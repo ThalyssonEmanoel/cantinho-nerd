@@ -14,7 +14,227 @@ export type Database = {
   }
   public: {
     Tables: {
-      [_ in never]: never
+      board_tokens: {
+        Row: {
+          created_at: string
+          height: number
+          id: string
+          image_url: string
+          label: string
+          owner_id: string | null
+          session_id: string
+          token_type: string
+          width: number
+          x: number
+          y: number
+        }
+        Insert: {
+          created_at?: string
+          height?: number
+          id?: string
+          image_url: string
+          label?: string
+          owner_id?: string | null
+          session_id: string
+          token_type: string
+          width?: number
+          x?: number
+          y?: number
+        }
+        Update: {
+          created_at?: string
+          height?: number
+          id?: string
+          image_url?: string
+          label?: string
+          owner_id?: string | null
+          session_id?: string
+          token_type?: string
+          width?: number
+          x?: number
+          y?: number
+        }
+        Relationships: [
+          {
+            foreignKeyName: "board_tokens_owner_id_fkey"
+            columns: ["owner_id"]
+            isOneToOne: false
+            referencedRelation: "players"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "board_tokens_session_id_fkey"
+            columns: ["session_id"]
+            isOneToOne: false
+            referencedRelation: "sessions"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      dice_rolls: {
+        Row: {
+          created_at: string
+          dice_formula: string
+          id: string
+          is_hidden: boolean
+          modifier: number
+          player_avatar: string | null
+          player_id: string
+          player_name: string
+          results: number[]
+          session_id: string
+          total: number
+        }
+        Insert: {
+          created_at?: string
+          dice_formula: string
+          id?: string
+          is_hidden?: boolean
+          modifier?: number
+          player_avatar?: string | null
+          player_id: string
+          player_name: string
+          results: number[]
+          session_id: string
+          total: number
+        }
+        Update: {
+          created_at?: string
+          dice_formula?: string
+          id?: string
+          is_hidden?: boolean
+          modifier?: number
+          player_avatar?: string | null
+          player_id?: string
+          player_name?: string
+          results?: number[]
+          session_id?: string
+          total?: number
+        }
+        Relationships: [
+          {
+            foreignKeyName: "dice_rolls_player_id_fkey"
+            columns: ["player_id"]
+            isOneToOne: false
+            referencedRelation: "players"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "dice_rolls_session_id_fkey"
+            columns: ["session_id"]
+            isOneToOne: false
+            referencedRelation: "sessions"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      players: {
+        Row: {
+          avatar_url: string | null
+          created_at: string
+          id: string
+          name: string
+          password_hash: string
+        }
+        Insert: {
+          avatar_url?: string | null
+          created_at?: string
+          id?: string
+          name: string
+          password_hash: string
+        }
+        Update: {
+          avatar_url?: string | null
+          created_at?: string
+          id?: string
+          name?: string
+          password_hash?: string
+        }
+        Relationships: []
+      }
+      session_participants: {
+        Row: {
+          id: string
+          joined_at: string
+          player_id: string
+          role: string
+          session_id: string
+        }
+        Insert: {
+          id?: string
+          joined_at?: string
+          player_id: string
+          role: string
+          session_id: string
+        }
+        Update: {
+          id?: string
+          joined_at?: string
+          player_id?: string
+          role?: string
+          session_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "session_participants_player_id_fkey"
+            columns: ["player_id"]
+            isOneToOne: false
+            referencedRelation: "players"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "session_participants_session_id_fkey"
+            columns: ["session_id"]
+            isOneToOne: false
+            referencedRelation: "sessions"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      sessions: {
+        Row: {
+          active_map_url: string | null
+          created_at: string
+          dm_id: string
+          id: string
+          is_active: boolean
+          maps: string[] | null
+          monster_images: string[] | null
+          name: string
+          password: string
+        }
+        Insert: {
+          active_map_url?: string | null
+          created_at?: string
+          dm_id: string
+          id?: string
+          is_active?: boolean
+          maps?: string[] | null
+          monster_images?: string[] | null
+          name: string
+          password: string
+        }
+        Update: {
+          active_map_url?: string | null
+          created_at?: string
+          dm_id?: string
+          id?: string
+          is_active?: boolean
+          maps?: string[] | null
+          monster_images?: string[] | null
+          name?: string
+          password?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "sessions_dm_id_fkey"
+            columns: ["dm_id"]
+            isOneToOne: false
+            referencedRelation: "players"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
     }
     Views: {
       [_ in never]: never
