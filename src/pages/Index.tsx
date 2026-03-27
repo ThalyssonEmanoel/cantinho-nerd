@@ -1,16 +1,46 @@
-// Update this page (the content is just a fallback if you fail to update the page)
+import { useState } from 'react';
+import { useAuth, AuthProvider } from '@/lib/auth-context';
+import LoginScreen from '@/components/LoginScreen';
+import RoleSelection from '@/components/RoleSelection';
+import DmLobby from '@/components/DmLobby';
+import PlayerLobby from '@/components/PlayerLobby';
+import JoinSession from '@/components/JoinSession';
+import GameBoard from '@/components/GameBoard';
 
-// IMPORTANT: Fully REPLACE this with your own code
-const PlaceholderIndex = () => {
-  // PLACEHOLDER: Replace this entire return statement with the user's app.
-  // The inline background color is intentionally not part of the design system.
-  return (
-    <div className="flex min-h-screen items-center justify-center" style={{ backgroundColor: '#fcfbf8' }}>
-      <img data-lovable-blank-page-placeholder="REMOVE_THIS" src="/placeholder.svg" alt="Your app will live here!" />
-    </div>
-  );
-};
+function AppContent() {
+  const { player, role } = useAuth();
+  const [activeSessionId, setActiveSessionId] = useState<string | null>(null);
+  const [joiningSessionId, setJoiningSessionId] = useState<string | null>(null);
 
-const Index = PlaceholderIndex;
+  // Not logged in
+  if (!player) return <LoginScreen />;
+
+  // No role selected
+  if (!role) return <RoleSelection />;
+
+  // In active game session
+  if (activeSessionId) {
+    return <GameBoard sessionId={activeSessionId} onLeave={() => setActiveSessionId(null)} />;
+  }
+
+  // Joining a session (need password)
+  if (joiningSessionId) {
+    return <JoinSession sessionId={joiningSessionId} onJoin={setActiveSessionId} />;
+  }
+
+  // DM flow
+  if (role === 'dm') {
+    return <DmLobby onSessionStart={setActiveSessionId} />;
+  }
+
+  // Player flow
+  return <PlayerLobby onJoinSession={setJoiningSessionId} />;
+}
+
+const Index = () => (
+  <AuthProvider>
+    <AppContent />
+  </AuthProvider>
+);
 
 export default Index;
