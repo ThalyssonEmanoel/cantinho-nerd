@@ -223,8 +223,9 @@ export default function GameBoard({ sessionId, onLeave }: GameBoardProps) {
           onPointerUp={handlePointerUp}
           style={{
             backgroundImage: session?.active_map_url ? `url(${session.active_map_url})` : undefined,
-            backgroundSize: 'cover',
+            backgroundSize: 'contain',
             backgroundPosition: 'center',
+            backgroundRepeat: 'no-repeat',
             backgroundColor: 'hsl(220, 20%, 6%)',
           }}
         >
