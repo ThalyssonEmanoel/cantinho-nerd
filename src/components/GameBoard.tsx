@@ -47,6 +47,8 @@ export default function GameBoard({ sessionId, onLeave }: GameBoardProps) {
   const [showDrawing, setShowDrawing] = useState(false);
   const [showRuler, setShowRuler] = useState(false);
   const [selectedToken, setSelectedToken] = useState<string | null>(null);
+  const [editingLabel, setEditingLabel] = useState<string | null>(null);
+  const [editLabelValue, setEditLabelValue] = useState('');
   const [draggingToken, setDraggingToken] = useState<string | null>(null);
   const [dragOffset, setDragOffset] = useState({ x: 0, y: 0 });
   const boardRef = useRef<HTMLDivElement>(null);
@@ -253,10 +255,11 @@ export default function GameBoard({ sessionId, onLeave }: GameBoardProps) {
           onClick={() => { if (!draggingToken) setSelectedToken(null); }}
           style={{
             backgroundImage: session?.active_map_url ? `url(${session.active_map_url})` : undefined,
-            backgroundSize: '100% 100%',
+            backgroundSize: 'contain',
             backgroundPosition: 'center',
             backgroundRepeat: 'no-repeat',
             backgroundColor: 'hsl(220, 20%, 6%)',
+            padding: '0 20px',
           }}
         >
           {!session?.active_map_url && (
@@ -279,8 +282,42 @@ export default function GameBoard({ sessionId, onLeave }: GameBoardProps) {
               } shadow-lg transition-all ${selectedToken === token.id ? 'ring-2 ring-gold ring-offset-2 ring-offset-background' : ''}`}>
                 <img src={token.image_url} alt={token.label} className="w-full h-full object-cover pointer-events-none" draggable={false} />
               </div>
-              <div className="absolute -bottom-5 left-1/2 -translate-x-1/2 whitespace-nowrap text-xs font-display bg-card/90 px-1.5 py-0.5 rounded text-foreground border border-border">
-                {token.label}
+              <div
+                className="absolute -bottom-5 left-1/2 -translate-x-1/2 whitespace-nowrap text-xs font-display bg-card/90 px-1.5 py-0.5 rounded text-foreground border border-border cursor-text"
+                onDoubleClick={(e) => {
+                  e.stopPropagation();
+                  if (canInteractToken(token)) {
+                    setEditingLabel(token.id);
+                    setEditLabelValue(token.label);
+                  }
+                }}
+              >
+                {editingLabel === token.id ? (
+                  <input
+                    autoFocus
+                    value={editLabelValue}
+                    onChange={e => setEditLabelValue(e.target.value)}
+                    onBlur={async () => {
+                      if (editLabelValue.trim() && editLabelValue !== token.label) {
+                        await supabase.from('board_tokens').update({ label: editLabelValue.trim() }).eq('id', token.id);
+                      }
+                      setEditingLabel(null);
+                    }}
+                    onKeyDown={async (e) => {
+                      if (e.key === 'Enter') {
+                        if (editLabelValue.trim() && editLabelValue !== token.label) {
+                          await supabase.from('board_tokens').update({ label: editLabelValue.trim() }).eq('id', token.id);
+                        }
+                        setEditingLabel(null);
+                      } else if (e.key === 'Escape') {
+                        setEditingLabel(null);
+                      }
+                    }}
+                    onClick={e => e.stopPropagation()}
+                    onPointerDown={e => e.stopPropagation()}
+                    className="bg-transparent border-none outline-none text-xs text-foreground w-20 text-center"
+                  />
+                ) : token.label}
               </div>
 
               {/* Resize & delete controls - shown when selected */}
