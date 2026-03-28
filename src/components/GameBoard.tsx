@@ -4,8 +4,10 @@ import { useAuth } from '@/lib/auth-context';
 import { toast } from 'sonner';
 import DiceRoller from './DiceRoller';
 import DiceLog from './DiceLog';
+import DrawingCanvas from './DrawingCanvas';
+import MeasureRuler from './MeasureRuler';
 import { Button } from '@/components/ui/button';
-import { Image, Plus, Trash2, LogOut, Dices, ScrollText, Menu } from 'lucide-react';
+import { Image, Plus, Trash2, LogOut, Dices, ScrollText, Pencil, Ruler, ZoomIn, ZoomOut } from 'lucide-react';
 
 interface GameBoardProps {
   sessionId: string;
@@ -42,6 +44,9 @@ export default function GameBoard({ sessionId, onLeave }: GameBoardProps) {
   const [showLog, setShowLog] = useState(false);
   const [showMapPicker, setShowMapPicker] = useState(false);
   const [showMonsters, setShowMonsters] = useState(false);
+  const [showDrawing, setShowDrawing] = useState(false);
+  const [showRuler, setShowRuler] = useState(false);
+  const [selectedToken, setSelectedToken] = useState<string | null>(null);
   const [draggingToken, setDraggingToken] = useState<string | null>(null);
   const [dragOffset, setDragOffset] = useState({ x: 0, y: 0 });
   const boardRef = useRef<HTMLDivElement>(null);
@@ -141,11 +146,21 @@ export default function GameBoard({ sessionId, onLeave }: GameBoardProps) {
   // Remove token
   const removeToken = async (tokenId: string) => {
     await supabase.from('board_tokens').delete().eq('id', tokenId);
+    if (selectedToken === tokenId) setSelectedToken(null);
+  };
+
+  // Resize token
+  const resizeToken = async (tokenId: string, delta: number) => {
+    const token = tokens.find(t => t.id === tokenId);
+    if (!token) return;
+    const newSize = Math.max(20, Math.min(200, token.width + delta));
+    setTokens(prev => prev.map(t => t.id === tokenId ? { ...t, width: newSize, height: newSize } : t));
+    await supabase.from('board_tokens').update({ width: newSize, height: newSize }).eq('id', tokenId);
   };
 
   // Drag handlers
   const handlePointerDown = useCallback((e: React.PointerEvent, token: Token) => {
-    // Only allow drag if: DM (can drag anything) or player owns the token
+    if (showDrawing || showRuler) return;
     if (!isDm && token.owner_id !== player?.id) return;
     if (!isDm && token.token_type === 'monster') return;
 
@@ -153,22 +168,23 @@ export default function GameBoard({ sessionId, onLeave }: GameBoardProps) {
     if (!board) return;
     const rect = board.getBoundingClientRect();
     setDraggingToken(token.id);
+    setSelectedToken(token.id);
     setDragOffset({
       x: e.clientX - rect.left - token.x,
       y: e.clientY - rect.top - token.y,
     });
     (e.target as HTMLElement).setPointerCapture(e.pointerId);
-  }, [isDm, player]);
+  }, [isDm, player, showDrawing, showRuler]);
 
   const handlePointerMove = useCallback((e: React.PointerEvent) => {
     if (!draggingToken || !boardRef.current) return;
     const rect = boardRef.current.getBoundingClientRect();
-    const x = Math.max(0, Math.min(rect.width - 50, e.clientX - rect.left - dragOffset.x));
-    const y = Math.max(0, Math.min(rect.height - 50, e.clientY - rect.top - dragOffset.y));
-
-    // Optimistic local update
+    const token = tokens.find(t => t.id === draggingToken);
+    const size = token?.width || 50;
+    const x = Math.max(0, Math.min(rect.width - size, e.clientX - rect.left - dragOffset.x));
+    const y = Math.max(0, Math.min(rect.height - size, e.clientY - rect.top - dragOffset.y));
     setTokens(prev => prev.map(t => t.id === draggingToken ? { ...t, x, y } : t));
-  }, [draggingToken, dragOffset]);
+  }, [draggingToken, dragOffset, tokens]);
 
   const handlePointerUp = useCallback(async () => {
     if (!draggingToken) return;
@@ -179,10 +195,12 @@ export default function GameBoard({ sessionId, onLeave }: GameBoardProps) {
     setDraggingToken(null);
   }, [draggingToken, tokens]);
 
+  const canInteractToken = (token: Token) => isDm || token.owner_id === player?.id;
+
   return (
     <div className="h-screen w-screen flex flex-col bg-background overflow-hidden">
       {/* Top bar */}
-      <div className="h-12 bg-card border-b border-border flex items-center px-4 gap-3 shrink-0 z-20">
+      <div className="h-12 bg-card border-b border-border flex items-center px-4 gap-2 shrink-0 z-20">
         <span className="font-display text-gold text-sm tracking-wider">{session?.name || 'Carregando...'}</span>
         <div className="flex-1" />
 
@@ -203,6 +221,17 @@ export default function GameBoard({ sessionId, onLeave }: GameBoardProps) {
           </Button>
         )}
 
+        <div className="w-px h-5 bg-border" />
+
+        <Button variant={showDrawing ? 'default' : 'ghost'} size="sm" onClick={() => { setShowDrawing(!showDrawing); setShowRuler(false); }} title="Desenhar">
+          <Pencil className="w-4 h-4" />
+        </Button>
+        <Button variant={showRuler ? 'default' : 'ghost'} size="sm" onClick={() => { setShowRuler(!showRuler); setShowDrawing(false); }} title="Régua">
+          <Ruler className="w-4 h-4" />
+        </Button>
+
+        <div className="w-px h-5 bg-border" />
+
         <Button variant="ghost" size="sm" onClick={() => setShowDice(!showDice)}>
           <Dices className="w-4 h-4" />
         </Button>
@@ -219,11 +248,12 @@ export default function GameBoard({ sessionId, onLeave }: GameBoardProps) {
         <div
           ref={boardRef}
           className="w-full h-full relative select-none"
-          onPointerMove={handlePointerMove}
-          onPointerUp={handlePointerUp}
+          onPointerMove={!showDrawing && !showRuler ? handlePointerMove : undefined}
+          onPointerUp={!showDrawing && !showRuler ? handlePointerUp : undefined}
+          onClick={() => { if (!draggingToken) setSelectedToken(null); }}
           style={{
             backgroundImage: session?.active_map_url ? `url(${session.active_map_url})` : undefined,
-            backgroundSize: 'contain',
+            backgroundSize: '100% 100%',
             backgroundPosition: 'center',
             backgroundRepeat: 'no-repeat',
             backgroundColor: 'hsl(220, 20%, 6%)',
@@ -239,28 +269,65 @@ export default function GameBoard({ sessionId, onLeave }: GameBoardProps) {
           {tokens.map(token => (
             <div
               key={token.id}
-              className={`absolute cursor-grab active:cursor-grabbing group ${draggingToken === token.id ? 'z-50' : 'z-10'}`}
+              className={`absolute group ${!showDrawing && !showRuler && canInteractToken(token) ? 'cursor-grab active:cursor-grabbing' : ''} ${draggingToken === token.id ? 'z-50' : 'z-10'} ${selectedToken === token.id ? 'z-40' : ''}`}
               style={{ left: token.x, top: token.y, width: token.width, height: token.height }}
               onPointerDown={e => handlePointerDown(e, token)}
+              onClick={e => { e.stopPropagation(); if (canInteractToken(token)) setSelectedToken(token.id); }}
             >
               <div className={`w-full h-full rounded-full overflow-hidden border-2 ${
                 token.token_type === 'player' ? 'border-gold glow-gold' : 'border-blood'
-              } shadow-lg`}>
+              } shadow-lg transition-all ${selectedToken === token.id ? 'ring-2 ring-gold ring-offset-2 ring-offset-background' : ''}`}>
                 <img src={token.image_url} alt={token.label} className="w-full h-full object-cover pointer-events-none" draggable={false} />
               </div>
               <div className="absolute -bottom-5 left-1/2 -translate-x-1/2 whitespace-nowrap text-xs font-display bg-card/90 px-1.5 py-0.5 rounded text-foreground border border-border">
                 {token.label}
               </div>
-              {isDm && (
-                <button
-                  onClick={(e) => { e.stopPropagation(); removeToken(token.id); }}
-                  className="absolute -top-2 -right-2 w-5 h-5 bg-destructive rounded-full flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity z-50"
-                >
-                  <Trash2 className="w-3 h-3 text-destructive-foreground" />
-                </button>
+
+              {/* Resize & delete controls - shown when selected */}
+              {selectedToken === token.id && canInteractToken(token) && (
+                <div className="absolute -top-8 left-1/2 -translate-x-1/2 flex items-center gap-1 bg-card/95 border border-border rounded-lg px-1 py-0.5 shadow-lg z-50">
+                  <button
+                    onClick={e => { e.stopPropagation(); resizeToken(token.id, -10); }}
+                    className="w-5 h-5 flex items-center justify-center rounded hover:bg-muted transition-colors"
+                    title="Diminuir"
+                  >
+                    <ZoomOut className="w-3 h-3 text-muted-foreground" />
+                  </button>
+                  <span className="text-[10px] text-muted-foreground w-6 text-center">{token.width}</span>
+                  <button
+                    onClick={e => { e.stopPropagation(); resizeToken(token.id, 10); }}
+                    className="w-5 h-5 flex items-center justify-center rounded hover:bg-muted transition-colors"
+                    title="Aumentar"
+                  >
+                    <ZoomIn className="w-3 h-3 text-muted-foreground" />
+                  </button>
+                  {isDm && (
+                    <button
+                      onClick={e => { e.stopPropagation(); removeToken(token.id); }}
+                      className="w-5 h-5 flex items-center justify-center rounded hover:bg-destructive/20 transition-colors ml-0.5"
+                      title="Remover"
+                    >
+                      <Trash2 className="w-3 h-3 text-destructive" />
+                    </button>
+                  )}
+                </div>
               )}
             </div>
           ))}
+
+          {/* Drawing Canvas */}
+          {showDrawing && (
+            <DrawingCanvas
+              width={boardRef.current?.clientWidth || 1920}
+              height={boardRef.current?.clientHeight || 1080}
+              onClose={() => setShowDrawing(false)}
+            />
+          )}
+
+          {/* Ruler */}
+          {showRuler && (
+            <MeasureRuler boardRef={boardRef} onClose={() => setShowRuler(false)} />
+          )}
         </div>
 
         {/* Map picker overlay (DM) */}
