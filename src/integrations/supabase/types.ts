@@ -14,6 +14,45 @@ export type Database = {
   }
   public: {
     Tables: {
+      board_drawings: {
+        Row: {
+          created_at: string
+          data: Json
+          id: string
+          player_id: string
+          session_id: string
+        }
+        Insert: {
+          created_at?: string
+          data: Json
+          id?: string
+          player_id: string
+          session_id: string
+        }
+        Update: {
+          created_at?: string
+          data?: Json
+          id?: string
+          player_id?: string
+          session_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "board_drawings_player_id_fkey"
+            columns: ["player_id"]
+            isOneToOne: false
+            referencedRelation: "players"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "board_drawings_session_id_fkey"
+            columns: ["session_id"]
+            isOneToOne: false
+            referencedRelation: "sessions"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       board_tokens: {
         Row: {
           created_at: string
@@ -196,34 +235,40 @@ export type Database = {
           active_map_url: string | null
           created_at: string
           dm_id: string
+          grid_size: number
           id: string
           is_active: boolean
           maps: string[] | null
           monster_images: string[] | null
           name: string
           password: string
+          show_grid: boolean
         }
         Insert: {
           active_map_url?: string | null
           created_at?: string
           dm_id: string
+          grid_size?: number
           id?: string
           is_active?: boolean
           maps?: string[] | null
           monster_images?: string[] | null
           name: string
           password: string
+          show_grid?: boolean
         }
         Update: {
           active_map_url?: string | null
           created_at?: string
           dm_id?: string
+          grid_size?: number
           id?: string
           is_active?: boolean
           maps?: string[] | null
           monster_images?: string[] | null
           name?: string
           password?: string
+          show_grid?: boolean
         }
         Relationships: [
           {
