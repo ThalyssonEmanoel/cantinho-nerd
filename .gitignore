@@ -25,5 +25,5 @@ dist-ssr
 
 #personalizado
 .env
-supabase
-ramix
+/supabase
+/ramix
