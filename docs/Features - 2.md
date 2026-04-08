@@ -1,0 +1,5 @@
+# Ajustes
+
+## Fichas
+- Há um problema na criação da ficha, quando eu seleciono uma raça ela atribui pontos no atributo referente a ela de acordo com o livro oficial de D&D, mas tem um problema, se na ficha eu troco de raça para outro, os pontos não são alterados, mas sim INCREMENTADOS, ou seja, se eu escolhi um humano, todos os atributos somaram mais 1, porém caso eu troque para a classe drow, somara +2 em destreza e +1 em carisma em cima dos pontos que já foram somados anteriormente com a raça humano;
+- Um problema semelhante ao anterior acontece com os dados de "Antecedente", caso eu escolha, por exemplo, acólito irá adicionar ponto em intuição e religião, mas caso eu troque para criminoso, irá implementar as perícias Enganação e Furtividade e irá manter as perícias do acólito, sendo que está equivocado dessa forma;
