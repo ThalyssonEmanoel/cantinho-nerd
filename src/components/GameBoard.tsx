@@ -7,7 +7,6 @@ import DiceLog from './DiceLog';
 import DrawingCanvas from './DrawingCanvas';
 import MeasureRuler from './MeasureRuler';
 import GridOverlay from './GridOverlay';
-import FogOfWar from './FogOfWar';
 import ChatPanel from './ChatPanel';
 import CombatCalculator from './CombatCalculator';
 import ProfileSettings from './ProfileSettings';
@@ -15,10 +14,16 @@ import CharacterSheet from './CharacterSheet';
 import { Button } from '@/components/ui/button';
 import {
   Image, Plus, Trash2, LogOut, Dices, ScrollText, Pencil, Ruler,
-  ZoomIn, ZoomOut, Menu, X, Grid3x3, CloudFog, MessageCircle,
+  ZoomIn, ZoomOut, Menu, X, Grid3x3, MessageCircle,
   Calculator, Settings, Smile, ClipboardList, Users,
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
+
+// Fixed virtual coordinate space. All tokens, drawings, ruler points and
+// grid cells are stored and broadcast in this coordinate system, so every
+// client sees identical positions regardless of their physical screen size.
+const VIRTUAL_W = 1920;
+const VIRTUAL_H = 1080;
 
 interface GameBoardProps {
   sessionId: string;
@@ -45,6 +50,8 @@ interface Session {
   active_map_url: string | null;
   maps: string[];
   monster_images: string[];
+  show_grid: boolean;
+  grid_size: number;
 }
 
 interface TokenReaction {
@@ -65,8 +72,6 @@ export default function GameBoard({ sessionId, onLeave }: GameBoardProps) {
   const [showMonsters, setShowMonsters] = useState(false);
   const [showDrawing, setShowDrawing] = useState(false);
   const [showRuler, setShowRuler] = useState(false);
-  const [showGrid, setShowGrid] = useState(false);
-  const [showFog, setShowFog] = useState(false);
   const [showChat, setShowChat] = useState(false);
   const [showCalc, setShowCalc] = useState(false);
   const [showProfile, setShowProfile] = useState(false);
@@ -76,24 +81,33 @@ export default function GameBoard({ sessionId, onLeave }: GameBoardProps) {
   const [showMobileMenu, setShowMobileMenu] = useState(false);
   const [showReactionPicker, setShowReactionPicker] = useState<string | null>(null); // tokenId
   const [tokenReactions, setTokenReactions] = useState<TokenReaction[]>([]);
-  const [gridSize, setGridSize] = useState(50);
   const [selectedToken, setSelectedToken] = useState<string | null>(null);
   const [editingLabel, setEditingLabel] = useState<string | null>(null);
   const [editLabelValue, setEditLabelValue] = useState('');
   const [draggingToken, setDraggingToken] = useState<string | null>(null);
   const [dragOffset, setDragOffset] = useState({ x: 0, y: 0 });
-  const [boardSize, setBoardSize] = useState({ w: 0, h: 0 });
+  const [scale, setScale] = useState(1);
+  const containerRef = useRef<HTMLDivElement>(null);
   const boardRef = useRef<HTMLDivElement>(null);
   const reactionChannelRef = useRef<ReturnType<typeof supabase.channel> | null>(null);
   const isDm = role === 'dm';
+  const showGrid = !!session?.show_grid;
+  const gridSize = session?.grid_size ?? 50;
 
-  // Track board size for grid/fog
+  // Compute the scale factor to fit the virtual board into the available area.
+  // This guarantees every client renders the same logical board, just at a
+  // different visual size.
   useEffect(() => {
-    const obs = new ResizeObserver(entries => {
-      const { width, height } = entries[0].contentRect;
-      setBoardSize({ w: width, h: height });
-    });
-    if (boardRef.current) obs.observe(boardRef.current);
+    const container = containerRef.current;
+    if (!container) return;
+    const update = () => {
+      const { width, height } = container.getBoundingClientRect();
+      if (width <= 0 || height <= 0) return;
+      setScale(Math.min(width / VIRTUAL_W, height / VIRTUAL_H));
+    };
+    update();
+    const obs = new ResizeObserver(update);
+    obs.observe(container);
     return () => obs.disconnect();
   }, []);
 
@@ -210,9 +224,24 @@ export default function GameBoard({ sessionId, onLeave }: GameBoardProps) {
   };
 
   const removeToken = async (tokenId: string) => {
-    await supabase.from('board_tokens').delete().eq('id', tokenId);
+    // Optimistic update — don't wait for the realtime DELETE event, which is
+    // unreliable on tables without REPLICA IDENTITY FULL and breaks the trash
+    // button until a refresh.
+    setTokens(prev => prev.filter(t => t.id !== tokenId));
     if (selectedToken === tokenId) setSelectedToken(null);
+    const { error } = await supabase.from('board_tokens').delete().eq('id', tokenId);
+    if (error) toast.error('Erro ao remover token');
   };
+
+  // Convert a pointer event into virtual board coordinates.
+  const getVirtualPos = useCallback((clientX: number, clientY: number) => {
+    const board = boardRef.current;
+    if (!board) return { x: 0, y: 0 };
+    const rect = board.getBoundingClientRect();
+    const sx = VIRTUAL_W / rect.width;
+    const sy = VIRTUAL_H / rect.height;
+    return { x: (clientX - rect.left) * sx, y: (clientY - rect.top) * sy };
+  }, []);
 
   const resizeToken = async (tokenId: string, delta: number) => {
     const token = tokens.find(t => t.id === tokenId);
@@ -223,27 +252,25 @@ export default function GameBoard({ sessionId, onLeave }: GameBoardProps) {
   };
 
   const handlePointerDown = useCallback((e: React.PointerEvent, token: Token) => {
-    if (showDrawing || showRuler || showFog) return;
+    if (showDrawing || showRuler) return;
     if (!isDm && token.owner_id !== player?.id) return;
     if (!isDm && token.token_type === 'monster') return;
-    const board = boardRef.current;
-    if (!board) return;
-    const rect = board.getBoundingClientRect();
+    const pos = getVirtualPos(e.clientX, e.clientY);
     setDraggingToken(token.id);
     setSelectedToken(token.id);
-    setDragOffset({ x: e.clientX - rect.left - token.x, y: e.clientY - rect.top - token.y });
+    setDragOffset({ x: pos.x - token.x, y: pos.y - token.y });
     (e.target as HTMLElement).setPointerCapture(e.pointerId);
-  }, [isDm, player, showDrawing, showRuler, showFog]);
+  }, [isDm, player, showDrawing, showRuler, getVirtualPos]);
 
   const handlePointerMove = useCallback((e: React.PointerEvent) => {
-    if (!draggingToken || !boardRef.current) return;
-    const rect = boardRef.current.getBoundingClientRect();
+    if (!draggingToken) return;
     const token = tokens.find(t => t.id === draggingToken);
     const size = token?.width || 50;
-    const x = Math.max(0, Math.min(rect.width - size, e.clientX - rect.left - dragOffset.x));
-    const y = Math.max(0, Math.min(rect.height - size, e.clientY - rect.top - dragOffset.y));
+    const pos = getVirtualPos(e.clientX, e.clientY);
+    const x = Math.max(0, Math.min(VIRTUAL_W - size, pos.x - dragOffset.x));
+    const y = Math.max(0, Math.min(VIRTUAL_H - size, pos.y - dragOffset.y));
     setTokens(prev => prev.map(t => t.id === draggingToken ? { ...t, x, y } : t));
-  }, [draggingToken, dragOffset, tokens]);
+  }, [draggingToken, dragOffset, tokens, getVirtualPos]);
 
   const handlePointerUp = useCallback(async () => {
     if (!draggingToken) return;
@@ -254,11 +281,30 @@ export default function GameBoard({ sessionId, onLeave }: GameBoardProps) {
 
   const canInteractToken = (token: Token) => isDm || token.owner_id === player?.id;
 
-  const toggleTool = (tool: 'drawing' | 'ruler' | 'fog') => {
+  const toggleTool = (tool: 'drawing' | 'ruler') => {
     setShowDrawing(tool === 'drawing' ? (v => !v) : false);
     setShowRuler(tool === 'ruler' ? (v => !v) : false);
-    setShowFog(tool === 'fog' ? (v => !v) : false);
     setShowMobileMenu(false);
+  };
+
+  // Grid is owned by the DM and synced to all players via the session row.
+  const toggleGrid = async () => {
+    if (!isDm || !session) return;
+    await supabase.from('sessions').update({ show_grid: !session.show_grid }).eq('id', sessionId);
+    setShowMobileMenu(false);
+  };
+
+  const updateGridSize = async (next: number) => {
+    if (!isDm || !session) return;
+    const clamped = Math.max(20, Math.min(200, next));
+    await supabase.from('sessions').update({ grid_size: clamped }).eq('id', sessionId);
+  };
+
+  // Allow renaming a token (used by the DM, including for monsters).
+  const startEditingLabel = (token: Token) => {
+    if (!canInteractToken(token)) return;
+    setEditingLabel(token.id);
+    setEditLabelValue(token.label);
   };
 
   // Toolbar button helper
@@ -308,8 +354,7 @@ export default function GameBoard({ sessionId, onLeave }: GameBoardProps) {
 
             <TB icon={Pencil} label="Desenhar" active={showDrawing} onClick={() => toggleTool('drawing')} />
             <TB icon={Ruler} label="Régua" active={showRuler} onClick={() => toggleTool('ruler')} />
-            <TB icon={Grid3x3} label="Grade" active={showGrid} onClick={() => setShowGrid(v => !v)} />
-            {isDm && <TB icon={CloudFog} label="Névoa de Guerra" active={showFog} onClick={() => toggleTool('fog')} />}
+            {isDm && <TB icon={Grid3x3} label="Grade" active={showGrid} onClick={toggleGrid} />}
 
             <div className="w-px h-5 bg-border mx-1" />
 
@@ -353,14 +398,13 @@ export default function GameBoard({ sessionId, onLeave }: GameBoardProps) {
                 <>
                   <MobileMenuItem icon={Image} label="Trocar Mapa" onClick={() => { setShowMapPicker(v => !v); setShowMobileMenu(false); }} active={showMapPicker} />
                   <MobileMenuItem icon={Plus} label="Monstros" onClick={() => { setShowMonsters(v => !v); setShowMobileMenu(false); }} active={showMonsters} />
-                  <MobileMenuItem icon={CloudFog} label="Névoa de Guerra" onClick={() => toggleTool('fog')} active={showFog} />
                 </>
               )}
               {!isDm && <MobileMenuItem icon={Plus} label="Meu Token" onClick={() => { addPlayerToken(); setShowMobileMenu(false); }} />}
               <div className="h-px bg-border my-1" />
               <MobileMenuItem icon={Pencil} label="Desenhar" onClick={() => toggleTool('drawing')} active={showDrawing} />
               <MobileMenuItem icon={Ruler} label="Régua" onClick={() => toggleTool('ruler')} active={showRuler} />
-              <MobileMenuItem icon={Grid3x3} label="Grade" onClick={() => { setShowGrid(v => !v); setShowMobileMenu(false); }} active={showGrid} />
+              {isDm && <MobileMenuItem icon={Grid3x3} label="Grade" onClick={toggleGrid} active={showGrid} />}
               <div className="h-px bg-border my-1" />
               <MobileMenuItem icon={ScrollText} label="Histórico" onClick={() => { setShowLog(v => !v); setShowMobileMenu(false); }} active={showLog} />
               <MobileMenuItem icon={Calculator} label="Calculadora" onClick={() => { setShowCalc(v => !v); setShowMobileMenu(false); }} active={showCalc} />
@@ -380,22 +424,38 @@ export default function GameBoard({ sessionId, onLeave }: GameBoardProps) {
         </AnimatePresence>
 
         {/* Board Area */}
-        <div className="flex-1 relative overflow-hidden">
+        <div
+          ref={containerRef}
+          className="flex-1 relative overflow-hidden"
+          style={{ backgroundColor: 'hsl(220, 20%, 6%)' }}
+        >
+          {/* Inner virtual board: fixed VIRTUAL_W x VIRTUAL_H, scaled to fit */}
           <div
             ref={boardRef}
-            className="w-full h-full relative select-none"
-            onPointerMove={!showDrawing && !showRuler && !showFog ? handlePointerMove : undefined}
-            onPointerUp={!showDrawing && !showRuler && !showFog ? handlePointerUp : undefined}
-            onClick={() => { if (!draggingToken) setSelectedToken(null); setShowReactionPicker(null); }}
+            className="absolute select-none"
             style={{
-              backgroundImage: session?.active_map_url ? `url(${session.active_map_url})` : undefined,
-              backgroundSize: 'contain',
-              backgroundPosition: 'center',
-              backgroundRepeat: 'no-repeat',
-              backgroundColor: 'hsl(220, 20%, 6%)',
-              padding: '0 20px',
+              width: VIRTUAL_W,
+              height: VIRTUAL_H,
+              left: '50%',
+              top: '50%',
+              transform: `translate(-50%, -50%) scale(${scale})`,
+              transformOrigin: 'center center',
+              backgroundColor: 'hsl(220, 25%, 4%)',
             }}
+            onPointerMove={!showDrawing && !showRuler ? handlePointerMove : undefined}
+            onPointerUp={!showDrawing && !showRuler ? handlePointerUp : undefined}
+            onClick={() => { if (!draggingToken) setSelectedToken(null); setShowReactionPicker(null); }}
           >
+            {/* Background map (rendered as <img> so it lives in virtual space) */}
+            {session?.active_map_url && (
+              <img
+                src={session.active_map_url}
+                alt=""
+                draggable={false}
+                className="absolute inset-0 w-full h-full object-contain pointer-events-none"
+              />
+            )}
+
             {!session?.active_map_url && (
               <div className="absolute inset-0 flex flex-col items-center justify-center text-muted-foreground font-display gap-2">
                 <Image className="w-10 h-10 opacity-20" />
@@ -403,15 +463,20 @@ export default function GameBoard({ sessionId, onLeave }: GameBoardProps) {
               </div>
             )}
 
-            {/* Grid overlay */}
+            {/* Grid overlay (DM-controlled, synced via session row) */}
             {showGrid && (
-              <GridOverlay cellSize={gridSize} boardWidth={boardSize.w} boardHeight={boardSize.h} />
+              <GridOverlay cellSize={gridSize} boardWidth={VIRTUAL_W} boardHeight={VIRTUAL_H} />
             )}
 
-            {/* Fog of War */}
-            {showFog && (
-              <FogOfWar boardRef={boardRef} sessionId={sessionId} isDm={isDm} onClose={() => setShowFog(false)} />
-            )}
+            {/* Drawings layer — always mounted so every client sees every stroke */}
+            <DrawingCanvas
+              virtualWidth={VIRTUAL_W}
+              virtualHeight={VIRTUAL_H}
+              active={showDrawing}
+              onClose={() => setShowDrawing(false)}
+              sessionId={sessionId}
+              playerId={player?.id ?? ''}
+            />
 
             {/* Tokens */}
             {tokens.map(token => {
@@ -419,7 +484,7 @@ export default function GameBoard({ sessionId, onLeave }: GameBoardProps) {
               return (
                 <div
                   key={token.id}
-                  className={`absolute group ${!showDrawing && !showRuler && !showFog && canInteractToken(token) ? 'cursor-grab active:cursor-grabbing' : ''} ${draggingToken === token.id ? 'z-50' : 'z-10'} ${selectedToken === token.id ? 'z-40' : ''}`}
+                  className={`absolute group ${!showDrawing && !showRuler && canInteractToken(token) ? 'cursor-grab active:cursor-grabbing' : ''} ${draggingToken === token.id ? 'z-50' : 'z-10'} ${selectedToken === token.id ? 'z-40' : ''}`}
                   style={{ left: token.x, top: token.y, width: token.width, height: token.height }}
                   onPointerDown={e => handlePointerDown(e, token)}
                   onClick={e => { e.stopPropagation(); if (canInteractToken(token)) setSelectedToken(token.id); }}
@@ -478,7 +543,7 @@ export default function GameBoard({ sessionId, onLeave }: GameBoardProps) {
                     ) : token.label}
                   </div>
 
-                  {/* Controls: resize/delete/react */}
+                  {/* Controls: resize/rename/react/delete */}
                   {selectedToken === token.id && canInteractToken(token) && (
                     <div className="absolute -top-8 left-1/2 -translate-x-1/2 flex items-center gap-1 bg-card/95 border border-border rounded-lg px-1 py-0.5 shadow-lg z-50">
                       <button onClick={e => { e.stopPropagation(); resizeToken(token.id, -10); }}
@@ -489,6 +554,10 @@ export default function GameBoard({ sessionId, onLeave }: GameBoardProps) {
                       <button onClick={e => { e.stopPropagation(); resizeToken(token.id, 10); }}
                         className="w-5 h-5 flex items-center justify-center rounded hover:bg-muted" title="Aumentar">
                         <ZoomIn className="w-3 h-3 text-muted-foreground" />
+                      </button>
+                      <button onClick={e => { e.stopPropagation(); startEditingLabel(token); }}
+                        className="w-5 h-5 flex items-center justify-center rounded hover:bg-muted" title="Renomear">
+                        <Pencil className="w-3 h-3 text-muted-foreground" />
                       </button>
                       <button onClick={e => { e.stopPropagation(); setShowReactionPicker(showReactionPicker === token.id ? null : token.id); }}
                         className="w-5 h-5 flex items-center justify-center rounded hover:bg-muted" title="Reagir">
@@ -519,32 +588,29 @@ export default function GameBoard({ sessionId, onLeave }: GameBoardProps) {
               );
             })}
 
-            {/* Drawing Canvas */}
-            {showDrawing && (
-              <DrawingCanvas
-                width={boardSize.w || boardRef.current?.clientWidth || 1920}
-                height={boardSize.h || boardRef.current?.clientHeight || 1080}
-                onClose={() => setShowDrawing(false)}
+            {/* Ruler */}
+            {showRuler && (
+              <MeasureRuler
+                boardRef={boardRef}
+                virtualWidth={VIRTUAL_W}
+                virtualHeight={VIRTUAL_H}
+                gridCellSize={gridSize}
+                onClose={() => setShowRuler(false)}
                 sessionId={sessionId}
                 playerId={player?.id ?? ''}
               />
             )}
-
-            {/* Ruler */}
-            {showRuler && (
-              <MeasureRuler boardRef={boardRef} onClose={() => setShowRuler(false)} sessionId={sessionId} playerId={player?.id ?? ''} />
-            )}
           </div>
 
-          {/* Grid size control */}
-          {showGrid && (
+          {/* Grid size control (DM only) */}
+          {showGrid && isDm && (
             <div className="absolute bottom-4 right-4 z-30 bg-card/90 border border-border rounded-lg px-3 py-2 flex items-center gap-2 shadow-lg">
               <Grid3x3 className="w-3.5 h-3.5 text-gold" />
               <span className="text-xs font-display text-muted-foreground">Grade:</span>
-              <button onClick={() => setGridSize(v => Math.max(20, v - 10))} className="text-xs text-muted-foreground hover:text-foreground w-5">−</button>
+              <button onClick={() => updateGridSize(gridSize - 10)} className="text-xs text-muted-foreground hover:text-foreground w-5">−</button>
               <span className="text-xs text-gold font-display w-8 text-center">{gridSize}px</span>
-              <button onClick={() => setGridSize(v => Math.min(200, v + 10))} className="text-xs text-muted-foreground hover:text-foreground w-5">+</button>
-              <button onClick={() => setShowGrid(false)} className="text-muted-foreground hover:text-foreground ml-1">
+              <button onClick={() => updateGridSize(gridSize + 10)} className="text-xs text-muted-foreground hover:text-foreground w-5">+</button>
+              <button onClick={toggleGrid} className="text-muted-foreground hover:text-foreground ml-1">
                 <X className="w-3 h-3" />
               </button>
             </div>

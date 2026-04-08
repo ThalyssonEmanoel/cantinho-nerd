@@ -1,4 +1,5 @@
-import { createContext, useContext, useState, useCallback, ReactNode } from 'react';
+import { createContext, useContext, useState, useCallback, useEffect, ReactNode } from 'react';
+import { supabase } from '@/integrations/supabase/client';
 
 export interface Player {
   id: string;
@@ -40,7 +41,39 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const logout = useCallback(() => {
     handleSetPlayer(null);
     handleSetRole(null);
+    localStorage.removeItem('vtt-active-session');
   }, [handleSetPlayer, handleSetRole]);
+
+  // Validate the cached player against the database on mount. If the row no
+  // longer exists (database reset, player deleted, different environment),
+  // clear the cache so the user is sent back to the login screen instead of
+  // hitting an FK violation later when creating a session or token.
+  useEffect(() => {
+    if (!player) return;
+    let cancelled = false;
+    (async () => {
+      const { data, error } = await supabase
+        .from('players')
+        .select('id, name, avatar_url')
+        .eq('id', player.id)
+        .maybeSingle();
+      if (cancelled) return;
+      if (error) return; // network failure — keep cached player, don't log out
+      if (!data) {
+        handleSetPlayer(null);
+        handleSetRole(null);
+        localStorage.removeItem('vtt-active-session');
+        return;
+      }
+      // Refresh local cache with latest name/avatar.
+      if (data.name !== player.name || data.avatar_url !== player.avatar_url) {
+        handleSetPlayer({ id: data.id, name: data.name, avatar_url: data.avatar_url });
+      }
+    })();
+    return () => { cancelled = true; };
+    // Only run once on mount with the initial cached player.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   return (
     <AuthContext.Provider value={{ player, role, setPlayer: handleSetPlayer, setRole: handleSetRole, logout }}>
