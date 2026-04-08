@@ -62,13 +62,25 @@
 @layer base {
   * {
     @apply border-border;
+    -webkit-tap-highlight-color: transparent;
   }
   body {
     @apply bg-background text-foreground;
     font-family: var(--font-body);
+    /* Prevent text size adjustment on mobile */
+    -webkit-text-size-adjust: 100%;
   }
   h1, h2, h3, h4, h5, h6 {
     font-family: var(--font-display);
+  }
+  /* Better touch scrolling */
+  .overflow-y-auto,
+  .overflow-auto {
+    -webkit-overflow-scrolling: touch;
+  }
+  /* Prevent zoom on double-tap for game board */
+  canvas, .select-none {
+    touch-action: none;
   }
 }
 
@@ -98,4 +110,52 @@
   .bg-card-gradient {
     background: linear-gradient(135deg, hsl(var(--card)) 0%, hsl(220 18% 10%) 100%);
   }
+  /* Animated border shimmer for interactive cards */
+  .border-shimmer {
+    position: relative;
+  }
+  .border-shimmer::before {
+    content: '';
+    position: absolute;
+    inset: -1px;
+    border-radius: inherit;
+    background: linear-gradient(
+      135deg,
+      hsl(var(--gold) / 0) 0%,
+      hsl(var(--gold) / 0.3) 50%,
+      hsl(var(--gold) / 0) 100%
+    );
+    opacity: 0;
+    transition: opacity 0.3s;
+    pointer-events: none;
+  }
+  .border-shimmer:hover::before {
+    opacity: 1;
+  }
+  /* Scrollbar styling */
+  ::-webkit-scrollbar {
+    width: 4px;
+    height: 4px;
+  }
+  ::-webkit-scrollbar-track {
+    background: hsl(var(--background));
+  }
+  ::-webkit-scrollbar-thumb {
+    background: hsl(var(--border));
+    border-radius: 2px;
+  }
+  ::-webkit-scrollbar-thumb:hover {
+    background: hsl(var(--gold) / 0.5);
+  }
+  /* Mobile-safe full height */
+  .h-screen-safe {
+    height: 100vh;
+    height: 100dvh;
+  }
+}
+
+/* Use dynamic viewport height for mobile */
+.h-screen {
+  height: 100vh;
+  height: 100dvh;
 }
