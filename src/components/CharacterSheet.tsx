@@ -2,7 +2,7 @@ import { useState, useEffect, useCallback } from 'react';
 import { supabase } from '@/integrations/supabase/client';
 import { useAuth } from '@/lib/auth-context';
 import { Button } from '@/components/ui/button';
-import { X, Save, Sword, BookOpen, Package, Sparkles, ChevronDown, ChevronUp, Users } from 'lucide-react';
+import { X, Save, Sword, BookOpen, Package, Sparkles, Shield } from 'lucide-react';
 import { toast } from 'sonner';
 
 /* ─────────────────────────────────────────────
@@ -45,7 +45,8 @@ const SKILLS: { name: string; attr: Attr; label: string }[] = [
 ];
 
 const SPELL_LEVELS = ['Truques', '1º', '2º', '3º', '4º', '5º', '6º', '7º', '8º', '9º'];
-const SPELL_SLOTS_BY_LEVEL: Record<number, number[]> = {
+// Full caster: Bardo, Clérigo, Druida, Mago, Feiticeiro
+const SPELL_SLOTS_FULL: Record<number, number[]> = {
   1:  [0,2,0,0,0,0,0,0,0,0],
   2:  [0,3,0,0,0,0,0,0,0,0],
   3:  [0,4,2,0,0,0,0,0,0,0],
@@ -67,6 +68,61 @@ const SPELL_SLOTS_BY_LEVEL: Record<number, number[]> = {
   19: [0,4,3,3,3,3,2,1,1,1],
   20: [0,4,3,3,3,3,2,2,1,1],
 };
+// Half caster: Paladino, Patrulheiro (no spells at level 1)
+const SPELL_SLOTS_HALF: Record<number, number[]> = {
+  1:  [0,0,0,0,0,0,0,0,0,0],
+  2:  [0,2,0,0,0,0,0,0,0,0],
+  3:  [0,3,0,0,0,0,0,0,0,0],
+  4:  [0,3,0,0,0,0,0,0,0,0],
+  5:  [0,4,2,0,0,0,0,0,0,0],
+  6:  [0,4,2,0,0,0,0,0,0,0],
+  7:  [0,4,3,0,0,0,0,0,0,0],
+  8:  [0,4,3,0,0,0,0,0,0,0],
+  9:  [0,4,3,2,0,0,0,0,0,0],
+  10: [0,4,3,2,0,0,0,0,0,0],
+  11: [0,4,3,3,0,0,0,0,0,0],
+  12: [0,4,3,3,0,0,0,0,0,0],
+  13: [0,4,3,3,1,0,0,0,0,0],
+  14: [0,4,3,3,1,0,0,0,0,0],
+  15: [0,4,3,3,2,0,0,0,0,0],
+  16: [0,4,3,3,2,0,0,0,0,0],
+  17: [0,4,3,3,3,1,0,0,0,0],
+  18: [0,4,3,3,3,1,0,0,0,0],
+  19: [0,4,3,3,3,2,0,0,0,0],
+  20: [0,4,3,3,3,2,0,0,0,0],
+};
+// Pact Magic: Bruxo (1 fixed level, scales but never above 5)
+const SPELL_SLOTS_PACT: Record<number, number[]> = {
+  1:  [0,1,0,0,0,0,0,0,0,0],
+  2:  [0,2,0,0,0,0,0,0,0,0],
+  3:  [0,0,2,0,0,0,0,0,0,0],
+  4:  [0,0,2,0,0,0,0,0,0,0],
+  5:  [0,0,0,2,0,0,0,0,0,0],
+  6:  [0,0,0,2,0,0,0,0,0,0],
+  7:  [0,0,0,0,2,0,0,0,0,0],
+  8:  [0,0,0,0,2,0,0,0,0,0],
+  9:  [0,0,0,0,0,2,0,0,0,0],
+  10: [0,0,0,0,0,2,0,0,0,0],
+  11: [0,0,0,0,0,3,0,0,0,0],
+  12: [0,0,0,0,0,3,0,0,0,0],
+  13: [0,0,0,0,0,3,0,0,0,0],
+  14: [0,0,0,0,0,3,0,0,0,0],
+  15: [0,0,0,0,0,3,0,0,0,0],
+  16: [0,0,0,0,0,3,0,0,0,0],
+  17: [0,0,0,0,0,4,0,0,0,0],
+  18: [0,0,0,0,0,4,0,0,0,0],
+  19: [0,0,0,0,0,4,0,0,0,0],
+  20: [0,0,0,0,0,4,0,0,0,0],
+};
+
+function getSpellSlotsForClass(className: string, level: number): number[] {
+  const FULL = ['Bardo', 'Clérigo', 'Druida', 'Mago', 'Feiticeiro'];
+  const HALF = ['Paladino', 'Patrulheiro'];
+  if (FULL.includes(className)) return SPELL_SLOTS_FULL[level] ?? Array(10).fill(0);
+  if (HALF.includes(className)) return SPELL_SLOTS_HALF[level] ?? Array(10).fill(0);
+  if (className === 'Bruxo') return SPELL_SLOTS_PACT[level] ?? Array(10).fill(0);
+  return Array(10).fill(0);
+}
 
 /* ─────────────────────────────────────────────
    D&D 5e Race Data
@@ -432,7 +488,206 @@ const BACKGROUND_DATA: Record<string, BackgroundData> = {
     bonds: ['Saí de meu isolamento para proteger alguém querido.'],
     flaws: ['Agora que voltei ao mundo, acho difícil interagir com ele.'],
   },
+  'Marinheiro': {
+    skillProfs: ['athletics', 'perception'],
+    toolProfs: 'Ferramentas de navegação, veículos (aquáticos)',
+    languages: 'Nenhuma',
+    feature: 'Passagem de Navio: pode garantir passagem em um navio mercante para si e seus companheiros.',
+    traits: ['Meus amigos sabem que podem contar comigo, não importa o quê.'],
+    ideals: ['Respeito: as pessoas no meu navio são minha família, e eu as protejo a todo custo.'],
+    bonds: ['Sou fiel ao meu capitão antes de qualquer coisa.'],
+    flaws: ['Costumo seguir ordens, mesmo quando acho que estão erradas.'],
+  },
+  'Artesão de Guilda': {
+    skillProfs: ['insight', 'persuasion'],
+    toolProfs: '1 tipo de ferramenta de artesão',
+    languages: '1 idioma à escolha',
+    feature: 'Filiação à Guilda: a guilda oferece alojamento, comida e apoio em outras cidades.',
+    traits: ['Acredito que qualquer coisa que vale a pena fazer, vale a pena ser bem feito.'],
+    ideals: ['Comunidade: é nossa responsabilidade, como civilizados, ajudar aqueles em necessidade.'],
+    bonds: ['Trabalho para tornar minha guilda a melhor de seu tipo.'],
+    flaws: ['Não há nada que eu não faça por meus companheiros de guilda.'],
+  },
+  'Pivete': {
+    skillProfs: ['sleight_of_hand', 'stealth'],
+    toolProfs: 'Ferramentas de disfarce, ferramentas de ladrão',
+    languages: 'Nenhuma',
+    feature: 'Habilidade Citadina: conhece padrões secretos das cidades, podendo se mover pelo dobro da velocidade entre dois pontos.',
+    traits: ['Esquadrinho qualquer coisa que vejo de relance.'],
+    ideals: ['Respeito: todos, ricos ou pobres, merecem respeito.'],
+    bonds: ['Devo tudo ao meu mentor — uma pessoa virtuosa que me salvou das ruas.'],
+    flaws: ['Quando alguém demonstra confiança em mim, eu fujo.'],
+  },
 };
+
+/* ─────────────────────────────────────────────
+   D&D 5e Subclass Data (PHB)
+───────────────────────────────────────────── */
+interface SubclassInfo {
+  level: number; // level when subclass is chosen
+  options: Record<string, string>;
+}
+
+const SUBCLASS_DATA: Record<string, SubclassInfo> = {
+  'Bárbaro': {
+    level: 3,
+    options: {
+      'Caminho do Berserker': 'Frenesi (ataque extra como ação bônus durante a Fúria, ganha 1 nível de exaustão ao final). Imunidade ao Encanto/Medo (nv 6). Represália Implacável (nv 10). Fúria Aterrorizante (nv 14).',
+      'Caminho do Guerreiro Totêmico': 'Buscador Espiritual (rituais com Falar com Animais). Totem Espiritual no nv 3 (Urso = resistência a todo dano exceto psíquico durante a Fúria; Águia = movimento e desengajar; Lobo = aliados têm vantagem em ataques contra inimigos a 1,5m). Caminhar Espiritual (nv 6), Ataque Espiritual (nv 10), Sintonia Totêmica (nv 14).',
+    },
+  },
+  'Bardo': {
+    level: 3,
+    options: {
+      'Colégio do Conhecimento': 'Proficiências Bônus (3 perícias). Palavras Cortantes (reação: gasta uma Inspiração para reduzir 1d6 do ataque/dano/teste de habilidade do alvo). Segredos Mágicos Adicionais (nv 6, 2 magias de qualquer classe). Palavras Cortantes Aprimoradas (nv 14).',
+      'Colégio do Valor': 'Proficiência em armaduras médias, escudos e armas marciais. Inspiração de Combate (alvo soma o dado em dano ou CA). Ataque Extra (nv 6). Conjuração de Combate (nv 6). Defesa Magnífica (nv 14).',
+    },
+  },
+  'Clérigo': {
+    level: 1,
+    options: {
+      'Domínio do Conhecimento': 'Magias de Domínio. Bênçãos do Conhecimento (2 idiomas + 2 perícias proficientes em dobro). Canalizar Divindade: Visões do Passado (nv 2). Potência da Divindade (nv 8). Visões do Passado Aprimoradas (nv 17).',
+      'Domínio da Vida': 'Magias de Domínio. Proficiência em armadura pesada. Discípulo da Vida (curas restauram +2 + nível da magia). Canalizar Divindade: Preservar a Vida (nv 2). Bem-aventurado Curador (nv 6). Golpe Divino (nv 8). Ciclo Supremo de Cura (nv 17).',
+      'Domínio da Luz': 'Magias de Domínio. Truque Bônus (Chama Sagrada). Aura Ofuscante (reação para reduzir dano com luz). Canalizar Divindade: Irradiar a Aurora (nv 2). Coroa Aurificada (nv 6). Potência da Divindade (nv 8). Aura Solar (nv 17).',
+      'Domínio da Natureza': 'Magias de Domínio. Aceólito da Natureza (1 truque de druida + perícia: Adestrar Animais, Natureza ou Sobrevivência). Proficiência em armadura pesada. Canalizar Divindade: Encantar Animais e Plantas (nv 2). Andança Calejada (nv 6). Golpe Divino (nv 8). Mestre da Natureza (nv 17).',
+      'Domínio da Tempestade': 'Magias de Domínio. Proficiência em armadura pesada e armas marciais. Fúria da Tempestade (reação após sofrer dano). Canalizar Divindade: Ira Destrutiva (nv 2). Resistência Trovejante (nv 6). Golpe Divino (nv 8). Senhor das Tempestades (nv 17).',
+      'Domínio do Engano': 'Magias de Domínio. Bênção do Trapaceiro (toque dá vantagem em Furtividade ao alvo). Canalizar Divindade: Invocar a Duplicidade (nv 2). Ataque Sagaz (nv 6). Golpe Divino (nv 8). Sósia Aprimorado (nv 17).',
+      'Domínio da Guerra': 'Magias de Domínio. Proficiência em armadura pesada e armas marciais. Sacerdote de Guerra (ação bônus para atacar, x/longo). Canalizar Divindade: Investida de Guerra (nv 2). Bênção do Deus de Guerra (nv 6). Golpe Divino (nv 8). Avatar da Batalha (nv 17).',
+    },
+  },
+  'Druida': {
+    level: 2,
+    options: {
+      'Círculo da Terra': 'Magias do Círculo (variam por terreno: ártico, costa, deserto, floresta, montanha, pântano, planície, subterrâneo). Recuperação Natural (recupera espaços de magia em descanso curto). Passos da Terra (nv 6). Corpo de Hera (nv 10). Arqui-druida (nv 14).',
+      'Círculo da Lua': 'Forma Selvagem de Combate (CR 1 já no nv 2, ação bônus em vez de ação). Forma de Combate ganha melhor PV. Golpes Primais (nv 6). Forma Elemental (nv 10). Mil Formas (nv 14).',
+    },
+  },
+  'Guerreiro': {
+    level: 3,
+    options: {
+      'Campeão': 'Crítico Aprimorado (crítico em 19-20). Atleta Notável (nv 7, +1/2 PROF em FOR/DES/CON checks). Estilo de Combate Adicional (nv 10). Crítico Superior (nv 15, 18-20). Sobrevivente (nv 18, regen).',
+      'Mestre de Batalha': 'Manobras de Combate (3 conhecidas + dado superioridade d8). Aprendiz de Artesão (1 ferramenta). Conhecer o Inimigo (nv 7). Manobras Aprimoradas (dado d10 nv 10, d12 nv 18). Reposta Relâmpago (nv 15).',
+      'Cavaleiro Arcano': 'Conjuração arcana (Mago, foco em Abjuração/Evocação, INT). Vínculo Arcano (vincular 2 armas). Golpe Bélico (nv 7, gastar espaço de magia para dano extra). Resistência Arcana (nv 10). Golpe Bélico Aprimorado (nv 15). Golpe Bélico Sobrenatural (nv 18).',
+    },
+  },
+  'Ladino': {
+    level: 3,
+    options: {
+      'Trapaceiro': 'Mãos Rápidas (Prestidigitação como ação bônus). Trabalho com Cordas (Acrobacia para desempate). Subir Veloz (nv 9). Reflexos Sobrenaturais (nv 13). Ladrão das Lendas (nv 17).',
+      'Assassino': 'Proficiência Bônus em ferramentas de disfarce e venenos. Ataque Surpresa (dobra dano contra surpresos). Assassinar (nv 9, crítico contra criaturas que ainda não agiram). Infiltrador (nv 13). Mente Imaculada (nv 17).',
+      'Trapaceiro Arcano': 'Conjuração arcana (Mago, foco em Encantamento/Ilusão, INT). Mão de Ladrão (Mão Mágica aprimorada). Magicimbria (nv 9). Mente Versátil (nv 13). Roubar o Pensamento (nv 17).',
+    },
+  },
+  'Mago': {
+    level: 2,
+    options: {
+      'Escola de Abjuração': 'Salvaguarda Abjuradora (escudo de magia). Mago Abjurador (recuperar espaços ao copiar feitiços). Resistência Arcana Projetada (nv 6). Salvaguarda Aprimorada (nv 10). Carga Salvaguardadora (nv 14).',
+      'Escola de Conjuração': 'Conjurador Hábil. Invocação Menor (criar objeto). Conjuração Benéfica (nv 6). Invocação Rápida (nv 10). Conjuração Reinventada (nv 14).',
+      'Escola de Adivinhação': 'Adivinhação. Presciência (rola 2d20 que substituem rolagens depois). Adivinhação Especializada (nv 6, recupera espaço ao usar magia de adivinhação). Sabedoria do Adivinho (nv 10). Presciência Maior (nv 14).',
+      'Escola de Encantamento': 'Encantador. Hipnótico Olhar (fascinar). Mago Encantador (dois alvos numa magia). Sutil (nv 6). Magia Dividida (nv 10). Servo Alterado (nv 14).',
+      'Escola de Evocação': 'Evocador. Esculpir Magias (proteger aliados de área). Magia Potente (nv 6, +mod do atributo no dano). Magia Empoderada (nv 10). Magia Sobreposta (nv 14).',
+      'Escola de Ilusão': 'Ilusionista. Ilusão Aprimorada (Ilusão Menor com som). Ilusões Maleáveis (nv 6). Familiar Ilusório (nv 10). Realidade Ilusória (nv 14).',
+      'Escola de Necromancia': 'Necromante. Conhecimento Macabro (proficiência média em armaduras). Ceifeiro (nv 2, dano extra em truques necromânticos). Comandar Mortos-Vivos (nv 6). Discípulo Inerte (nv 10). Senhor dos Mortos (nv 14).',
+      'Escola de Transmutação': 'Transmutador. Pedra do Transmutador. Mago Transmutador (modificar duração). Mestre dos Transmutadores (nv 10). Forma Transmutável (nv 14).',
+    },
+  },
+  'Monge': {
+    level: 3,
+    options: {
+      'Caminho da Mão Aberta': 'Técnica da Mão Aberta (afastar/derrubar/negar reações ao bater). Bem-Estar (nv 6, ação para curar). Tranquilidade (nv 11). Ataque Mortal Devastador (nv 17).',
+      'Caminho da Sombra': 'Artes da Sombra (gastar Ki para certas magias). Caminhos das Sombras (teleporte entre escuridão). Manto da Sombra (nv 11). Sombra Oportuna (nv 17).',
+      'Caminho dos Quatro Elementos': 'Disciplina Elemental (escolha técnicas usando Ki para efeitos elementais variados). Aprende novas disciplinas e aprimoramentos nos níveis 6, 11 e 17.',
+    },
+  },
+  'Paladino': {
+    level: 3,
+    options: {
+      'Juramento de Devoção': 'Magias do Juramento. Canalizar Divindade: Arma Sagrada e Expulsar os Profanos. Aura de Devoção (nv 7, imune a charme). Pureza Espiritual (nv 15). Aura Sagrada (nv 20).',
+      'Juramento dos Anciões': 'Magias do Juramento. Canalizar Divindade: Fúria da Natureza e Expulsar os Profanos. Aura de Proteção (nv 7, resistência a magia). Imune a Doenças (nv 15). Campeão dos Anciões (nv 20).',
+      'Juramento de Vingança': 'Magias do Juramento. Canalizar Divindade: Castigo Adjurador e Voto de Inimizade (vantagem em ataques contra um alvo). Alma Implacável (nv 15). Avatar da Vingança (nv 20).',
+    },
+  },
+  'Patrulheiro': {
+    level: 3,
+    options: {
+      'Caçador': 'Presa do Caçador (Assassino do Colosso/Atirador da Horda/Espírito Defensivo). Defesa do Caçador no nv 7 (Esquiva Sobre-humana, Múltiplos Adversários ou Aço de Lâmina). Ataques Múltiplos (nv 11). Defesa Superior (nv 15).',
+      'Mestre dos Bichos': 'Companheiro Animal (besta CR 1/4 ou menor, age na sua iniciativa, recebe metade do nível em PV bônus e pode receber comandos). Habilidades Excepcionais (nv 7). Gazes a Bestialidade (nv 11). Furtividade Compartilhada (nv 15).',
+    },
+  },
+  'Feiticeiro': {
+    level: 1,
+    options: {
+      'Linhagem Dracônica': 'Ancestralidade Dracônica (escolha tipo de dragão, idioma Dracônico). Resistência Dracônica (PV +1/nível, CA = 13 + DES sem armadura). Afinidade Elemental (nv 6, +CAR no dano do tipo). Asas Dracônicas (nv 14). Presença Dracônica (nv 18).',
+      'Magia Selvagem': 'Surto de Magia Selvagem (rolar tabela de efeitos aleatórios). Marés do Caos (nv 1, vantagem em rolagem). Curvar a Sorte (nv 6, gasta Pontos de Feitiçaria para alterar rolagens). Caos Controlado (nv 14). Surto Caótico (nv 18).',
+    },
+  },
+  'Bruxo': {
+    level: 1,
+    options: {
+      'O Arquifada': 'Magias Expandidas. Presença Encantadora (alvo deve passar em TR de SAB ou ficar enfeitiçado). Manto de Sombras (nv 6, invisível na sombra). Recuo Misterioso (nv 10, teleporte). Vida Encantada (nv 14).',
+      'O Senhor do Abismo': 'Magias Expandidas. Bênção Sombria (PV temporários ao reduzir inimigo a 0). Castigo Sombrio (nv 6, dano extra). Resistência Demoníaca (nv 10). Acusar a Hierarquia (nv 14).',
+      'O Grande Antigo': 'Magias Expandidas. Comunicação Telepática Sussurrada. Defesas do Grande Antigo (nv 6, dano psíquico de retorno). Pensamentos Sussurrados (nv 10). Submissão Forçada (nv 14).',
+    },
+  },
+};
+
+/* ─────────────────────────────────────────────
+   D&D 5e Armor Data (PHB)
+───────────────────────────────────────────── */
+type ArmorCategory = 'Leve' | 'Média' | 'Pesada' | 'Escudo';
+interface ArmorData {
+  category: ArmorCategory;
+  baseAC: number;
+  addDex: boolean;
+  maxDexBonus?: number;
+  strReq?: number;
+  stealthDisadv: boolean;
+  weight: number;
+  cost: string;
+}
+
+const ARMOR_DATA: Record<string, ArmorData> = {
+  // Armaduras Leves
+  'Acolchoada':       { category: 'Leve',    baseAC: 11, addDex: true,  stealthDisadv: true,  weight: 8,  cost: '5 po' },
+  'Couro':            { category: 'Leve',    baseAC: 11, addDex: true,  stealthDisadv: false, weight: 10, cost: '10 po' },
+  'Couro Batido':     { category: 'Leve',    baseAC: 12, addDex: true,  stealthDisadv: false, weight: 13, cost: '45 po' },
+  // Armaduras Médias
+  'Gibão de Peles':   { category: 'Média',   baseAC: 12, addDex: true, maxDexBonus: 2, stealthDisadv: false, weight: 12, cost: '10 po' },
+  'Camisão de Malha': { category: 'Média',   baseAC: 13, addDex: true, maxDexBonus: 2, stealthDisadv: false, weight: 20, cost: '50 po' },
+  'Brunea':           { category: 'Média',   baseAC: 14, addDex: true, maxDexBonus: 2, stealthDisadv: true,  weight: 45, cost: '50 po' },
+  'Peitoral':         { category: 'Média',   baseAC: 14, addDex: true, maxDexBonus: 2, stealthDisadv: false, weight: 20, cost: '400 po' },
+  'Meia-Armadura':    { category: 'Média',   baseAC: 15, addDex: true, maxDexBonus: 2, stealthDisadv: true,  weight: 40, cost: '750 po' },
+  // Armaduras Pesadas
+  'Cota de Anéis':    { category: 'Pesada',  baseAC: 14, addDex: false, stealthDisadv: true, weight: 40, cost: '30 po' },
+  'Cota de Malha':    { category: 'Pesada',  baseAC: 16, addDex: false, strReq: 13, stealthDisadv: true, weight: 55, cost: '75 po' },
+  'Lamelar':          { category: 'Pesada',  baseAC: 17, addDex: false, strReq: 15, stealthDisadv: true, weight: 60, cost: '200 po' },
+  'Placas':           { category: 'Pesada',  baseAC: 18, addDex: false, strReq: 15, stealthDisadv: true, weight: 65, cost: '1.500 po' },
+  // Escudo
+  'Escudo':           { category: 'Escudo',  baseAC: 2,  addDex: false, stealthDisadv: false, weight: 6, cost: '10 po' },
+};
+
+// Compute the resulting CA based on equipped armor + shield + DEX (+ class fallback for Bárbaro/Monge)
+function computeAC(
+  armorName: string,
+  hasShield: boolean,
+  dexScore: number,
+  conScore: number,
+  wisScore: number,
+  className: string,
+): number {
+  const dexMod = mod(dexScore);
+  let base = 10 + dexMod;
+  if (armorName && ARMOR_DATA[armorName]) {
+    const a = ARMOR_DATA[armorName];
+    base = a.baseAC + (a.addDex ? (a.maxDexBonus !== undefined ? Math.min(dexMod, a.maxDexBonus) : dexMod) : 0);
+  } else {
+    // Class-based unarmored defense
+    if (className === 'Bárbaro') base = 10 + dexMod + mod(conScore);
+    else if (className === 'Monge') base = 10 + dexMod + mod(wisScore);
+  }
+  if (hasShield) base += ARMOR_DATA['Escudo'].baseAC;
+  return base;
+}
 
 /* ─────────────────────────────────────────────
    Alignment Options
@@ -454,6 +709,7 @@ export interface SheetData {
   characterName: string;
   playerName: string;
   class: string;
+  subclass: string;
   level: number;
   race: string;
   background: string;
@@ -464,9 +720,12 @@ export interface SheetData {
   skillProfs: Record<string, 0 | 1 | 2>;
   maxHp: number; currentHp: number; tempHp: number;
   ac: number;
+  equippedArmor: string;
+  hasShield: boolean;
   speedOverride: string;
   hitDiceType: number; hitDiceCurrent: number;
   deathSaveSucc: number; deathSaveFail: number;
+  exhaustion: number;
   inspiration: boolean;
   personalityTraits: string; ideals: string; bonds: string; flaws: string;
   languages: string;
@@ -481,17 +740,28 @@ export interface SheetData {
   spellSlotsUsed: number[];
   spells: SpellEntry[];
   notes: string;
+  // Physical description
+  age: string;
+  height: string;
+  weight: string;
+  eyes: string;
+  skin: string;
+  hair: string;
+  // Story
+  alliesOrgs: string;
+  backstory: string;
 }
 
 const defaultSheet = (): SheetData => ({
-  characterName: '', playerName: '', class: '', level: 1, race: '',
+  characterName: '', playerName: '', class: '', subclass: '', level: 1, race: '',
   background: '', alignment: '', experience: 0,
   str: 10, dex: 10, con: 10, int: 10, wis: 10, cha: 10,
   savingThrowProfs: {},
   skillProfs: Object.fromEntries(SKILLS.map(s => [s.name, 0])),
   maxHp: 8, currentHp: 8, tempHp: 0,
-  ac: 10, speedOverride: '30', hitDiceType: 8, hitDiceCurrent: 1,
-  deathSaveSucc: 0, deathSaveFail: 0, inspiration: false,
+  ac: 10, equippedArmor: '', hasShield: false,
+  speedOverride: '30', hitDiceType: 8, hitDiceCurrent: 1,
+  deathSaveSucc: 0, deathSaveFail: 0, exhaustion: 0, inspiration: false,
   personalityTraits: '', ideals: '', bonds: '', flaws: '',
   languages: 'Comum', armorProfs: '', weaponProfs: '', toolProfs: '', features: '',
   attacks: [{ name: '', bonus: '', damage: '', type: '' }],
@@ -499,72 +769,221 @@ const defaultSheet = (): SheetData => ({
   backpack: [], equipped: [], treasure: [],
   spellcastingAbility: '', spellSlotsUsed: Array(10).fill(0),
   spells: [], notes: '',
+  age: '', height: '', weight: '', eyes: '', skin: '', hair: '',
+  alliesOrgs: '', backstory: '',
 });
 
 /* ─────────────────────────────────────────────
    Apply race/class automation
 ───────────────────────────────────────────── */
+// Merge tool prof strings from class + background, deduping and stripping "Nenhuma"
+function mergeToolProfs(className: string, bgName: string): string {
+  const cls = CLASS_DATA[className];
+  const bg = BACKGROUND_DATA[bgName];
+  const parts: string[] = [];
+  if (cls?.toolProfs && cls.toolProfs !== 'Nenhuma') parts.push(cls.toolProfs);
+  if (bg?.toolProfs && bg.toolProfs !== 'Nenhuma') parts.push(bg.toolProfs);
+  return parts.length ? parts.join(', ') : 'Nenhuma';
+}
+
+// Average HP per level after first (rounded up, per PHB)
+function avgHpPerLevel(hitDice: number): number {
+  return Math.floor(hitDice / 2) + 1;
+}
+
+// Compute max HP from class + level + CON
+function computeMaxHp(hitDice: number, level: number, conScore: number): number {
+  const conMod = mod(conScore);
+  const first = hitDice + conMod;
+  const rest = (level - 1) * (avgHpPerLevel(hitDice) + conMod);
+  return Math.max(1, first + rest);
+}
+
 function applyRace(sheet: SheetData, raceName: string): SheetData {
+  const next: SheetData = { ...sheet };
+
+  // Revert previous race's ASI before applying the new one
+  const prevRace = RACE_DATA[sheet.race];
+  if (prevRace) {
+    for (const [attr, bonus] of Object.entries(prevRace.asi)) {
+      (next as any)[attr] = Math.max(1, (sheet as any)[attr] - (bonus ?? 0));
+    }
+  }
+
+  next.race = raceName;
   const race = RACE_DATA[raceName];
-  if (!race) return { ...sheet, race: raceName };
-  const next = { ...sheet, race: raceName };
-  // Apply ASI
+
+  // Strip the previous race entry from features regardless
+  const cleanedFeatures = next.features
+    .split('\n\n')
+    .filter(l => !l.startsWith('[Raça]'))
+    .join('\n\n');
+  next.features = cleanedFeatures;
+
+  if (!race) return next;
+
+  // Apply new ASI
   for (const [attr, bonus] of Object.entries(race.asi)) {
-    (next as any)[attr] = Math.min(20, (sheet as any)[attr] + (bonus ?? 0));
+    (next as any)[attr] = Math.min(20, (next as any)[attr] + (bonus ?? 0));
   }
   next.speedOverride = String(race.speed);
   next.languages = race.languages;
-  // Append traits (don't overwrite class features)
-  const existingFeatures = next.features.split('\n').filter(l => !l.startsWith('[Raça]'));
-  next.features = [`[Raça] ${raceName}:\n${race.traits}`, ...existingFeatures].join('\n\n');
+
+  // Append the new race's feature block
+  next.features = [`[Raça] ${raceName}:\n${race.traits}`, cleanedFeatures]
+    .filter(Boolean)
+    .join('\n\n');
+
+  // CON may have changed → recompute HP if class is set
+  if (next.class && CLASS_DATA[next.class]) {
+    next.maxHp = computeMaxHp(CLASS_DATA[next.class].hitDice, next.level, next.con);
+    next.currentHp = Math.min(next.maxHp, Math.max(1, next.currentHp || next.maxHp));
+  }
+
   return next;
 }
 
 function applyClass(sheet: SheetData, className: string): SheetData {
   const cls = CLASS_DATA[className];
-  if (!cls) return { ...sheet, class: className };
-  const next = { ...sheet, class: className };
+  // Reset subclass when class changes
+  const next: SheetData = { ...sheet, class: className, subclass: '' };
+
+  // Strip the previous class & subclass entries from features regardless
+  const cleanedFeatures = next.features
+    .split('\n\n')
+    .filter(l => !l.startsWith('[Classe]') && !l.startsWith('[Subclasse]'))
+    .join('\n\n');
+  next.features = cleanedFeatures;
+
+  if (!cls) return next;
+
   next.hitDiceType = cls.hitDice;
   next.hitDiceCurrent = sheet.level;
-  // Max HP at level 1 = hit die + con mod
-  const conMod = mod(sheet.con);
-  next.maxHp = cls.hitDice + conMod;
-  next.currentHp = Math.max(1, next.maxHp);
-  // Saving throw proficiencies
+  // Recompute max HP across all levels (PHB averages after level 1)
+  next.maxHp = computeMaxHp(cls.hitDice, sheet.level, sheet.con);
+  next.currentHp = next.maxHp;
+  // Saving throw proficiencies (full assignment per class)
   const newSaves: Partial<Record<Attr, boolean>> = {};
   cls.savingThrows.forEach(a => { newSaves[a] = true; });
   next.savingThrowProfs = newSaves;
-  // Proficiencies
+  // Class proficiencies (armor & weapons replaced; tools merged with current background)
   next.armorProfs = cls.armorProfs;
   next.weaponProfs = cls.weaponProfs;
-  next.toolProfs = cls.toolProfs;
-  // Spellcasting
+  next.toolProfs = mergeToolProfs(className, sheet.background);
+  // Spellcasting ability
   next.spellcastingAbility = cls.spellcastingAbility;
   // Class features
-  const existingFeatures = next.features.split('\n\n').filter(l => !l.startsWith('[Classe]'));
-  next.features = [`[Classe] ${className} (Nível ${sheet.level}):\n${cls.features}`, ...existingFeatures].join('\n\n');
+  next.features = [`[Classe] ${className} (Nível ${sheet.level}):\n${cls.features}`, cleanedFeatures]
+    .filter(Boolean)
+    .join('\n\n');
   return next;
 }
 
 function applyBackground(sheet: SheetData, bgName: string): SheetData {
-  const bg = BACKGROUND_DATA[bgName];
-  if (!bg) return { ...sheet, background: bgName };
-  const next = { ...sheet, background: bgName };
-  // Mark skill proficiencies
+  const next: SheetData = { ...sheet };
+
+  // Revert previous background's skill proficiencies (only if still at level 1, never wipe expertise)
   const newSkillProfs = { ...sheet.skillProfs };
+  const prevBg = BACKGROUND_DATA[sheet.background];
+  if (prevBg) {
+    prevBg.skillProfs.forEach(skill => {
+      if (newSkillProfs[skill] === 1) newSkillProfs[skill] = 0;
+    });
+  }
+
+  next.background = bgName;
+
+  // Strip the previous background entry from features regardless
+  const cleanedFeatures = next.features
+    .split('\n\n')
+    .filter(l => !l.startsWith('[Antecedente]'))
+    .join('\n\n');
+  next.features = cleanedFeatures;
+
+  const bg = BACKGROUND_DATA[bgName];
+  if (!bg) {
+    next.skillProfs = newSkillProfs;
+    next.toolProfs = mergeToolProfs(sheet.class, '');
+    return next;
+  }
+
+  // Mark new skill proficiencies (don't overwrite expertise)
   bg.skillProfs.forEach(skill => {
-    if (newSkillProfs[skill] === 0) newSkillProfs[skill] = 1;
+    if ((newSkillProfs[skill] ?? 0) < 1) newSkillProfs[skill] = 1;
   });
   next.skillProfs = newSkillProfs;
-  next.toolProfs = [sheet.toolProfs, bg.toolProfs].filter(Boolean).join(', ');
-  // Set personality info if empty
-  if (!next.personalityTraits && bg.traits.length > 0) next.personalityTraits = bg.traits[0];
-  if (!next.ideals && bg.ideals.length > 0) next.ideals = bg.ideals[0];
-  if (!next.bonds && bg.bonds.length > 0) next.bonds = bg.bonds[0];
-  if (!next.flaws && bg.flaws.length > 0) next.flaws = bg.flaws[0];
+
+  // Recompose tool profs (class + new background)
+  next.toolProfs = mergeToolProfs(sheet.class, bgName);
+
+  // Replace personality fields if they were empty OR matched the previous background's defaults
+  const prevMatch = (cur: string, list?: string[]) => !cur || (list ? list.includes(cur) : false);
+  if (prevMatch(next.personalityTraits, prevBg?.traits) && bg.traits.length > 0) {
+    next.personalityTraits = bg.traits[0];
+  }
+  if (prevMatch(next.ideals, prevBg?.ideals) && bg.ideals.length > 0) {
+    next.ideals = bg.ideals[0];
+  }
+  if (prevMatch(next.bonds, prevBg?.bonds) && bg.bonds.length > 0) {
+    next.bonds = bg.bonds[0];
+  }
+  if (prevMatch(next.flaws, prevBg?.flaws) && bg.flaws.length > 0) {
+    next.flaws = bg.flaws[0];
+  }
+
   // Append background feature
-  const existingFeatures = next.features.split('\n\n').filter(l => !l.startsWith('[Antecedente]'));
-  next.features = [...existingFeatures, `[Antecedente] ${bgName}:\n${bg.feature}`].join('\n\n');
+  next.features = [cleanedFeatures, `[Antecedente] ${bgName}:\n${bg.feature}`]
+    .filter(Boolean)
+    .join('\n\n');
+  return next;
+}
+
+function applySubclass(sheet: SheetData, subclassName: string): SheetData {
+  const next: SheetData = { ...sheet, subclass: subclassName };
+
+  // Strip any previous subclass entry
+  const cleanedFeatures = next.features
+    .split('\n\n')
+    .filter(l => !l.startsWith('[Subclasse]'))
+    .join('\n\n');
+  next.features = cleanedFeatures;
+
+  if (!subclassName || !sheet.class) return next;
+  const sub = SUBCLASS_DATA[sheet.class];
+  if (!sub) return next;
+  const desc = sub.options[subclassName];
+  if (!desc) return next;
+
+  next.features = [`[Subclasse] ${subclassName}:\n${desc}`, cleanedFeatures]
+    .filter(Boolean)
+    .join('\n\n');
+  return next;
+}
+
+function applyLevel(sheet: SheetData, level: number): SheetData {
+  const clamped = Math.max(1, Math.min(20, level));
+  const next: SheetData = { ...sheet, level: clamped };
+  // Reset hit dice pool to match new level
+  next.hitDiceCurrent = clamped;
+  // Recompute max HP if class is known
+  if (next.class && CLASS_DATA[next.class]) {
+    const newMax = computeMaxHp(CLASS_DATA[next.class].hitDice, clamped, next.con);
+    // Preserve current HP ratio (so leveling up doesn't fully heal)
+    const ratio = sheet.maxHp > 0 ? sheet.currentHp / sheet.maxHp : 1;
+    next.maxHp = newMax;
+    next.currentHp = Math.max(1, Math.round(newMax * ratio));
+  }
+  // Refresh class feature line so the level number stays in sync
+  if (next.class && CLASS_DATA[next.class]) {
+    const cls = CLASS_DATA[next.class];
+    const cleaned = next.features
+      .split('\n\n')
+      .filter(l => !l.startsWith('[Classe]'))
+      .join('\n\n');
+    next.features = [`[Classe] ${next.class} (Nível ${clamped}):\n${cls.features}`, cleaned]
+      .filter(Boolean)
+      .join('\n\n');
+  }
   return next;
 }
 
@@ -646,7 +1065,7 @@ export interface CharacterSheetProps {
   readOnly?: boolean;
 }
 
-type Tab = 'main' | 'combat' | 'spells' | 'inventory';
+type Tab = 'main' | 'combat' | 'armor' | 'spells' | 'inventory';
 
 export default function CharacterSheet({ sessionId, onClose, targetPlayerId, targetPlayerName, readOnly = false }: CharacterSheetProps) {
   const { player, role } = useAuth();
@@ -703,6 +1122,11 @@ export default function CharacterSheet({ sessionId, onClose, targetPlayerId, tar
     setDirty(true);
   };
 
+  const handleSubclassChange = (subName: string) => {
+    setSheet(prev => applySubclass(prev, subName));
+    setDirty(true);
+  };
+
   const handleRaceChange = (raceName: string) => {
     setSheet(prev => applyRace(prev, raceName));
     setDirty(true);
@@ -710,6 +1134,27 @@ export default function CharacterSheet({ sessionId, onClose, targetPlayerId, tar
 
   const handleBackgroundChange = (bgName: string) => {
     setSheet(prev => applyBackground(prev, bgName));
+    setDirty(true);
+  };
+
+  const handleLevelChange = (level: number) => {
+    setSheet(prev => applyLevel(prev, level));
+    setDirty(true);
+  };
+
+  const handleArmorChange = (armorName: string) => {
+    setSheet(prev => {
+      const newAc = computeAC(armorName, prev.hasShield, prev.dex, prev.con, prev.wis, prev.class);
+      return { ...prev, equippedArmor: armorName, ac: newAc };
+    });
+    setDirty(true);
+  };
+
+  const handleShieldToggle = (val: boolean) => {
+    setSheet(prev => {
+      const newAc = computeAC(prev.equippedArmor, val, prev.dex, prev.con, prev.wis, prev.class);
+      return { ...prev, hasShield: val, ac: newAc };
+    });
     setDirty(true);
   };
 
@@ -723,11 +1168,12 @@ export default function CharacterSheet({ sessionId, onClose, targetPlayerId, tar
   const saveBonus = (a: Attr) => attrMod(a) + (sheet.savingThrowProfs[a] ? pb : 0);
   const passivePerc = 10 + skillBonus(SKILLS.find(s => s.name === 'perception')!);
   const initiative = attrMod('dex');
-  const defaultSlots = SPELL_SLOTS_BY_LEVEL[sheet.level] ?? Array(10).fill(0);
+  const defaultSlots = getSpellSlotsForClass(sheet.class, sheet.level);
 
   const TABS: { id: Tab; label: string; icon: any }[] = [
     { id: 'main', label: 'Principal', icon: BookOpen },
     { id: 'combat', label: 'Combate', icon: Sword },
+    { id: 'armor', label: 'Armadura', icon: Shield },
     { id: 'spells', label: 'Magias', icon: Sparkles },
     { id: 'inventory', label: 'Inventário', icon: Package },
   ];
@@ -797,6 +1243,22 @@ export default function CharacterSheet({ sessionId, onClose, targetPlayerId, tar
                   )}
                 </div>
                 <div>
+                  <label className="text-[10px] text-muted-foreground font-display">
+                    Subclasse{sheet.class && SUBCLASS_DATA[sheet.class] && sheet.level < SUBCLASS_DATA[sheet.class].level ? ` (nv ${SUBCLASS_DATA[sheet.class].level})` : ''}
+                  </label>
+                  {canEdit ? (
+                    <Sel
+                      val={sheet.subclass}
+                      onChange={handleSubclassChange}
+                      options={sheet.class && SUBCLASS_DATA[sheet.class] ? Object.keys(SUBCLASS_DATA[sheet.class].options) : []}
+                      placeholder={sheet.class ? '— Escolha —' : '— Selecione classe —'}
+                      readOnly={!sheet.class || (SUBCLASS_DATA[sheet.class] && sheet.level < SUBCLASS_DATA[sheet.class].level)}
+                    />
+                  ) : (
+                    <TF val={sheet.subclass} onChange={() => {}} readOnly />
+                  )}
+                </div>
+                <div>
                   <label className="text-[10px] text-muted-foreground font-display">Raça</label>
                   {canEdit ? (
                     <Sel
@@ -832,7 +1294,7 @@ export default function CharacterSheet({ sessionId, onClose, targetPlayerId, tar
                 </div>
                 <div>
                   <label className="text-[10px] text-muted-foreground font-display">Nível</label>
-                  <N val={sheet.level} onChange={v => set('level', Math.max(1, Math.min(20, v)))} min={1} max={20} className="w-full h-8" readOnly={!canEdit} />
+                  <N val={sheet.level} onChange={handleLevelChange} min={1} max={20} className="w-full h-8" readOnly={!canEdit} />
                 </div>
                 <div>
                   <label className="text-[10px] text-muted-foreground font-display">Experiência</label>
@@ -928,6 +1390,37 @@ export default function CharacterSheet({ sessionId, onClose, targetPlayerId, tar
                 </div>
               </div>
 
+              {/* Physical description */}
+              <div>
+                <SectionTitle>Descrição Física</SectionTitle>
+                <div className="grid grid-cols-2 sm:grid-cols-6 gap-2">
+                  <div>
+                    <label className="text-[10px] text-muted-foreground font-display">Idade</label>
+                    <TF val={sheet.age} onChange={v => set('age', v)} readOnly={!canEdit} />
+                  </div>
+                  <div>
+                    <label className="text-[10px] text-muted-foreground font-display">Altura</label>
+                    <TF val={sheet.height} onChange={v => set('height', v)} readOnly={!canEdit} />
+                  </div>
+                  <div>
+                    <label className="text-[10px] text-muted-foreground font-display">Peso</label>
+                    <TF val={sheet.weight} onChange={v => set('weight', v)} readOnly={!canEdit} />
+                  </div>
+                  <div>
+                    <label className="text-[10px] text-muted-foreground font-display">Olhos</label>
+                    <TF val={sheet.eyes} onChange={v => set('eyes', v)} readOnly={!canEdit} />
+                  </div>
+                  <div>
+                    <label className="text-[10px] text-muted-foreground font-display">Pele</label>
+                    <TF val={sheet.skin} onChange={v => set('skin', v)} readOnly={!canEdit} />
+                  </div>
+                  <div>
+                    <label className="text-[10px] text-muted-foreground font-display">Cabelo</label>
+                    <TF val={sheet.hair} onChange={v => set('hair', v)} readOnly={!canEdit} />
+                  </div>
+                </div>
+              </div>
+
               {/* Character description */}
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                 <div>
@@ -945,6 +1438,18 @@ export default function CharacterSheet({ sessionId, onClose, targetPlayerId, tar
                 <div>
                   <SectionTitle>Defeitos</SectionTitle>
                   <TA val={sheet.flaws} onChange={v => set('flaws', v)} rows={2} readOnly={!canEdit} />
+                </div>
+              </div>
+
+              {/* Allies & Backstory */}
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                <div>
+                  <SectionTitle>Aliados e Organizações</SectionTitle>
+                  <TA val={sheet.alliesOrgs} onChange={v => set('alliesOrgs', v)} rows={3} placeholder="Facções, contatos, símbolo da organização..." readOnly={!canEdit} />
+                </div>
+                <div>
+                  <SectionTitle>História do Personagem</SectionTitle>
+                  <TA val={sheet.backstory} onChange={v => set('backstory', v)} rows={3} placeholder="Origens, motivações, eventos marcantes..." readOnly={!canEdit} />
                 </div>
               </div>
 
@@ -1037,8 +1542,8 @@ export default function CharacterSheet({ sessionId, onClose, targetPlayerId, tar
                 </div>
               </div>
 
-              {/* Dados de vida + Death saves */}
-              <div className="grid grid-cols-2 gap-4">
+              {/* Dados de vida + Death saves + Exaustão */}
+              <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
                 <div>
                   <SectionTitle>Dados de Vida Restantes</SectionTitle>
                   <div className="flex items-center gap-2">
@@ -1066,6 +1571,29 @@ export default function CharacterSheet({ sessionId, onClose, targetPlayerId, tar
                       ))}
                     </div>
                   </div>
+                </div>
+                <div>
+                  <SectionTitle>Exaustão</SectionTitle>
+                  <div className="flex items-center gap-2">
+                    <div className="flex gap-1">
+                      {[1, 2, 3, 4, 5, 6].map(i => (
+                        <Checkbox key={i} checked={sheet.exhaustion >= i}
+                          onChange={() => canEdit && set('exhaustion', sheet.exhaustion === i ? i - 1 : i)}
+                          readOnly={!canEdit} />
+                      ))}
+                    </div>
+                    <span className="text-xs text-muted-foreground">Nv {sheet.exhaustion}/6</span>
+                  </div>
+                  {sheet.exhaustion > 0 && (
+                    <div className="text-[10px] text-muted-foreground mt-1">
+                      {sheet.exhaustion === 1 && 'Desvantagem em testes de habilidade'}
+                      {sheet.exhaustion === 2 && 'Deslocamento reduzido pela metade'}
+                      {sheet.exhaustion === 3 && 'Desvantagem em ataques e TR'}
+                      {sheet.exhaustion === 4 && 'PV máximo reduzido pela metade'}
+                      {sheet.exhaustion === 5 && 'Deslocamento reduzido a 0'}
+                      {sheet.exhaustion === 6 && 'Morte'}
+                    </div>
+                  )}
                 </div>
               </div>
 
@@ -1112,6 +1640,148 @@ export default function CharacterSheet({ sessionId, onClose, targetPlayerId, tar
               <div>
                 <SectionTitle>Notas de Combate</SectionTitle>
                 <TA val={sheet.notes} onChange={v => set('notes', v)} rows={3} placeholder="Condições, habilidades especiais..." readOnly={!canEdit} />
+              </div>
+            </div>
+          )}
+
+          {/* ══════════ TAB: ARMADURA ══════════ */}
+          {tab === 'armor' && (
+            <div className="space-y-4">
+              {/* AC summary */}
+              <div className="bg-secondary/50 border border-border rounded-lg p-4">
+                <SectionTitle>Classe de Armadura Atual</SectionTitle>
+                <div className="flex items-center justify-between gap-4 flex-wrap">
+                  <div className="text-center">
+                    <div className="text-5xl font-display text-gold">{sheet.ac}</div>
+                    <div className="text-[10px] text-muted-foreground font-display mt-1">CA TOTAL</div>
+                  </div>
+                  <div className="text-xs text-muted-foreground space-y-0.5 flex-1 min-w-[180px]">
+                    {sheet.equippedArmor && ARMOR_DATA[sheet.equippedArmor] ? (
+                      <>
+                        <div>Base ({sheet.equippedArmor}): <span className="text-gold">{ARMOR_DATA[sheet.equippedArmor].baseAC}</span></div>
+                        {ARMOR_DATA[sheet.equippedArmor].addDex && (
+                          <div>
+                            Mod. DES:{' '}
+                            <span className="text-gold">
+                              {ARMOR_DATA[sheet.equippedArmor].maxDexBonus !== undefined
+                                ? `+${Math.min(attrMod('dex'), ARMOR_DATA[sheet.equippedArmor].maxDexBonus!)} (máx +${ARMOR_DATA[sheet.equippedArmor].maxDexBonus})`
+                                : modStr(attrMod('dex'))}
+                            </span>
+                          </div>
+                        )}
+                      </>
+                    ) : sheet.class === 'Bárbaro' ? (
+                      <div>Defesa Sem Armadura (Bárbaro): <span className="text-gold">10 + DES ({modStr(attrMod('dex'))}) + CON ({modStr(attrMod('con'))})</span></div>
+                    ) : sheet.class === 'Monge' ? (
+                      <div>Defesa Sem Armadura (Monge): <span className="text-gold">10 + DES ({modStr(attrMod('dex'))}) + SAB ({modStr(attrMod('wis'))})</span></div>
+                    ) : (
+                      <div>Sem armadura: <span className="text-gold">10 + DES ({modStr(attrMod('dex'))})</span></div>
+                    )}
+                    {sheet.hasShield && <div>Escudo: <span className="text-gold">+2</span></div>}
+                  </div>
+                  <div className="flex flex-col gap-2">
+                    <Checkbox checked={sheet.hasShield} onChange={handleShieldToggle} label="Usando Escudo" readOnly={!canEdit} />
+                    {canEdit && (
+                      <Button size="sm" variant="ghost" className="text-xs h-7 font-display"
+                        onClick={() => handleArmorChange('')}>
+                        Remover Armadura
+                      </Button>
+                    )}
+                  </div>
+                </div>
+                {sheet.equippedArmor && ARMOR_DATA[sheet.equippedArmor]?.strReq && sheet.str < ARMOR_DATA[sheet.equippedArmor].strReq! && (
+                  <div className="mt-2 text-[11px] text-destructive">
+                    ⚠ Esta armadura requer Força {ARMOR_DATA[sheet.equippedArmor].strReq} (você tem {sheet.str}). Deslocamento reduzido em 3m (10ft).
+                  </div>
+                )}
+                {sheet.equippedArmor && ARMOR_DATA[sheet.equippedArmor]?.stealthDisadv && (
+                  <div className="mt-1 text-[11px] text-yellow-500/80">
+                    ⚠ Desvantagem em testes de Furtividade.
+                  </div>
+                )}
+              </div>
+
+              {/* Armor selection list */}
+              {(['Leve', 'Média', 'Pesada'] as ArmorCategory[]).map(cat => {
+                const items = Object.entries(ARMOR_DATA).filter(([, a]) => a.category === cat);
+                return (
+                  <div key={cat}>
+                    <SectionTitle>Armaduras {cat === 'Leve' ? 'Leves' : cat === 'Média' ? 'Médias' : 'Pesadas'}</SectionTitle>
+                    <div className="space-y-1">
+                      <div className="grid grid-cols-12 gap-1 text-[10px] text-muted-foreground font-display px-1">
+                        <span className="col-span-1" />
+                        <span className="col-span-3">Nome</span>
+                        <span className="col-span-3">CA</span>
+                        <span className="col-span-1 text-center">FOR</span>
+                        <span className="col-span-1 text-center">Furt.</span>
+                        <span className="col-span-1 text-right">Peso</span>
+                        <span className="col-span-2 text-right">Custo</span>
+                      </div>
+                      {items.map(([name, a]) => {
+                        const isEquipped = sheet.equippedArmor === name;
+                        const acFormula =
+                          a.addDex
+                            ? a.maxDexBonus !== undefined
+                              ? `${a.baseAC} + DES (máx ${a.maxDexBonus})`
+                              : `${a.baseAC} + DES`
+                            : `${a.baseAC}`;
+                        return (
+                          <div
+                            key={name}
+                            className={`grid grid-cols-12 gap-1 items-center px-1 py-1 rounded text-xs cursor-pointer transition-colors ${
+                              isEquipped ? 'bg-gold/15 border border-gold/40' : 'hover:bg-secondary/40 border border-transparent'
+                            } ${!canEdit ? 'cursor-default' : ''}`}
+                            onClick={() => canEdit && handleArmorChange(isEquipped ? '' : name)}
+                          >
+                            <div className="col-span-1 flex justify-center">
+                              <span className={`w-3 h-3 rounded-full border ${isEquipped ? 'bg-gold border-gold' : 'border-border'}`} />
+                            </div>
+                            <span className="col-span-3 text-foreground font-display">{name}</span>
+                            <span className="col-span-3 text-muted-foreground">{acFormula}</span>
+                            <span className="col-span-1 text-center text-muted-foreground">{a.strReq ? `${a.strReq}` : '—'}</span>
+                            <span className="col-span-1 text-center text-muted-foreground">{a.stealthDisadv ? 'Desv.' : '—'}</span>
+                            <span className="col-span-1 text-right text-muted-foreground">{a.weight}</span>
+                            <span className="col-span-2 text-right text-muted-foreground">{a.cost}</span>
+                          </div>
+                        );
+                      })}
+                    </div>
+                  </div>
+                );
+              })}
+
+              {/* Shield reference */}
+              <div>
+                <SectionTitle>Escudo</SectionTitle>
+                <div className="grid grid-cols-12 gap-1 text-[10px] text-muted-foreground font-display px-1">
+                  <span className="col-span-1" />
+                  <span className="col-span-3">Nome</span>
+                  <span className="col-span-3">CA</span>
+                  <span className="col-span-1 text-center">FOR</span>
+                  <span className="col-span-1 text-center">Furt.</span>
+                  <span className="col-span-1 text-right">Peso</span>
+                  <span className="col-span-2 text-right">Custo</span>
+                </div>
+                <div
+                  className={`grid grid-cols-12 gap-1 items-center px-1 py-1 rounded text-xs cursor-pointer transition-colors ${
+                    sheet.hasShield ? 'bg-gold/15 border border-gold/40' : 'hover:bg-secondary/40 border border-transparent'
+                  } ${!canEdit ? 'cursor-default' : ''}`}
+                  onClick={() => canEdit && handleShieldToggle(!sheet.hasShield)}
+                >
+                  <div className="col-span-1 flex justify-center">
+                    <span className={`w-3 h-3 rounded-sm border ${sheet.hasShield ? 'bg-gold border-gold' : 'border-border'}`} />
+                  </div>
+                  <span className="col-span-3 text-foreground font-display">Escudo</span>
+                  <span className="col-span-3 text-muted-foreground">+2 (à CA)</span>
+                  <span className="col-span-1 text-center text-muted-foreground">—</span>
+                  <span className="col-span-1 text-center text-muted-foreground">—</span>
+                  <span className="col-span-1 text-right text-muted-foreground">6</span>
+                  <span className="col-span-2 text-right text-muted-foreground">10 po</span>
+                </div>
+              </div>
+
+              <div className="text-[11px] text-muted-foreground italic px-1">
+                Clique em uma armadura para equipá-la. A CA é recalculada automaticamente. Você precisa ter proficiência com a categoria de armadura para usá-la sem penalidades (consulte a aba Principal).
               </div>
             </div>
           )}
