@@ -14,6 +14,45 @@ export type Database = {
   }
   public: {
     Tables: {
+      character_sheets: {
+        Row: {
+          id: string
+          session_id: string
+          player_id: string
+          data: Json
+          updated_at: string
+        }
+        Insert: {
+          id?: string
+          session_id: string
+          player_id: string
+          data?: Json
+          updated_at?: string
+        }
+        Update: {
+          id?: string
+          session_id?: string
+          player_id?: string
+          data?: Json
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "character_sheets_session_id_fkey"
+            columns: ["session_id"]
+            isOneToOne: false
+            referencedRelation: "sessions"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "character_sheets_player_id_fkey"
+            columns: ["player_id"]
+            isOneToOne: false
+            referencedRelation: "players"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       board_drawings: {
         Row: {
           created_at: string
@@ -191,6 +230,60 @@ export type Database = {
         }
         Relationships: []
       }
+      session_messages: {
+        Row: {
+          id: string
+          session_id: string
+          player_id: string
+          player_name: string
+          player_avatar: string | null
+          content: string
+          is_whisper: boolean
+          whisper_to_player_id: string | null
+          whisper_to_name: string | null
+          created_at: string
+        }
+        Insert: {
+          id?: string
+          session_id: string
+          player_id: string
+          player_name: string
+          player_avatar?: string | null
+          content: string
+          is_whisper?: boolean
+          whisper_to_player_id?: string | null
+          whisper_to_name?: string | null
+          created_at?: string
+        }
+        Update: {
+          id?: string
+          session_id?: string
+          player_id?: string
+          player_name?: string
+          player_avatar?: string | null
+          content?: string
+          is_whisper?: boolean
+          whisper_to_player_id?: string | null
+          whisper_to_name?: string | null
+          created_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "session_messages_session_id_fkey"
+            columns: ["session_id"]
+            isOneToOne: false
+            referencedRelation: "sessions"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "session_messages_player_id_fkey"
+            columns: ["player_id"]
+            isOneToOne: false
+            referencedRelation: "players"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       session_participants: {
         Row: {
           id: string
@@ -243,6 +336,7 @@ export type Database = {
           name: string
           password: string
           show_grid: boolean
+          system: string
         }
         Insert: {
           active_map_url?: string | null
@@ -256,6 +350,7 @@ export type Database = {
           name: string
           password: string
           show_grid?: boolean
+          system?: string
         }
         Update: {
           active_map_url?: string | null
@@ -269,6 +364,7 @@ export type Database = {
           name?: string
           password?: string
           show_grid?: boolean
+          system?: string
         }
         Relationships: [
           {
