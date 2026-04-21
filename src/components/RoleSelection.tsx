@@ -1,10 +1,40 @@
+import { useEffect, useState } from 'react';
 import { useAuth } from '@/lib/auth-context';
 import { Crown, Sword, LogOut } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { motion } from 'framer-motion';
+import { supabase } from '@/integrations/supabase/client';
+import { getSystem } from '@/lib/systems';
+
+const ACTIVE_SESSION_KEY = 'vtt-active-session';
 
 export default function RoleSelection() {
   const { player, setRole, logout } = useAuth();
+  const [activeSessionSystem, setActiveSessionSystem] = useState<string | null>(null);
+
+  useEffect(() => {
+    const loadSessionSystem = async () => {
+      const activeSessionId = localStorage.getItem(ACTIVE_SESSION_KEY);
+      if (!activeSessionId) {
+        setActiveSessionSystem(null);
+        return;
+      }
+
+      const { data } = await supabase
+        .from('sessions')
+        .select('system')
+        .eq('id', activeSessionId)
+        .maybeSingle();
+
+      if (data?.system) {
+        setActiveSessionSystem(getSystem(data.system).shortName);
+      } else {
+        setActiveSessionSystem(null);
+      }
+    };
+
+    loadSessionSystem();
+  }, []);
 
   return (
     <div className="min-h-screen flex items-center justify-center bg-fantasy-gradient">
@@ -18,6 +48,11 @@ export default function RoleSelection() {
           </h2>
         </div>
         <p className="text-muted-foreground font-body text-lg mb-8">Escolha seu papel nesta aventura</p>
+        {activeSessionSystem && (
+          <p className="text-xs text-muted-foreground mb-6">
+            Sessão ativa detectada: <span className="text-gold font-display">{activeSessionSystem}</span>
+          </p>
+        )}
 
         <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 sm:gap-6">
           <motion.button

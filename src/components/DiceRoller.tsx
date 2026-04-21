@@ -6,11 +6,13 @@ import { Input } from '@/components/ui/input';
 import { X, Dices } from 'lucide-react';
 import { toast } from 'sonner';
 import { motion, AnimatePresence } from 'framer-motion';
+import { OP_CLASSES, OP_DIFICULDADES, OP_TABELA_PANICO, type OPClasse } from '@/lib/systems';
 
 const DICE_TYPES = [4, 6, 8, 10, 12, 20, 100] as const;
 
 interface DiceRollerProps {
   sessionId: string;
+  sessionSystem?: string;
   onClose: () => void;
 }
 
@@ -22,7 +24,7 @@ interface RollAnnouncement {
   id: string;
 }
 
-export default function DiceRoller({ sessionId, onClose }: DiceRollerProps) {
+export default function DiceRoller({ sessionId, sessionSystem, onClose }: DiceRollerProps) {
   const { player, role } = useAuth();
   const [selectedDice, setSelectedDice] = useState<number>(20);
   const [quantity, setQuantity] = useState(1);
@@ -32,7 +34,34 @@ export default function DiceRoller({ sessionId, onClose }: DiceRollerProps) {
   const [rolling, setRolling] = useState(false);
   const [lastResult, setLastResult] = useState<{ results: number[]; total: number; formula: string } | null>(null);
   const [announcements, setAnnouncements] = useState<RollAnnouncement[]>([]);
+  const [effortDie, setEffortDie] = useState<number | null>(null);
   const channelRef = useRef<ReturnType<typeof supabase.channel> | null>(null);
+  const isOP = sessionSystem === 'ordem_paranormal';
+
+  useEffect(() => {
+    const loadEffortDie = async () => {
+      if (!player || !isOP) {
+        setEffortDie(null);
+        return;
+      }
+
+      const { data } = await supabase
+        .from('character_sheets')
+        .select('data')
+        .eq('session_id', sessionId)
+        .eq('player_id', player.id)
+        .maybeSingle();
+
+      const classe = (data?.data as { classe?: OPClasse } | null)?.classe;
+      if (classe && OP_CLASSES[classe]) {
+        setEffortDie(OP_CLASSES[classe].dadoEsforco);
+      } else {
+        setEffortDie(null);
+      }
+    };
+
+    loadEffortDie();
+  }, [isOP, player, sessionId]);
 
   useEffect(() => {
     const channel = supabase
@@ -78,6 +107,68 @@ export default function DiceRoller({ sessionId, onClose }: DiceRollerProps) {
     throw new Error('Fórmula inválida. Use: XdY+Z (ex: 2d6+3)');
   };
 
+  const persistRoll = async (
+    formula: string,
+    results: number[],
+    total: number,
+    critical = false,
+  ) => {
+    if (!player) return;
+
+    channelRef.current?.send({
+      type: 'broadcast',
+      event: 'roll_announce',
+      payload: {
+        playerId: player.id,
+        playerName: player.name,
+        formula,
+        total,
+        critical,
+      },
+    });
+
+    await supabase.from('dice_rolls').insert({
+      session_id: sessionId,
+      player_id: player.id,
+      player_name: player.name,
+      player_avatar: player.avatar_url,
+      dice_formula: formula,
+      results,
+      modifier: useCustom ? 0 : modifier,
+      total,
+      is_hidden: role === 'dm',
+    });
+  };
+
+  const rollPanico = async () => {
+    if (!player || !isOP) return;
+    setRolling(true);
+    setLastResult(null);
+    await new Promise(r => setTimeout(r, 350));
+
+    const result = Math.floor(Math.random() * 20) + 1;
+    const formula = '1d20 (Pânico)';
+    setLastResult({ results: [result], total: result, formula });
+    await persistRoll(formula, [result], result, false);
+    toast.info(`Pânico ${result}: ${OP_TABELA_PANICO[result]}`);
+
+    setRolling(false);
+  };
+
+  const rollEffortDie = async () => {
+    if (!player || !isOP || !effortDie) return;
+    setRolling(true);
+    setLastResult(null);
+    await new Promise(r => setTimeout(r, 350));
+
+    const result = Math.floor(Math.random() * effortDie) + 1;
+    const formula = `1d${effortDie} (Esforço)`;
+    setLastResult({ results: [result], total: result, formula });
+    await persistRoll(formula, [result], result, false);
+
+    setRolling(false);
+  };
+
   const rollDice = async () => {
     if (!player) return;
     setRolling(true);
@@ -113,30 +204,7 @@ export default function DiceRoller({ sessionId, onClose }: DiceRollerProps) {
 
     const isCritical = selectedDice === 20 && results.includes(20) && !useCustom;
 
-    // Broadcast to other players
-    channelRef.current?.send({
-      type: 'broadcast',
-      event: 'roll_announce',
-      payload: {
-        playerId: player.id,
-        playerName: player.name,
-        formula,
-        total,
-        critical: isCritical,
-      },
-    });
-
-    await supabase.from('dice_rolls').insert({
-      session_id: sessionId,
-      player_id: player.id,
-      player_name: player.name,
-      player_avatar: player.avatar_url,
-      dice_formula: formula,
-      results,
-      modifier: useCustom ? 0 : modifier,
-      total,
-      is_hidden: role === 'dm',
-    });
+    await persistRoll(formula, results, total, isCritical);
 
     setRolling(false);
   };
@@ -234,6 +302,37 @@ export default function DiceRoller({ sessionId, onClose }: DiceRollerProps) {
           </span>
         ) : '🎲 Rolar Dados!'}
       </Button>
+
+      {isOP && (
+        <div className="mt-2 grid grid-cols-1 gap-2">
+          <Button variant="secondary" className="w-full font-display" onClick={rollPanico} disabled={rolling}>
+            Rolar Pânico
+          </Button>
+          <div className="text-xs font-display text-muted-foreground bg-secondary rounded px-2 py-1 flex items-center justify-between">
+            <span>Dado de Esforço</span>
+            <span className="text-gold">{effortDie ? `d${effortDie}` : 'Sem classe OP'}</span>
+          </div>
+          {effortDie && (
+            <Button variant="secondary" className="w-full font-display" onClick={rollEffortDie} disabled={rolling}>
+              Rolar Esforço (d{effortDie})
+            </Button>
+          )}
+        </div>
+      )}
+
+      {isOP && (
+        <div className="mt-3 border border-border rounded-lg p-2 bg-secondary/40">
+          <div className="text-xs font-display text-gold mb-1">Referência de Dificuldades (OP)</div>
+          <div className="grid grid-cols-2 gap-x-2 gap-y-1 text-xs">
+            {OP_DIFICULDADES.map(diff => (
+              <div key={diff.label} className="flex items-center justify-between text-muted-foreground">
+                <span>{diff.label}</span>
+                <span className="text-foreground">CD {diff.cd}</span>
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
 
       {/* Result */}
       <AnimatePresence>

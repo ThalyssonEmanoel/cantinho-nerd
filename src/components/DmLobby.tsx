@@ -7,6 +7,7 @@ import { Label } from '@/components/ui/label';
 import { Crown, Plus, Copy, ArrowRight, Upload, X, LogOut, History, Play, Calendar, Trash2, Settings } from 'lucide-react';
 import { toast } from 'sonner';
 import ProfileSettings from './ProfileSettings';
+import { SYSTEMS, DEFAULT_SYSTEM, type SystemId } from '@/lib/systems';
 
 interface DmLobbyProps {
   onSessionStart: (sessionId: string) => void;
@@ -18,6 +19,7 @@ interface PastSession {
   created_at: string;
   active_map_url: string | null;
   is_active: boolean;
+  system: string;
 }
 
 async function sha256(text: string): Promise<string> {
@@ -36,6 +38,7 @@ export default function DmLobby({ onSessionStart }: DmLobbyProps) {
   const [monsterPreviews, setMonsterPreviews] = useState<string[]>([]);
   const [createdSessionId, setCreatedSessionId] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
+  const [selectedSystem, setSelectedSystem] = useState<SystemId>(DEFAULT_SYSTEM);
   const [pastSessions, setPastSessions] = useState<PastSession[]>([]);
   const [loadingHistory, setLoadingHistory] = useState(false);
   const [showProfile, setShowProfile] = useState(false);
@@ -49,7 +52,7 @@ export default function DmLobby({ onSessionStart }: DmLobbyProps) {
     setLoadingHistory(true);
     const { data } = await supabase
       .from('sessions')
-      .select('id, name, created_at, active_map_url, is_active')
+      .select('id, name, created_at, active_map_url, is_active, system')
       .eq('dm_id', player.id)
       .order('created_at', { ascending: false })
       .limit(20);
@@ -134,6 +137,7 @@ export default function DmLobby({ onSessionStart }: DmLobbyProps) {
         maps: mapUrls,
         monster_images: monsterUrls,
         active_map_url: mapUrls[0] || null,
+        system: selectedSystem,
       }).select().single();
 
       if (error) throw error;
@@ -234,6 +238,38 @@ export default function DmLobby({ onSessionStart }: DmLobbyProps) {
           <div className="p-6">
             {tab === 'create' && (
               <div className="space-y-5">
+                {/* Seletor de Sistema */}
+                <div>
+                  <Label className="font-display text-sm">Sistema de RPG</Label>
+                  <div className="mt-2 grid grid-cols-1 sm:grid-cols-2 gap-2">
+                    {(Object.values(SYSTEMS)).map(sys => (
+                      <button
+                        key={sys.id}
+                        type="button"
+                        onClick={() => setSelectedSystem(sys.id)}
+                        className={`flex items-center gap-3 p-3 rounded-lg border-2 transition-all text-left ${
+                          selectedSystem === sys.id
+                            ? 'border-gold bg-gold/10'
+                            : 'border-border bg-secondary hover:border-gold/40'
+                        }`}
+                      >
+                        <span
+                          className="w-3 h-3 rounded-full shrink-0"
+                          style={{ backgroundColor: sys.accentColor }}
+                        />
+                        <div className="min-w-0">
+                          <p className={`text-sm font-display truncate ${
+                            selectedSystem === sys.id ? 'text-gold' : 'text-foreground'
+                          }`}>
+                            {sys.shortName}
+                          </p>
+                          <p className="text-[10px] text-muted-foreground truncate">{sys.description}</p>
+                        </div>
+                      </button>
+                    ))}
+                  </div>
+                </div>
+
                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                   <div>
                     <Label className="font-display text-sm">Nome da Sessão</Label>
@@ -319,10 +355,16 @@ export default function DmLobby({ onSessionStart }: DmLobbyProps) {
                         )}
                         <div className="flex-1 min-w-0">
                           <p className="font-display text-sm text-foreground truncate">{session.name}</p>
-                          <p className="text-xs text-muted-foreground flex items-center gap-1 mt-0.5">
-                            <Calendar className="w-3 h-3" />
-                            {new Date(session.created_at).toLocaleDateString('pt-BR', { day: '2-digit', month: 'short', year: 'numeric' })}
-                          </p>
+                          <div className="flex items-center gap-2 mt-0.5">
+                            <span
+                              className="w-2 h-2 rounded-full shrink-0"
+                              style={{ backgroundColor: SYSTEMS[session.system as SystemId]?.accentColor ?? '#c8a84b' }}
+                            />
+                            <p className="text-xs text-muted-foreground flex items-center gap-1">
+                              <Calendar className="w-3 h-3" />
+                              {new Date(session.created_at).toLocaleDateString('pt-BR', { day: '2-digit', month: 'short', year: 'numeric' })}
+                            </p>
+                          </div>
                         </div>
                         <div className="flex gap-1 shrink-0">
                           <Button size="sm" onClick={() => rejoinSession(session.id)}

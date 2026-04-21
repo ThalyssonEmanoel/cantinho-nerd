@@ -232,6 +232,27 @@ O sistema usa os mesmos dados físicos (d4 a d20), mas com mecânicas próprias:
 
 ---
 
+## Condições de Ordem Paranormal
+
+Condições afetam personagens durante o combate e exploração:
+
+| Condição | Efeito |
+|----------|--------|
+| **Agarrado** | Deslocamento 0. Escapa com teste de Atletismo ou Acrobacia (CD = 10 + FOR do oponente). |
+| **Caído** | Deslocamento pela metade. Ataques corpo a corpo contra você têm vantagem. Seus ataques à distância têm desvantagem. Levantar gasta metade do deslocamento. |
+| **Inconsciente** | Incapacitado, não pode se mover ou falar. Solta o que está segurando e cai. Ataques contra você têm vantagem. Ataques corpo a corpo são críticos automáticos. |
+| **Paralisado** | Incapacitado, não pode se mover ou falar. Testes de Reflexos falham automaticamente. Ataques contra você têm vantagem. |
+| **Envenenado** | Desvantagem em testes de atributo e ataques. |
+| **Cego** | Falha automaticamente em testes que exigem visão. Ataques têm desvantagem. Ataques contra você têm vantagem. |
+| **Surdo** | Falha automaticamente em testes que exigem audição. |
+| **Enfraquecido** | Dano corpo a corpo reduzido pela metade. |
+| **Apavorado** | Desvantagem em testes enquanto a fonte do medo estiver visível. Não pode se aproximar da fonte. |
+| **Atordoado** | Incapacitado, não pode se mover. Fala de forma confusa. Testes de Reflexos falham automaticamente. Ataques contra você têm vantagem. |
+| **Exausto** | Desvantagem em todos os testes. Deslocamento reduzido pela metade. |
+| **Sangrando** | Perde 1d6 PV no início de cada turno. Para com teste de Medicina (CD 15) ou cura mágica. |
+
+---
+
 ## Perícias de Ordem Paranormal
 
 ```typescript
@@ -306,6 +327,379 @@ export const OP_CLASSES: Record<OPClasse, OPClasseData> = {
 
 ---
 
+## Rituais de Ordem Paranormal
+
+### Rituais Pré-definidos (Exemplos do Livro)
+
+#### Círculo 1
+
+| Nome | Elemento | Execução | Alcance | Custo | Descrição |
+|------|----------|-----------|---------|-------|------------|
+| **Amaldiçoar Tecnologia** | Energia | Ação padrão | Toque | 1 PE | Desativa um dispositivo eletrônico por 1 rodada. |
+| **Aura de Medo** | Morte | Ação padrão | Pessoal | 1 PE | Emana uma aura de 3m. Criaturas hostis fazem teste de Vontade (CD 12) ou ficam apavoradas por 1 rodada. |
+| **Comunicação Paranormal** | Conhecimento | Ação padrão | Pessoal | 1 PE | Envia uma mensagem telepática curta para alguém que você conhece, independente da distância. |
+| **Detectar Ameaça** | Conhecimento | Ação padrão | 9m | 1 PE | Revela criaturas hostis e armadilhas em 9m por 1 minuto. |
+| **Lâmina de Sangue** | Sangue | Ação padrão | Pessoal | 1 PE | Cria uma arma corpo a corpo (1d6 de dano) por 1 cena. |
+| **Luz do Conhecimento** | Conhecimento | Ação livre | Toque | 1 PE | Objeto tocado emite luz por 1 hora. |
+| **Percepção Paranormal** | Energia | Ação padrão | Pessoal | 1 PE | Detecta presença paranormal em 9m por 1 minuto. |
+| **Proteção Espiritual** | Morte | Ação padrão | Toque | 1 PE | Alvo ganha +2 em Defesa contra ataques paranormais por 1 cena. |
+| **Rajada de Energia** | Energia | Ação padrão | 30m | 1 PE | Ataque à distância: 2d6 de dano de energia. |
+| **Sentir Emoções** | Conhecimento | Ação padrão | 9m | 1 PE | Sente as emoções de uma criatura por 1 minuto. |
+
+#### Círculo 2
+
+| Nome | Elemento | Execução | Alcance | Custo | Descrição |
+|------|----------|-----------|---------|-------|------------|
+| **Amplificar Dor** | Sangue | Ação padrão | 30m | 2 PE | Alvo sofre 3d6 de dano e fica enfraquecido por 1 rodada (Fortitude CD 15 reduz pela metade). |
+| **Animar Objeto** | Energia | Ação padrão | 9m | 2 PE | Anima um objeto inanimado que obedece seus comandos por 1 cena. |
+| **Armadura de Sangue** | Sangue | Ação padrão | Pessoal | 2 PE | Ganha 10 PV temporários e +2 em Defesa por 1 cena. |
+| **Criar Ilusão** | Conhecimento | Ação padrão | 30m | 2 PE | Cria uma ilusão visual e sonora em área de 6m por 1 minuto. |
+| **Descarnar** | Morte | Ação completa | Pessoal | 2 PE | Seu espírito deixa o corpo por 1 cena. Corpo fica inconsciente. |
+| **Escudo de Energia** | Energia | Reação | Pessoal | 2 PE | Ganha +5 em Defesa contra um ataque. |
+| **Invocar Medo** | Morte | Ação padrão | 30m | 2 PE | Alvo faz teste de Vontade (CD 15) ou fica apavorado por 1d4 rodadas. |
+| **Leitura de Mente** | Conhecimento | Ação padrão | 9m | 2 PE | Lê pensamentos superficiais de uma criatura por 1 minuto. |
+| **Regeneração** | Sangue | Ação padrão | Toque | 2 PE | Alvo recupera 3d8+3 PV. |
+| **Velocidade Sobrenatural** | Energia | Ação bônus | Pessoal | 2 PE | Deslocamento dobrado e +2 em Reflexos por 1 cena. |
+
+#### Círculo 3
+
+| Nome | Elemento | Execução | Alcance | Custo | Descrição |
+|------|----------|-----------|---------|-------|------------|
+| **Controlar Mente** | Conhecimento | Ação padrão | 30m | 3 PE | Controla ações de uma criatura por 1 rodada (Vontade CD 17 resiste). |
+| **Criar Zumbi** | Morte | Ação completa | 9m | 3 PE | Anima um cadáver como zumbi sob seu controle por 1 dia. |
+| **Drenar Vida** | Sangue | Ação padrão | Toque | 3 PE | Causa 5d8 de dano e você recupera metade como PV. |
+| **Explosão de Energia** | Energia | Ação padrão | 30m | 3 PE | Explosão em área de 6m causa 6d6 de dano (Reflexos CD 17 reduz pela metade). |
+| **Invisibilidade** | Conhecimento | Ação padrão | Toque | 3 PE | Alvo fica invisível por 1 cena ou até atacar. |
+| **Invocar Criatura** | Morte | Ação completa | 9m | 3 PE | Invoca uma criatura paranormal (NEX até 25%) que obedece por 1 cena. |
+| **Muralha de Energia** | Energia | Ação padrão | 30m | 3 PE | Cria uma barreira de 6m x 3m que bloqueia passagem por 1 cena. |
+| **Possessão** | Morte | Ação completa | Toque | 3 PE | Tenta possuir uma criatura (Vontade CD 17 resiste). Dura 1 cena. |
+| **Teletransporte** | Energia | Ação padrão | Pessoal | 3 PE | Teleporta até 30m para local visível. |
+| **Visão do Passado** | Conhecimento | Ação completa | Toque | 3 PE | Vê eventos passados de um objeto ou local (até 1 semana atrás). |
+
+#### Círculo 4
+
+| Nome | Elemento | Execução | Alcance | Custo | Descrição |
+|------|----------|-----------|---------|-------|------------|
+| **Chuva de Sangue** | Sangue | Ação padrão | 60m | 4 PE | Área de 12m sofre 8d6 de dano (Fortitude CD 19 reduz pela metade). |
+| **Dominar Criatura** | Conhecimento | Ação padrão | 30m | 4 PE | Controla uma criatura por 1 hora (Vontade CD 19 resiste). |
+| **Forma Paranormal** | Morte | Ação completa | Pessoal | 4 PE | Transforma-se em criatura paranormal por 1 cena. Ganha habilidades da criatura. |
+| **Invocar Entidade** | Morte | Ação completa | 9m | 4 PE | Invoca uma entidade paranormal (NEX até 50%) que obedece por 1 cena. |
+| **Parar o Tempo** | Energia | Ação padrão | Pessoal | 4 PE | Tempo para por 1 rodada. Apenas você pode agir. |
+| **Portal Dimensional** | Energia | Ação completa | 9m | 4 PE | Cria portal para local conhecido (até 1km). Dura 1 minuto. |
+| **Ressurreição** | Sangue | 1 hora | Toque | 4 PE | Traz de volta à vida uma criatura morta há até 1 dia. |
+| **Tempestade de Energia** | Energia | Ação padrão | 60m | 4 PE | Área de 12m sofre 10d6 de dano de energia (Reflexos CD 19 reduz pela metade). |
+| **Transformação** | Sangue | Ação completa | Pessoal | 4 PE | Transforma-se em outra criatura por 1 hora. |
+| **Visão Verdadeira** | Conhecimento | Ação padrão | Pessoal | 4 PE | Vê através de ilusões, invisibilidade e escuridão por 1 cena. |
+
+### Sistema de Criação de Rituais Customizados
+
+Jogadores e mestres podem criar rituais personalizados seguindo estas diretrizes:
+
+#### Estrutura Base
+```typescript
+interface OPRitualCustom extends OPRitual {
+  criador: string;        // Nome do jogador/mestre que criou
+  aprovadoPorMestre: boolean;
+  dataCriacao: string;
+}
+```
+
+#### Regras de Balanceamento
+
+**Custo em PE por Círculo:**
+- Círculo 1: 1-2 PE
+- Círculo 2: 2-3 PE
+- Círculo 3: 3-4 PE
+- Círculo 4: 4-5 PE
+
+**Dano Base por Círculo:**
+- Círculo 1: 2d6
+- Círculo 2: 3d6 ou 4d6
+- Círculo 3: 6d6 ou 5d8
+- Círculo 4: 8d6 ou 10d6
+
+**Duração Sugerida:**
+- Instantâneo: efeitos de dano direto
+- 1 rodada: efeitos de controle rápido
+- 1 cena: buffs e debuffs
+- 1 hora: transformações e invocações
+- Permanente: apenas rituais de círculo 4+ com custo alto
+
+**Elementos e Temas:**
+- **Morte**: necromancia, medo, espíritos, possessão
+- **Sangue**: cura, dano vital, transformação corporal
+- **Energia**: raios, escudos, teletransporte, velocidade
+- **Conhecimento**: ilusões, telepatia, detecção, visões
+
+#### Aprovação do Mestre
+Todo ritual customizado deve ser aprovado pelo mestre antes de ser usado em jogo. O mestre pode:
+- Ajustar custo em PE
+- Modificar duração ou alcance
+- Adicionar limitações ou efeitos colaterais
+- Vetar rituais que quebrem o balanço da campanha
+
+---
+
+## Equipamentos e Itens de Ordem Paranormal
+
+### Armas Corpo a Corpo
+
+| Nome | Dano | Crítico | Tipo | Alcance | Peso | Preço |
+|------|------|----------|------|---------|------|-------|
+| Faca | 1d4 | 19/x2 | Cortante | — | 0,5kg | R$ 50 |
+| Cassetete | 1d6 | 20/x2 | Contundente | — | 1kg | R$ 80 |
+| Taco de Beisebol | 1d6 | 20/x2 | Contundente | — | 1kg | R$ 100 |
+| Machado | 1d8 | 20/x3 | Cortante | — | 3kg | R$ 200 |
+| Espada | 1d8 | 19/x2 | Cortante | — | 2kg | R$ 500 |
+| Motosserra | 2d6 | 20/x2 | Cortante | — | 5kg | R$ 800 |
+| Lança | 1d8 | 20/x3 | Perfurante | 3m | 2kg | R$ 150 |
+| Katana | 1d10 | 18/x2 | Cortante | — | 1,5kg | R$ 2.000 |
+
+### Armas de Fogo
+
+| Nome | Dano | Crítico | Tipo | Alcance | Munição | Peso | Preço |
+|------|------|----------|------|---------|----------|------|-------|
+| Revólver .38 | 2d6 | 20/x2 | Balístico | 15m | 6 | 1kg | R$ 1.500 |
+| Pistola 9mm | 2d6 | 20/x2 | Balístico | 15m | 15 | 1kg | R$ 2.000 |
+| Escopeta | 3d6 | 20/x2 | Balístico | 12m | 6 | 4kg | R$ 3.000 |
+| Rifle | 2d8 | 20/x3 | Balístico | 60m | 10 | 5kg | R$ 4.000 |
+| Submetralhadora | 2d6 | 20/x2 | Balístico | 30m | 30 | 3kg | R$ 5.000 |
+| Fuzil de Assalto | 2d8 | 20/x2 | Balístico | 90m | 30 | 4kg | R$ 8.000 |
+| Sniper | 3d8 | 19/x3 | Balístico | 300m | 5 | 6kg | R$ 12.000 |
+
+### Armaduras e Proteção
+
+| Nome | Defesa | Proteção | Penalidade | Peso | Preço |
+|------|--------|----------|------------|------|-------|
+| Roupa Comum | 10 | 0 | — | — | R$ 100 |
+| Jaqueta de Couro | 11 | 1 | — | 2kg | R$ 500 |
+| Colete à Prova de Balas (Leve) | 12 | 2 | — | 3kg | R$ 2.000 |
+| Colete Tático | 13 | 3 | -1 Agilidade | 5kg | R$ 5.000 |
+| Armadura Pesada | 15 | 5 | -2 Agilidade | 10kg | R$ 10.000 |
+
+### Equipamentos Gerais
+
+| Nome | Descrição | Peso | Preço |
+|------|------------|------|-------|
+| Mochila | Carrega até 20kg | 1kg | R$ 100 |
+| Lanterna | Ilumina 9m por 8 horas | 0,5kg | R$ 50 |
+| Corda (10m) | Suporta 200kg | 2kg | R$ 80 |
+| Kit de Primeiros Socorros | +2 em testes de Medicina, 5 usos | 1kg | R$ 200 |
+| Kit de Ferramentas | +2 em testes de Tecnologia | 2kg | R$ 300 |
+| Algemas | Prende uma criatura | 0,5kg | R$ 150 |
+| Celular | Comunicação, câmera, internet | 0,2kg | R$ 1.000 |
+| Laptop | Pesquisa, hacking, análise | 2kg | R$ 3.000 |
+| Câmera Profissional | Grava vídeo e áudio em alta qualidade | 1kg | R$ 2.500 |
+| Detector de Movimento | Alerta quando algo se move em 15m | 0,5kg | R$ 800 |
+| Gravador de Áudio | Grava até 12 horas | 0,2kg | R$ 400 |
+| Binóculos | Enxerga até 1km | 0,5kg | R$ 500 |
+| Kit de Disfarce | +2 em testes de Enganação para disfarces | 2kg | R$ 600 |
+| Lockpick | +2 em testes de Crime para arrombar fechaduras | 0,2kg | R$ 300 |
+
+### Itens Paranormais
+
+| Nome | Efeito | Preço |
+|------|--------|-------|
+| Amuleto de Proteção | +1 em testes de resistência contra efeitos paranormais | R$ 5.000 |
+| Cristal de Energia | Armazena 5 PE que podem ser usados em rituais | R$ 8.000 |
+| Livro Ocultista | +2 em testes de Ocultismo | R$ 3.000 |
+| Sal Grosso (1kg) | Cria barreira contra espíritos (linha de 3m) | R$ 100 |
+| Água Benta (1L) | Causa 1d6 de dano em criaturas paranormais | R$ 500 |
+| Símbolo de Proteção | Quando desenhado, impede entrada de criaturas paranormais (NEX até 25%) em área de 3m | R$ 2.000 |
+| Medidor de Paranormalidade | Detecta presença paranormal em 30m | R$ 10.000 |
+
+### Sistema de Criação de Itens Customizados
+
+Jogadores e mestres podem criar itens personalizados:
+
+#### Estrutura Base
+```typescript
+interface OPItemCustom extends OPItem {
+  categoria: 'arma' | 'armadura' | 'equipamento' | 'paranormal';
+  efeito?: string;
+  criador: string;
+  aprovadoPorMestre: boolean;
+}
+```
+
+#### Regras de Balanceamento para Armas
+
+**Armas Corpo a Corpo:**
+- Leve (1 mão): 1d4 a 1d6
+- Média (1 mão): 1d6 a 1d8
+- Pesada (2 mãos): 1d10 a 2d6
+
+**Armas de Fogo:**
+- Pistola: 2d6, alcance 15-30m
+- Rifle: 2d8, alcance 60-90m
+- Escopeta: 3d6, alcance 9-12m (curto)
+- Automática: +1d6 de dano, gasta 3x munição
+
+**Crítico:**
+- Padrão: 20/x2
+- Perfurante: 19-20/x2
+- Pesada: 20/x3
+
+#### Regras para Armaduras
+
+**Defesa Base:**
+- Leve: 11-12 (sem penalidade)
+- Média: 13-14 (-1 AGI)
+- Pesada: 15-16 (-2 AGI)
+
+**Proteção:**
+- Cada ponto reduz dano recebido em 1
+- Máximo recomendado: 5
+
+#### Itens Paranormais
+
+Devem ter:
+- Efeito claro e mensurável
+- Custo proporcional ao poder
+- Limitações de uso (cargas, por dia, etc.)
+- Aprovação obrigatória do mestre
+
+---
+
+## Sistema de Criação de Monstros e Criaturas
+
+### Estrutura de Criatura Paranormal
+
+```typescript
+interface OPCreature {
+  // Identidade
+  nome: string;
+  tipo: 'Paranormal' | 'Humano' | 'Animal' | 'Constructo';
+  nex: number;              // 5% a 99% (poder da criatura)
+  descricao: string;
+  
+  // Atributos
+  agi: number;
+  for: number;
+  int: number;
+  pre: number;
+  vig: number;
+  
+  // Combate
+  pv: number;
+  defesa: number;
+  protecao: number;
+  deslocamento: number;
+  
+  // Ataques
+  ataques: OPAtaque[];
+  
+  // Habilidades Especiais
+  habilidades: string[];
+  resistencias: string[];   // ex: "Resistente a balístico"
+  vulnerabilidades: string[]; // ex: "Vulnerável a fogo"
+  
+  // Rituais (se aplicável)
+  rituais?: OPRitual[];
+  pe?: number;
+  
+  // Loot
+  tesouro: string;          // O que dropa ao morrer
+  
+  // Meta
+  criador: string;
+  aprovadoPorMestre: boolean;
+}
+```
+
+### Exemplos de Criaturas do Livro
+
+#### Zumbi de Sangue (NEX 10%)
+- **PV:** 20
+- **Defesa:** 10
+- **Atributos:** AGI 1, FOR 3, INT 0, PRE 0, VIG 3
+- **Ataque:** Mordida +5 (1d6+3 de dano)
+- **Habilidades:** Morto-vivo (imune a veneno, doenças, medo)
+- **Deslocamento:** 6m
+
+#### Criatura da Montanha (NEX 25%)
+- **PV:** 60
+- **Defesa:** 14
+- **Proteção:** 5
+- **Atributos:** AGI 2, FOR 5, INT 1, PRE 2, VIG 5
+- **Ataque:** Garras +8 (2d8+5 de dano)
+- **Habilidades:** Regeneração (5 PV por rodada), Resistente a balístico
+- **Deslocamento:** 12m
+
+#### Entidade do Conhecimento (NEX 50%)
+- **PV:** 80
+- **Defesa:** 16
+- **Atributos:** AGI 3, FOR 2, INT 5, PRE 4, VIG 3
+- **PE:** 20
+- **Rituais:** Controlar Mente, Invisibilidade, Leitura de Mente
+- **Ataque:** Toque Mental +10 (3d6 de dano psíquico)
+- **Habilidades:** Telepatia, Levitação, Imune a dano físico não-paranormal
+- **Deslocamento:** 9m (voo)
+
+#### O Devorador (NEX 75%)
+- **PV:** 150
+- **Defesa:** 18
+- **Proteção:** 10
+- **Atributos:** AGI 4, FOR 6, INT 3, PRE 5, VIG 6
+- **Ataques:** 
+  - Mandíbulas +12 (4d8+6 de dano)
+  - Tentáculos +10 (3d6+6 de dano, agarrar)
+- **Habilidades:** Regeneração Rápida (10 PV/rodada), Aura de Medo (9m, Vontade CD 20), Engolir (criatura agarrada sofre 4d6 de dano por rodada)
+- **Deslocamento:** 15m
+
+### Regras de Balanceamento para Criação
+
+#### PV por NEX
+- NEX 5-10%: 15-30 PV
+- NEX 15-25%: 40-70 PV
+- NEX 30-50%: 80-120 PV
+- NEX 55-75%: 130-180 PV
+- NEX 80-99%: 200+ PV
+
+#### Defesa por NEX
+- NEX 5-10%: 10-12
+- NEX 15-25%: 13-15
+- NEX 30-50%: 16-18
+- NEX 55-75%: 19-21
+- NEX 80-99%: 22+
+
+#### Dano de Ataque por NEX
+- NEX 5-10%: 1d6 a 1d8
+- NEX 15-25%: 2d6 a 2d8
+- NEX 30-50%: 3d6 a 3d8
+- NEX 55-75%: 4d6 a 4d8
+- NEX 80-99%: 5d6+
+
+#### Habilidades Especiais
+
+Criaturas podem ter:
+- **Regeneração:** Recupera X PV por rodada
+- **Resistências:** Reduz dano de um tipo pela metade
+- **Imunidades:** Imune a um tipo de dano ou condição
+- **Vulnerabilidades:** Recebe dano dobrado de um tipo
+- **Aura:** Efeito em área ao redor da criatura
+- **Multiataques:** Pode atacar múltiplas vezes por turno
+- **Rituais:** Pode conjurar rituais (gasta PE)
+
+#### Aprovação do Mestre
+
+Toda criatura customizada deve:
+1. Ter NEX apropriado para a campanha
+2. Ser balanceada para o grupo (não muito fácil nem impossível)
+3. Ter temática coerente com o universo de Ordem Paranormal
+4. Ser aprovada pelo mestre antes de aparecer no jogo
+
+### Ferramenta de Criação no Sistema
+
+A ficha de Ordem Paranormal terá uma seção "Bestiário" onde o mestre pode:
+- Criar novas criaturas
+- Salvar criaturas customizadas
+- Importar criaturas do livro
+- Adicionar criaturas ao encontro atual
+- Gerenciar HP e condições de criaturas em combate
+
+---
+
 ## Plano de Implementação — Ordem de Execução
 
 ### Fase 1 — Infraestrutura (sem UI nova)
@@ -320,9 +714,10 @@ export const OP_CLASSES: Record<OPClasse, OPClasseData> = {
 ### Fase 3 — Ficha de Ordem Paranormal
 6. Criar `src/components/CharacterSheetOP.tsx` com todas as abas:
    - **Principal**: identidade, atributos, perícias
-   - **Combate**: PV, PS, PE, defesa, ataques, morte iminente
-   - **Rituais**: lista de rituais com círculo e elemento
-   - **Inventário**: equipamentos, dinheiro
+   - **Combate**: PV, PS, PE, defesa, ataques, morte iminente, condições
+   - **Rituais**: lista de rituais com círculo e elemento + criação de rituais customizados
+   - **Inventário**: equipamentos, dinheiro, criação de itens customizados
+   - **Bestiário** (apenas mestre): criar e gerenciar criaturas paranormais
 7. Atualizar `GameBoard.tsx` para renderizar a ficha correta por sistema
 
 ### Fase 4 — Dados Específicos de OP
