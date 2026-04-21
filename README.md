@@ -7,7 +7,12 @@ Fala, galera! Esse é o **Cantinho Nerd**, uma mesa virtual de RPG feita especia
 
 ## O que esse projeto faz?
 
-Basicamente, é uma VTT (Virtual Tabletop) simples onde o mestre pode criar sessões e os jogadores podem entrar pra jogar. Dá pra:
+Basicamente, é uma VTT (Virtual Tabletop) simples onde o mestre pode criar sessões e os jogadores podem entrar pra jogar. Agora o projeto suporta múltiplos sistemas por sessão:
+
+- **D&D 5e** — Sistema clássico de fantasia medieval
+- **Ordem Paranormal RPG** — Sistema brasileiro de horror paranormal (Cellbit/Jambô Editora)
+
+Dá pra:
 
 ### Tabuleiro/Mapa
 - Upload de mapas customizados
@@ -22,15 +27,42 @@ Basicamente, é uma VTT (Virtual Tabletop) simples onde o mestre pode criar sess
 - Detecção automática de **crítico** e **falha crítica** no d20
 - As rolagens aparecem em tempo real pra todo mundo na sessão
 - Histórico de rolagens salvo no banco
+- **Ordem Paranormal:** Rolagem de Pânico (1d20 com tabela de efeitos), Dado de Esforço da classe, Referência de dificuldades (CD 10/15/20/25/30)
 
 ### Chat
 - Chat em tempo real durante a sessão
 - Sistema de sussurro (whisper) pra mandar mensagens privadas pro mestre ou outro jogador
 
 ### Ficha de Personagem
-- Ficha de D&D 5e integrada
-- Cada jogador tem sua própria ficha
-- O mestre consegue ver as fichas de todos os players
+
+#### D&D 5e
+- Ficha completa com atributos (FOR/DES/CON/INT/SAB/CAR)
+- Perícias, testes de resistência, proficiências
+- Sistema de magias com espaços por nível
+- Inventário, ataques, equipamentos
+- Raças, classes e subclasses do PHB
+- Cálculo automático de CA, HP, bônus de proficiência
+
+#### Ordem Paranormal RPG
+- Ficha completa com atributos (AGI/FOR/INT/PRE/VIG)
+- 28 perícias com 4 níveis de proficiência (sem treino, treinado, veterano, expert)
+- Sistema de NEX (Nível de Exposição ao Paranormal) de 5% a 99%
+- 4 classes: Mundano, Ocultista, Combatente, Especialista
+- Recursos: PV (Pontos de Vida), PS (Pontos de Sanidade), PE (Pontos de Esforço)
+- **Aba de Combate:** Ataques, defesa, proteção, deslocamento, morte iminente, 12 condições (agarrado, caído, envenenado, etc.)
+- **Aba de Rituais:** Lista de rituais com círculo (1-4), elemento (Morte/Sangue/Energia/Conhecimento), custo em PE, criação de rituais customizados
+- **Aba de Inventário:** Equipamentos, armas, armaduras, itens paranormais, dinheiro em R$, criação de itens customizados
+- **Aba de Bestiário (Mestre):** Criação e gerenciamento de criaturas paranormais com NEX, PV, defesa, ataques e habilidades especiais
+
+### Recursos específicos de Ordem Paranormal
+- Seleção de sistema ao criar sessão no lobby do mestre
+- Rolagem de Pânico no painel de dados (1d20 com lookup na tabela de efeitos)
+- Rolagem de Dado de Esforço baseado na classe do personagem
+- Referência rápida de dificuldades (Fácil 10, Médio 15, Difícil 20, Absurdo 25, Impossível 30)
+- Sistema de condições de combate (12 condições com efeitos mecânicos)
+- Criação de rituais, itens e criaturas customizados (com aprovação do mestre)
+- Cálculo automático de PV máximo baseado em classe, VIG e NEX
+- Cálculo automático de PE máximo baseado em classe e NEX
 
 ### Ferramentas extras
 - Calculadora de combate
@@ -92,6 +124,7 @@ cantinho-nerd/
 │   │   ├── DiceRoller.tsx     # Sistema de dados
 │   │   ├── ChatPanel.tsx      # Chat da sessão
 │   │   ├── CharacterSheet.tsx # Ficha de personagem
+│   │   ├── CharacterSheetOP.tsx # Ficha de Ordem Paranormal
 │   │   ├── DrawingCanvas.tsx  # Ferramentas de desenho
 │   │   └── ...
 │   ├── pages/          # Páginas da aplicação
@@ -107,6 +140,29 @@ cantinho-nerd/
 ## Coisas que ainda precisam de ajuste
 
 Tem um arquivo `docs/Features.md` com os bugs conhecidos e ideias de melhorias.
+
+Para detalhes completos sobre a implementação de Ordem Paranormal, consulte `docs/OrdemParanormal-Rotas.md`.
+
+## Sistemas Suportados
+
+### D&D 5e
+- 12 classes do PHB (Bárbaro, Bardo, Clérigo, Druida, Guerreiro, Ladino, Mago, Monge, Paladino, Patrulheiro, Feiticeiro, Bruxo)
+- 13 raças (Humano, Elfos, Anões, Halflings, Gnomos, Meio-Elfo, Meio-Orc, Tiefling, Draconato)
+- 12 antecedentes (Acólito, Criminoso, Herói do Povo, Nobre, Sábio, Soldado, etc.)
+- Sistema de magias com espaços por nível (conjuradores completos, meio-conjuradores, magia do pacto)
+- Cálculo automático de CA baseado em armadura, escudo e classe
+
+### Ordem Paranormal RPG
+- 4 classes (Mundano, Ocultista, Combatente, Especialista)
+- 28 perícias vinculadas a 5 atributos (AGI, FOR, INT, PRE, VIG)
+- Sistema de NEX (5% a 99%) que escala PV, PE e habilidades
+- 40+ rituais pré-definidos em 4 círculos (Morte, Sangue, Energia, Conhecimento)
+- Sistema de criação de rituais, itens e criaturas customizados
+- 12 condições de combate (agarrado, caído, inconsciente, paralisado, envenenado, cego, surdo, enfraquecido, apavorado, atordoado, exausto, sangrando)
+- Tabela de Pânico (20 efeitos diferentes quando PS chega a 0)
+- Sistema de Morte Iminente (rolagem 1d20 por rodada quando PV chega a 0)
+- Armas, armaduras e equipamentos brasileiros (preços em R$)
+- Bestiário com sistema de criação de criaturas paranormais
 
 ## Diversão
 

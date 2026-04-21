@@ -11,6 +11,7 @@ import ChatPanel from './ChatPanel';
 import CombatCalculator from './CombatCalculator';
 import ProfileSettings from './ProfileSettings';
 import CharacterSheet from './CharacterSheet';
+import CharacterSheetOP from './CharacterSheetOP';
 import { Button } from '@/components/ui/button';
 import {
   Image, Plus, Trash2, LogOut, Dices, ScrollText, Pencil, Ruler,
@@ -52,6 +53,7 @@ interface Session {
   monster_images: string[];
   show_grid: boolean;
   grid_size: number;
+  system: string;
 }
 
 interface TokenReaction {
@@ -319,13 +321,23 @@ export default function GameBoard({ sessionId, onLeave }: GameBoardProps) {
     <>
       {showProfile && <ProfileSettings onClose={() => setShowProfile(false)} />}
       {charSheetTarget && (
-        <CharacterSheet
-          sessionId={sessionId}
-          onClose={() => setCharSheetTarget(null)}
-          targetPlayerId={charSheetTarget.playerId}
-          targetPlayerName={charSheetTarget.playerName}
-          readOnly={charSheetTarget.readOnly}
-        />
+        session?.system === 'ordem_paranormal' ? (
+          <CharacterSheetOP
+            sessionId={sessionId}
+            onClose={() => setCharSheetTarget(null)}
+            targetPlayerId={charSheetTarget.playerId}
+            targetPlayerName={charSheetTarget.playerName}
+            readOnly={charSheetTarget.readOnly}
+          />
+        ) : (
+          <CharacterSheet
+            sessionId={sessionId}
+            onClose={() => setCharSheetTarget(null)}
+            targetPlayerId={charSheetTarget.playerId}
+            targetPlayerName={charSheetTarget.playerName}
+            readOnly={charSheetTarget.readOnly}
+          />
+        )
       )}
 
       <div className="h-screen w-screen flex flex-col bg-background overflow-hidden">
@@ -737,7 +749,7 @@ export default function GameBoard({ sessionId, onLeave }: GameBoardProps) {
           {/* Dice Roller */}
           {showDice && (
             <div className="absolute bottom-4 left-2 sm:left-4 z-30 max-w-[calc(100vw-1rem)] sm:max-w-none">
-              <DiceRoller sessionId={sessionId} onClose={() => setShowDice(false)} />
+              <DiceRoller sessionId={sessionId} sessionSystem={session?.system} onClose={() => setShowDice(false)} />
             </div>
           )}
 
