@@ -89,8 +89,12 @@ export default function GameBoard({ sessionId, onLeave }: GameBoardProps) {
   const [draggingToken, setDraggingToken] = useState<string | null>(null);
   const [dragOffset, setDragOffset] = useState({ x: 0, y: 0 });
   const [scale, setScale] = useState(1);
+  const [uploadingMaps, setUploadingMaps] = useState(false);
+  const [uploadingMonsters, setUploadingMonsters] = useState(false);
   const containerRef = useRef<HTMLDivElement>(null);
   const boardRef = useRef<HTMLDivElement>(null);
+  const mapUploadInputRef = useRef<HTMLInputElement>(null);
+  const monsterUploadInputRef = useRef<HTMLInputElement>(null);
   const reactionChannelRef = useRef<ReturnType<typeof supabase.channel> | null>(null);
   const isDm = role === 'dm';
   const showGrid = !!session?.show_grid;
@@ -223,6 +227,68 @@ export default function GameBoard({ sessionId, onLeave }: GameBoardProps) {
       token_type: 'monster',
     });
     setShowMonsters(false);
+  };
+
+  const uploadFiles = async (files: File[], folder: 'maps' | 'monsters') => {
+    const urls: string[] = [];
+    for (const file of files) {
+      const ext = file.name.split('.').pop();
+      const path = `${folder}/${sessionId}/${Date.now()}-${Math.random().toString(36).slice(2)}.${ext}`;
+      const { error } = await supabase.storage.from('vtt-assets').upload(path, file);
+      if (error) throw error;
+      const { data } = supabase.storage.from('vtt-assets').getPublicUrl(path);
+      urls.push(data.publicUrl);
+    }
+    return urls;
+  };
+
+  const addMapsToSession = async (files: FileList | null) => {
+    if (!isDm || !session || !files || files.length === 0) return;
+    setUploadingMaps(true);
+    try {
+      const uploadedUrls = await uploadFiles(Array.from(files), 'maps');
+      const nextMaps = [...(session.maps || []), ...uploadedUrls];
+      const nextActiveMap = session.active_map_url || uploadedUrls[0] || null;
+
+      const { error } = await supabase
+        .from('sessions')
+        .update({ maps: nextMaps, active_map_url: nextActiveMap })
+        .eq('id', sessionId);
+
+      if (error) throw error;
+
+      setSession(prev => prev ? { ...prev, maps: nextMaps, active_map_url: nextActiveMap } : prev);
+      toast.success('Mapa(s) adicionado(s) à sessão');
+    } catch (err: any) {
+      toast.error(err?.message || 'Erro ao adicionar mapas');
+    } finally {
+      setUploadingMaps(false);
+      if (mapUploadInputRef.current) mapUploadInputRef.current.value = '';
+    }
+  };
+
+  const addMonstersToSession = async (files: FileList | null) => {
+    if (!isDm || !session || !files || files.length === 0) return;
+    setUploadingMonsters(true);
+    try {
+      const uploadedUrls = await uploadFiles(Array.from(files), 'monsters');
+      const nextMonsters = [...(session.monster_images || []), ...uploadedUrls];
+
+      const { error } = await supabase
+        .from('sessions')
+        .update({ monster_images: nextMonsters })
+        .eq('id', sessionId);
+
+      if (error) throw error;
+
+      setSession(prev => prev ? { ...prev, monster_images: nextMonsters } : prev);
+      toast.success('Monstro(s) adicionado(s) à sessão');
+    } catch (err: any) {
+      toast.error(err?.message || 'Erro ao adicionar monstros');
+    } finally {
+      setUploadingMonsters(false);
+      if (monsterUploadInputRef.current) monsterUploadInputRef.current.value = '';
+    }
   };
 
   const removeToken = async (tokenId: string) => {
@@ -633,8 +699,28 @@ export default function GameBoard({ sessionId, onLeave }: GameBoardProps) {
             <div className="absolute top-2 left-2 bg-card border border-border rounded-xl p-4 z-30 shadow-2xl w-64">
               <div className="flex items-center justify-between mb-3">
                 <h3 className="font-display text-sm text-gold">Mapas Disponíveis</h3>
-                <button onClick={() => setShowMapPicker(false)}><X className="w-4 h-4 text-muted-foreground" /></button>
+                <div className="flex items-center gap-2">
+                  <Button
+                    size="sm"
+                    variant="secondary"
+                    className="h-7 px-2 text-[11px]"
+                    onClick={() => mapUploadInputRef.current?.click()}
+                    disabled={uploadingMaps}
+                  >
+                    <Plus className="w-3 h-3 mr-1" />
+                    {uploadingMaps ? 'Enviando...' : 'Adicionar'}
+                  </Button>
+                  <button onClick={() => setShowMapPicker(false)}><X className="w-4 h-4 text-muted-foreground" /></button>
+                </div>
               </div>
+              <input
+                ref={mapUploadInputRef}
+                type="file"
+                accept="image/*"
+                multiple
+                className="hidden"
+                onChange={(e) => addMapsToSession(e.target.files)}
+              />
               <div className="grid grid-cols-3 gap-2 max-h-60 overflow-auto">
                 {(session.maps || []).map((url, i) => (
                   <button key={i} onClick={() => setActiveMap(url)}
@@ -643,6 +729,9 @@ export default function GameBoard({ sessionId, onLeave }: GameBoardProps) {
                   </button>
                 ))}
               </div>
+              {(session.maps || []).length === 0 && (
+                <p className="text-xs text-muted-foreground mt-2">Nenhum mapa ainda. Use Adicionar para enviar.</p>
+              )}
             </div>
           )}
 
@@ -651,8 +740,28 @@ export default function GameBoard({ sessionId, onLeave }: GameBoardProps) {
             <div className="absolute top-2 right-2 bg-card border border-border rounded-xl p-4 z-30 shadow-2xl w-56">
               <div className="flex items-center justify-between mb-3">
                 <h3 className="font-display text-sm text-gold">Adicionar Monstro</h3>
-                <button onClick={() => setShowMonsters(false)}><X className="w-4 h-4 text-muted-foreground" /></button>
+                <div className="flex items-center gap-2">
+                  <Button
+                    size="sm"
+                    variant="secondary"
+                    className="h-7 px-2 text-[11px]"
+                    onClick={() => monsterUploadInputRef.current?.click()}
+                    disabled={uploadingMonsters}
+                  >
+                    <Plus className="w-3 h-3 mr-1" />
+                    {uploadingMonsters ? 'Enviando...' : 'Adicionar'}
+                  </Button>
+                  <button onClick={() => setShowMonsters(false)}><X className="w-4 h-4 text-muted-foreground" /></button>
+                </div>
               </div>
+              <input
+                ref={monsterUploadInputRef}
+                type="file"
+                accept="image/*"
+                multiple
+                className="hidden"
+                onChange={(e) => addMonstersToSession(e.target.files)}
+              />
               <div className="grid grid-cols-4 gap-2 max-h-60 overflow-auto">
                 {(session.monster_images || []).map((url, i) => (
                   <button key={i} onClick={() => addMonsterToken(url)}
@@ -661,6 +770,9 @@ export default function GameBoard({ sessionId, onLeave }: GameBoardProps) {
                   </button>
                 ))}
               </div>
+              {(session.monster_images || []).length === 0 && (
+                <p className="text-xs text-muted-foreground mt-2">Nenhum monstro ainda. Use Adicionar para enviar.</p>
+              )}
             </div>
           )}
 
