@@ -27,3 +27,6 @@ dist-ssr
 .env
 /supabase
 /ramix
+
+# Ignore local SQL files folder
+/sql

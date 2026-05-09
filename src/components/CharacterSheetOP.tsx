@@ -4,6 +4,7 @@ import { useAuth } from '@/lib/auth-context';
 import { Button } from '@/components/ui/button';
 import { X, Save, BookOpen, Sword, Sparkles, Package, Skull, ScrollText } from 'lucide-react';
 import { toast } from 'sonner';
+import RitualCast from './RitualCast';
 import {
   Dialog,
   DialogContent,
@@ -181,6 +182,7 @@ export default function CharacterSheetOP({
   const [classAbilityDialogOpen, setClassAbilityDialogOpen] = useState(false);
   const [generalAbilityDialogOpen, setGeneralAbilityDialogOpen] = useState(false);
   const [classAbilityClassFilter, setClassAbilityClassFilter] = useState<OPClasse | ''>('');
+  const [castingRitual, setCastingRitual] = useState<OPRitual | null>(null);
   const [originForm, setOriginForm] = useState({
     nome: '',
     pericia1: '',
@@ -1181,7 +1183,7 @@ export default function CharacterSheetOP({
 
           {tab === 'rituais' && (
             <div className="space-y-3">
-              <div className="text-xs text-muted-foreground">Rituais com circulo, elemento e criacao customizada.</div>
+              <div className="text-xs text-muted-foreground">Rituais com circulo, elemento e criacao customizada. Clique em "Lançar" para usar o ritual.</div>
               {sheet.rituais.map((ritual, i) => (
                 <div key={i} className="border border-border rounded-lg p-3 bg-secondary/30 space-y-2">
                   <div className="grid grid-cols-1 sm:grid-cols-3 gap-2">
@@ -1205,6 +1207,32 @@ export default function CharacterSheetOP({
                     </div>
                   </div>
                   <TA value={ritual.descricao} onChange={v => setField('rituais', sheet.rituais.map((r, idx) => idx === i ? { ...r, descricao: v } : r))} rows={2} readOnly={!canEdit} />
+                  {canRoll && ritual.nome && ritual.custo && (
+                    <Button
+                      size="sm"
+                      variant="secondary"
+                      onClick={() => {
+                        const custoMatch = ritual.custo.match(/\d+/);
+                        const custoPE = custoMatch ? parseInt(custoMatch[0]) : 1;
+                        setCastingRitual({
+                          id: `ritual-${i}`,
+                          nome: ritual.nome,
+                          circulo: ritual.circulo,
+                          elemento: ritual.elemento,
+                          execucao: ritual.execucao || 'Padrão',
+                          alcance: ritual.alcance || 'Pessoal',
+                          alvo: 'Você',
+                          duracao: 'Instantânea',
+                          resistencia: '',
+                          descricao: ritual.descricao,
+                          custo_pe: custoPE,
+                        });
+                      }}
+                      className="w-full"
+                    >
+                      <Sparkles className="w-3 h-3 mr-1" /> Lançar Ritual
+                    </Button>
+                  )}
                 </div>
               ))}
               {canEdit && <Button size="sm" variant="secondary" onClick={addRitual}>Adicionar Ritual</Button>}
@@ -1562,6 +1590,22 @@ export default function CharacterSheetOP({
           </DialogFooter>
         </DialogContent>
       </Dialog>
+
+      {castingRitual && player && (
+        <RitualCast
+          playerId={player.id}
+          sessionId={sessionId}
+          ritual={castingRitual}
+          currentPE={sheet.peAtual}
+          maxPE={sheet.maxPE}
+          nex={effectiveNex}
+          onClose={() => setCastingRitual(null)}
+          onCast={(ritual, peCost) => {
+            setPEAtual(sheet.peAtual - peCost);
+            setCastingRitual(null);
+          }}
+        />
+      )}
     </div>
   );
 }
