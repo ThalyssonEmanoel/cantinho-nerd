@@ -10,12 +10,24 @@ import GridOverlay from './GridOverlay';
 import ChatPanel from './ChatPanel';
 import CombatCalculator from './CombatCalculator';
 import ProfileSettings from './ProfileSettings';
+import InitiativeTracker from './InitiativeTracker';
+import TokenHealthBar from './TokenHealthBar';
+import CombatLogPanel from './CombatLogPanel';
+import TokenConditions from './TokenConditions';
+import ConditionIcons from './ConditionIcons';
+import ConditionsSummaryPanel from './ConditionsSummaryPanel';
+import PullPlayersModal from './PullPlayersModal';
+import FogOfWar from './FogOfWar';
+import TokenVisibilityControl from './TokenVisibilityControl';
+import BestiaryManager from './BestiaryManager';
+import EncounterBuilder from './EncounterBuilder';
 import CharacterSheet from './CharacterSheet';
+import CharacterSheetOP from './CharacterSheetOP';
 import { Button } from '@/components/ui/button';
 import {
   Image, Plus, Trash2, LogOut, Dices, ScrollText, Pencil, Ruler,
   ZoomIn, ZoomOut, Menu, X, Grid3x3, MessageCircle,
-  Calculator, Settings, Smile, ClipboardList, Users,
+  Calculator, Settings, Smile, ClipboardList, Users, Swords, Activity, AlertCircle, Shield, UserPlus, Eye, BookOpen,
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
 
@@ -41,6 +53,14 @@ interface Token {
   width: number;
   height: number;
   token_type: string;
+  hp_current: number | null;
+  hp_max: number | null;
+  pe_current: number | null;
+  pe_max: number | null;
+  ps_current: number | null;
+  ps_max: number | null;
+  is_hidden: boolean;
+  vision_radius: number;
 }
 
 interface Session {
@@ -52,6 +72,9 @@ interface Session {
   monster_images: string[];
   show_grid: boolean;
   grid_size: number;
+  system: string;
+  fog_enabled: boolean;
+  default_vision_radius: number;
 }
 
 interface TokenReaction {
@@ -75,24 +98,38 @@ export default function GameBoard({ sessionId, onLeave }: GameBoardProps) {
   const [showChat, setShowChat] = useState(false);
   const [showCalc, setShowCalc] = useState(false);
   const [showProfile, setShowProfile] = useState(false);
+  const [showInitiative, setShowInitiative] = useState(false);
+  const [showHealthBars, setShowHealthBars] = useState(true);
+  const [showCombatLog, setShowCombatLog] = useState(false);
+  const [showConditionsPanel, setShowConditionsPanel] = useState<string | null>(null);
+  const [showConditionsSummary, setShowConditionsSummary] = useState(false);
+  const [showPullPlayersModal, setShowPullPlayersModal] = useState(false);
+  const [showBestiary, setShowBestiary] = useState(false);
+  const [showEncounterBuilder, setShowEncounterBuilder] = useState(false);
   const [charSheetTarget, setCharSheetTarget] = useState<{ playerId: string; playerName: string; readOnly: boolean } | null>(null);
   const [showPlayerSheets, setShowPlayerSheets] = useState(false);
   const [sessionPlayers, setSessionPlayers] = useState<{ id: string; name: string; avatar_url: string | null }[]>([]);
   const [showMobileMenu, setShowMobileMenu] = useState(false);
   const [showReactionPicker, setShowReactionPicker] = useState<string | null>(null); // tokenId
   const [tokenReactions, setTokenReactions] = useState<TokenReaction[]>([]);
+  const [tokenConditions, setTokenConditions] = useState<Record<string, any[]>>({});
   const [selectedToken, setSelectedToken] = useState<string | null>(null);
   const [editingLabel, setEditingLabel] = useState<string | null>(null);
   const [editLabelValue, setEditLabelValue] = useState('');
   const [draggingToken, setDraggingToken] = useState<string | null>(null);
   const [dragOffset, setDragOffset] = useState({ x: 0, y: 0 });
   const [scale, setScale] = useState(1);
+  const [uploadingMaps, setUploadingMaps] = useState(false);
+  const [uploadingMonsters, setUploadingMonsters] = useState(false);
   const containerRef = useRef<HTMLDivElement>(null);
   const boardRef = useRef<HTMLDivElement>(null);
+  const mapUploadInputRef = useRef<HTMLInputElement>(null);
+  const monsterUploadInputRef = useRef<HTMLInputElement>(null);
   const reactionChannelRef = useRef<ReturnType<typeof supabase.channel> | null>(null);
   const isDm = role === 'dm';
   const showGrid = !!session?.show_grid;
   const gridSize = session?.grid_size ?? 50;
+  const fogEnabled = !!session?.fog_enabled;
 
   // Compute the scale factor to fit the virtual board into the available area.
   // This guarantees every client renders the same logical board, just at a
@@ -125,6 +162,7 @@ export default function GameBoard({ sessionId, onLeave }: GameBoardProps) {
       if (data) setTokens(data as Token[]);
     };
     load();
+    loadAllConditions();
   }, [sessionId]);
 
   // Load all players in the session (for the character sheet picker)
@@ -172,12 +210,20 @@ export default function GameBoard({ sessionId, onLeave }: GameBoardProps) {
       })
       .subscribe();
 
+    // Conditions channel
+    const conditionsChannel = supabase
+      .channel(`conditions-${sessionId}`)
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'token_conditions', filter: `session_id=eq.${sessionId}` },
+        () => loadAllConditions())
+      .subscribe();
+
     reactionChannelRef.current = reactionChannel;
 
     return () => {
       supabase.removeChannel(tokenChannel);
       supabase.removeChannel(sessionChannel);
       supabase.removeChannel(reactionChannel);
+      supabase.removeChannel(conditionsChannel);
     };
   }, [sessionId]);
 
@@ -188,6 +234,22 @@ export default function GameBoard({ sessionId, onLeave }: GameBoardProps) {
       payload: { tokenId, emoji },
     });
     setShowReactionPicker(null);
+  };
+
+  const loadAllConditions = async () => {
+    const { data } = await supabase
+      .from('token_conditions')
+      .select('*')
+      .eq('session_id', sessionId);
+    
+    if (data) {
+      const grouped: Record<string, any[]> = {};
+      data.forEach((condition: any) => {
+        if (!grouped[condition.token_id]) grouped[condition.token_id] = [];
+        grouped[condition.token_id].push(condition);
+      });
+      setTokenConditions(grouped);
+    }
   };
 
   const setActiveMap = async (url: string) => {
@@ -221,6 +283,68 @@ export default function GameBoard({ sessionId, onLeave }: GameBoardProps) {
       token_type: 'monster',
     });
     setShowMonsters(false);
+  };
+
+  const uploadFiles = async (files: File[], folder: 'maps' | 'monsters') => {
+    const urls: string[] = [];
+    for (const file of files) {
+      const ext = file.name.split('.').pop();
+      const path = `${folder}/${sessionId}/${Date.now()}-${Math.random().toString(36).slice(2)}.${ext}`;
+      const { error } = await supabase.storage.from('vtt-assets').upload(path, file);
+      if (error) throw error;
+      const { data } = supabase.storage.from('vtt-assets').getPublicUrl(path);
+      urls.push(data.publicUrl);
+    }
+    return urls;
+  };
+
+  const addMapsToSession = async (files: FileList | null) => {
+    if (!isDm || !session || !files || files.length === 0) return;
+    setUploadingMaps(true);
+    try {
+      const uploadedUrls = await uploadFiles(Array.from(files), 'maps');
+      const nextMaps = [...(session.maps || []), ...uploadedUrls];
+      const nextActiveMap = session.active_map_url || uploadedUrls[0] || null;
+
+      const { error } = await supabase
+        .from('sessions')
+        .update({ maps: nextMaps, active_map_url: nextActiveMap })
+        .eq('id', sessionId);
+
+      if (error) throw error;
+
+      setSession(prev => prev ? { ...prev, maps: nextMaps, active_map_url: nextActiveMap } : prev);
+      toast.success('Mapa(s) adicionado(s) à sessão');
+    } catch (err: any) {
+      toast.error(err?.message || 'Erro ao adicionar mapas');
+    } finally {
+      setUploadingMaps(false);
+      if (mapUploadInputRef.current) mapUploadInputRef.current.value = '';
+    }
+  };
+
+  const addMonstersToSession = async (files: FileList | null) => {
+    if (!isDm || !session || !files || files.length === 0) return;
+    setUploadingMonsters(true);
+    try {
+      const uploadedUrls = await uploadFiles(Array.from(files), 'monsters');
+      const nextMonsters = [...(session.monster_images || []), ...uploadedUrls];
+
+      const { error } = await supabase
+        .from('sessions')
+        .update({ monster_images: nextMonsters })
+        .eq('id', sessionId);
+
+      if (error) throw error;
+
+      setSession(prev => prev ? { ...prev, monster_images: nextMonsters } : prev);
+      toast.success('Monstro(s) adicionado(s) à sessão');
+    } catch (err: any) {
+      toast.error(err?.message || 'Erro ao adicionar monstros');
+    } finally {
+      setUploadingMonsters(false);
+      if (monsterUploadInputRef.current) monsterUploadInputRef.current.value = '';
+    }
   };
 
   const removeToken = async (tokenId: string) => {
@@ -294,6 +418,12 @@ export default function GameBoard({ sessionId, onLeave }: GameBoardProps) {
     setShowMobileMenu(false);
   };
 
+  const toggleFog = async () => {
+    if (!isDm || !session) return;
+    await supabase.from('sessions').update({ fog_enabled: !session.fog_enabled }).eq('id', sessionId);
+    setShowMobileMenu(false);
+  };
+
   const updateGridSize = async (next: number) => {
     if (!isDm || !session) return;
     const clamped = Math.max(20, Math.min(200, next));
@@ -318,14 +448,47 @@ export default function GameBoard({ sessionId, onLeave }: GameBoardProps) {
   return (
     <>
       {showProfile && <ProfileSettings onClose={() => setShowProfile(false)} />}
-      {charSheetTarget && (
-        <CharacterSheet
+      {showPullPlayersModal && player && (
+        <PullPlayersModal
           sessionId={sessionId}
-          onClose={() => setCharSheetTarget(null)}
-          targetPlayerId={charSheetTarget.playerId}
-          targetPlayerName={charSheetTarget.playerName}
-          readOnly={charSheetTarget.readOnly}
+          dmId={player.id}
+          onClose={() => setShowPullPlayersModal(false)}
+          onSuccess={() => loadAllConditions()}
         />
+      )}
+      {showBestiary && player && (
+        <BestiaryManager
+          dmId={player.id}
+          system={session?.system || 'dnd5e'}
+          onClose={() => setShowBestiary(false)}
+        />
+      )}
+      {showEncounterBuilder && player && (
+        <EncounterBuilder
+          dmId={player.id}
+          sessionId={sessionId}
+          system={session?.system || 'dnd5e'}
+          onClose={() => setShowEncounterBuilder(false)}
+        />
+      )}
+      {charSheetTarget && (
+        session?.system === 'ordem_paranormal' ? (
+          <CharacterSheetOP
+            sessionId={sessionId}
+            onClose={() => setCharSheetTarget(null)}
+            targetPlayerId={charSheetTarget.playerId}
+            targetPlayerName={charSheetTarget.playerName}
+            readOnly={charSheetTarget.readOnly}
+          />
+        ) : (
+          <CharacterSheet
+            sessionId={sessionId}
+            onClose={() => setCharSheetTarget(null)}
+            targetPlayerId={charSheetTarget.playerId}
+            targetPlayerName={charSheetTarget.playerName}
+            readOnly={charSheetTarget.readOnly}
+          />
+        )
       )}
 
       <div className="h-screen w-screen flex flex-col bg-background overflow-hidden">
@@ -342,6 +505,8 @@ export default function GameBoard({ sessionId, onLeave }: GameBoardProps) {
               <>
                 <TB icon={Image} label="Trocar Mapa" active={showMapPicker} onClick={() => { setShowMapPicker(v => !v); setShowMobileMenu(false); }} />
                 <TB icon={Plus} label="Monstros" active={showMonsters} onClick={() => { setShowMonsters(v => !v); setShowMobileMenu(false); }} />
+                <TB icon={UserPlus} label="Puxar Jogadores" onClick={() => setShowPullPlayersModal(true)} />
+                <TB icon={Swords} label="Encontros" active={showEncounterBuilder} onClick={() => setShowEncounterBuilder(v => !v)} />
               </>
             )}
             {!isDm && (
@@ -355,6 +520,7 @@ export default function GameBoard({ sessionId, onLeave }: GameBoardProps) {
             <TB icon={Pencil} label="Desenhar" active={showDrawing} onClick={() => toggleTool('drawing')} />
             <TB icon={Ruler} label="Régua" active={showRuler} onClick={() => toggleTool('ruler')} />
             {isDm && <TB icon={Grid3x3} label="Grade" active={showGrid} onClick={toggleGrid} />}
+            {isDm && <TB icon={Eye} label="Fog of War" active={fogEnabled} onClick={toggleFog} />}
 
             <div className="w-px h-5 bg-border mx-1" />
 
@@ -362,6 +528,10 @@ export default function GameBoard({ sessionId, onLeave }: GameBoardProps) {
             <TB icon={ScrollText} label="Histórico" active={showLog} onClick={() => setShowLog(v => !v)} />
             <TB icon={MessageCircle} label="Chat" active={showChat} onClick={() => setShowChat(v => !v)} />
             <TB icon={Calculator} label="Calculadora" active={showCalc} onClick={() => setShowCalc(v => !v)} />
+            <TB icon={Swords} label="Iniciativa" active={showInitiative} onClick={() => setShowInitiative(v => !v)} />
+            <TB icon={Activity} label="Log de Combate" active={showCombatLog} onClick={() => setShowCombatLog(v => !v)} />
+            <TB icon={AlertCircle} label="Condições Ativas" active={showConditionsSummary} onClick={() => setShowConditionsSummary(v => !v)} />
+            {isDm && <TB icon={BookOpen} label="Bestiário" active={showBestiary} onClick={() => setShowBestiary(v => !v)} />}
 
             <div className="w-px h-5 bg-border mx-1" />
 
@@ -398,6 +568,8 @@ export default function GameBoard({ sessionId, onLeave }: GameBoardProps) {
                 <>
                   <MobileMenuItem icon={Image} label="Trocar Mapa" onClick={() => { setShowMapPicker(v => !v); setShowMobileMenu(false); }} active={showMapPicker} />
                   <MobileMenuItem icon={Plus} label="Monstros" onClick={() => { setShowMonsters(v => !v); setShowMobileMenu(false); }} active={showMonsters} />
+                  <MobileMenuItem icon={UserPlus} label="Puxar Jogadores" onClick={() => { setShowPullPlayersModal(true); setShowMobileMenu(false); }} />
+                  <MobileMenuItem icon={Swords} label="Encontros" onClick={() => { setShowEncounterBuilder(v => !v); setShowMobileMenu(false); }} active={showEncounterBuilder} />
                 </>
               )}
               {!isDm && <MobileMenuItem icon={Plus} label="Meu Token" onClick={() => { addPlayerToken(); setShowMobileMenu(false); }} />}
@@ -405,9 +577,14 @@ export default function GameBoard({ sessionId, onLeave }: GameBoardProps) {
               <MobileMenuItem icon={Pencil} label="Desenhar" onClick={() => toggleTool('drawing')} active={showDrawing} />
               <MobileMenuItem icon={Ruler} label="Régua" onClick={() => toggleTool('ruler')} active={showRuler} />
               {isDm && <MobileMenuItem icon={Grid3x3} label="Grade" onClick={toggleGrid} active={showGrid} />}
+              {isDm && <MobileMenuItem icon={Eye} label="Fog of War" onClick={toggleFog} active={fogEnabled} />}
               <div className="h-px bg-border my-1" />
               <MobileMenuItem icon={ScrollText} label="Histórico" onClick={() => { setShowLog(v => !v); setShowMobileMenu(false); }} active={showLog} />
               <MobileMenuItem icon={Calculator} label="Calculadora" onClick={() => { setShowCalc(v => !v); setShowMobileMenu(false); }} active={showCalc} />
+              <MobileMenuItem icon={Swords} label="Iniciativa" onClick={() => { setShowInitiative(v => !v); setShowMobileMenu(false); }} active={showInitiative} />
+              <MobileMenuItem icon={Activity} label="Log de Combate" onClick={() => { setShowCombatLog(v => !v); setShowMobileMenu(false); }} active={showCombatLog} />
+              <MobileMenuItem icon={AlertCircle} label="Condições Ativas" onClick={() => { setShowConditionsSummary(v => !v); setShowMobileMenu(false); }} active={showConditionsSummary} />
+              {isDm && <MobileMenuItem icon={BookOpen} label="Bestiário" onClick={() => { setShowBestiary(v => !v); setShowMobileMenu(false); }} active={showBestiary} />}
               {isDm ? (
                 <MobileMenuItem icon={Users} label="Fichas dos Jogadores" onClick={() => { setShowPlayerSheets(v => !v); setShowMobileMenu(false); }} active={showPlayerSheets} />
               ) : (
@@ -478,9 +655,35 @@ export default function GameBoard({ sessionId, onLeave }: GameBoardProps) {
               playerId={player?.id ?? ''}
             />
 
+            {/* Fog of War */}
+            <FogOfWar
+              sessionId={sessionId}
+              playerId={player?.id ?? ''}
+              isDm={isDm}
+              tokens={tokens.map(t => ({
+                id: t.id,
+                x: t.x,
+                y: t.y,
+                width: t.width,
+                height: t.height,
+                owner_id: t.owner_id,
+                token_type: t.token_type,
+                is_hidden: t.is_hidden ?? false,
+              }))}
+              virtualWidth={VIRTUAL_W}
+              virtualHeight={VIRTUAL_H}
+              enabled={fogEnabled}
+            />
+
             {/* Tokens */}
             {tokens.map(token => {
               const myReactions = tokenReactions.filter(r => r.tokenId === token.id);
+              const myConditions = tokenConditions[token.id] || [];
+              const hasHealth = token.hp_max && token.hp_max > 0;
+              const isVisible = isDm || !token.is_hidden; // Simplificado - fog controla visibilidade
+              
+              if (!isVisible) return null;
+              
               return (
                 <div
                   key={token.id}
@@ -489,6 +692,47 @@ export default function GameBoard({ sessionId, onLeave }: GameBoardProps) {
                   onPointerDown={e => handlePointerDown(e, token)}
                   onClick={e => { e.stopPropagation(); if (canInteractToken(token)) setSelectedToken(token.id); }}
                 >
+                  {/* Condition icons */}
+                  <ConditionIcons
+                    conditions={myConditions}
+                    onClick={() => setShowConditionsPanel(showConditionsPanel === token.id ? null : token.id)}
+                  />
+
+                  {/* Conditions panel */}
+                  {showConditionsPanel === token.id && (
+                    <TokenConditions
+                      tokenId={token.id}
+                      sessionId={sessionId}
+                      canEdit={isDm || token.owner_id === player?.id}
+                      showPanel={true}
+                      onClose={() => setShowConditionsPanel(null)}
+                    />
+                  )}
+                  {/* Health bars */}
+                  {showHealthBars && hasHealth && (
+                    <TokenHealthBar
+                      tokenId={token.id}
+                      sessionId={sessionId}
+                      playerId={player?.id || ''}
+                      playerName={player?.name || 'Desconhecido'}
+                      hp_current={token.hp_current || 0}
+                      hp_max={token.hp_max || 0}
+                      pe_current={token.pe_current || undefined}
+                      pe_max={token.pe_max || undefined}
+                      ps_current={token.ps_current || undefined}
+                      ps_max={token.ps_max || undefined}
+                      system={session?.system || 'dnd5e'}
+                      onUpdate={async (hp, pe, ps) => {
+                        await supabase.from('board_tokens').update({
+                          hp_current: hp,
+                          pe_current: pe,
+                          ps_current: ps
+                        }).eq('id', token.id);
+                      }}
+                      canEdit={isDm || token.owner_id === player?.id}
+                      showControls={selectedToken === token.id}
+                    />
+                  )}
                   <div className={`w-full h-full rounded-full overflow-hidden border-2 ${
                     token.token_type === 'player' ? 'border-gold glow-gold' : 'border-blood'
                   } shadow-lg transition-all ${selectedToken === token.id ? 'ring-2 ring-gold ring-offset-2 ring-offset-background' : ''}`}>
@@ -543,7 +787,7 @@ export default function GameBoard({ sessionId, onLeave }: GameBoardProps) {
                     ) : token.label}
                   </div>
 
-                  {/* Controls: resize/rename/react/delete */}
+                  {/* Controls: resize/rename/react/conditions/visibility/delete */}
                   {selectedToken === token.id && canInteractToken(token) && (
                     <div className="absolute -top-8 left-1/2 -translate-x-1/2 flex items-center gap-1 bg-card/95 border border-border rounded-lg px-1 py-0.5 shadow-lg z-50">
                       <button onClick={e => { e.stopPropagation(); resizeToken(token.id, -10); }}
@@ -559,6 +803,22 @@ export default function GameBoard({ sessionId, onLeave }: GameBoardProps) {
                         className="w-5 h-5 flex items-center justify-center rounded hover:bg-muted" title="Renomear">
                         <Pencil className="w-3 h-3 text-muted-foreground" />
                       </button>
+                      <button onClick={e => { e.stopPropagation(); setShowConditionsPanel(showConditionsPanel === token.id ? null : token.id); }}
+                        className="w-5 h-5 flex items-center justify-center rounded hover:bg-muted" title="Condições">
+                        <Shield className="w-3 h-3 text-muted-foreground" />
+                      </button>
+                      {isDm && (
+                        <button
+                          onClick={async (e) => {
+                            e.stopPropagation();
+                            await supabase.from('board_tokens').update({ is_hidden: !token.is_hidden }).eq('id', token.id);
+                          }}
+                          className="w-5 h-5 flex items-center justify-center rounded hover:bg-muted"
+                          title={token.is_hidden ? 'Revelar' : 'Ocultar'}
+                        >
+                          <Eye className={`w-3 h-3 ${token.is_hidden ? 'text-destructive' : 'text-muted-foreground'}`} />
+                        </button>
+                      )}
                       <button onClick={e => { e.stopPropagation(); setShowReactionPicker(showReactionPicker === token.id ? null : token.id); }}
                         className="w-5 h-5 flex items-center justify-center rounded hover:bg-muted" title="Reagir">
                         <Smile className="w-3 h-3 text-muted-foreground" />
@@ -621,8 +881,28 @@ export default function GameBoard({ sessionId, onLeave }: GameBoardProps) {
             <div className="absolute top-2 left-2 bg-card border border-border rounded-xl p-4 z-30 shadow-2xl w-64">
               <div className="flex items-center justify-between mb-3">
                 <h3 className="font-display text-sm text-gold">Mapas Disponíveis</h3>
-                <button onClick={() => setShowMapPicker(false)}><X className="w-4 h-4 text-muted-foreground" /></button>
+                <div className="flex items-center gap-2">
+                  <Button
+                    size="sm"
+                    variant="secondary"
+                    className="h-7 px-2 text-[11px]"
+                    onClick={() => mapUploadInputRef.current?.click()}
+                    disabled={uploadingMaps}
+                  >
+                    <Plus className="w-3 h-3 mr-1" />
+                    {uploadingMaps ? 'Enviando...' : 'Adicionar'}
+                  </Button>
+                  <button onClick={() => setShowMapPicker(false)}><X className="w-4 h-4 text-muted-foreground" /></button>
+                </div>
               </div>
+              <input
+                ref={mapUploadInputRef}
+                type="file"
+                accept="image/*"
+                multiple
+                className="hidden"
+                onChange={(e) => addMapsToSession(e.target.files)}
+              />
               <div className="grid grid-cols-3 gap-2 max-h-60 overflow-auto">
                 {(session.maps || []).map((url, i) => (
                   <button key={i} onClick={() => setActiveMap(url)}
@@ -631,6 +911,9 @@ export default function GameBoard({ sessionId, onLeave }: GameBoardProps) {
                   </button>
                 ))}
               </div>
+              {(session.maps || []).length === 0 && (
+                <p className="text-xs text-muted-foreground mt-2">Nenhum mapa ainda. Use Adicionar para enviar.</p>
+              )}
             </div>
           )}
 
@@ -639,8 +922,28 @@ export default function GameBoard({ sessionId, onLeave }: GameBoardProps) {
             <div className="absolute top-2 right-2 bg-card border border-border rounded-xl p-4 z-30 shadow-2xl w-56">
               <div className="flex items-center justify-between mb-3">
                 <h3 className="font-display text-sm text-gold">Adicionar Monstro</h3>
-                <button onClick={() => setShowMonsters(false)}><X className="w-4 h-4 text-muted-foreground" /></button>
+                <div className="flex items-center gap-2">
+                  <Button
+                    size="sm"
+                    variant="secondary"
+                    className="h-7 px-2 text-[11px]"
+                    onClick={() => monsterUploadInputRef.current?.click()}
+                    disabled={uploadingMonsters}
+                  >
+                    <Plus className="w-3 h-3 mr-1" />
+                    {uploadingMonsters ? 'Enviando...' : 'Adicionar'}
+                  </Button>
+                  <button onClick={() => setShowMonsters(false)}><X className="w-4 h-4 text-muted-foreground" /></button>
+                </div>
               </div>
+              <input
+                ref={monsterUploadInputRef}
+                type="file"
+                accept="image/*"
+                multiple
+                className="hidden"
+                onChange={(e) => addMonstersToSession(e.target.files)}
+              />
               <div className="grid grid-cols-4 gap-2 max-h-60 overflow-auto">
                 {(session.monster_images || []).map((url, i) => (
                   <button key={i} onClick={() => addMonsterToken(url)}
@@ -649,6 +952,9 @@ export default function GameBoard({ sessionId, onLeave }: GameBoardProps) {
                   </button>
                 ))}
               </div>
+              {(session.monster_images || []).length === 0 && (
+                <p className="text-xs text-muted-foreground mt-2">Nenhum monstro ainda. Use Adicionar para enviar.</p>
+              )}
             </div>
           )}
 
@@ -737,7 +1043,7 @@ export default function GameBoard({ sessionId, onLeave }: GameBoardProps) {
           {/* Dice Roller */}
           {showDice && (
             <div className="absolute bottom-4 left-2 sm:left-4 z-30 max-w-[calc(100vw-1rem)] sm:max-w-none">
-              <DiceRoller sessionId={sessionId} onClose={() => setShowDice(false)} />
+              <DiceRoller sessionId={sessionId} sessionSystem={session?.system} onClose={() => setShowDice(false)} />
             </div>
           )}
 
@@ -759,6 +1065,38 @@ export default function GameBoard({ sessionId, onLeave }: GameBoardProps) {
           {showCalc && (
             <div className="absolute bottom-4 right-4 z-30 max-w-[calc(100vw-2rem)] sm:max-w-none">
               <CombatCalculator onClose={() => setShowCalc(false)} />
+            </div>
+          )}
+
+          {/* Initiative Tracker */}
+          {showInitiative && (
+            <div className="absolute top-14 right-4 z-30">
+              <InitiativeTracker
+                sessionId={sessionId}
+                isDm={isDm}
+                tokens={tokens.map(t => ({ id: t.id, label: t.label }))}
+                onClose={() => setShowInitiative(false)}
+              />
+            </div>
+          )}
+
+          {/* Combat Log */}
+          {showCombatLog && (
+            <div className="absolute top-14 left-4 z-30">
+              <CombatLogPanel
+                sessionId={sessionId}
+                onClose={() => setShowCombatLog(false)}
+              />
+            </div>
+          )}
+
+          {/* Conditions Summary */}
+          {showConditionsSummary && (
+            <div className="absolute bottom-4 left-4 z-30">
+              <ConditionsSummaryPanel
+                sessionId={sessionId}
+                onClose={() => setShowConditionsSummary(false)}
+              />
             </div>
           )}
         </div>

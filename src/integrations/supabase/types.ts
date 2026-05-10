@@ -14,6 +14,198 @@ export type Database = {
   }
   public: {
     Tables: {
+      token_conditions: {
+        Row: {
+          id: string
+          session_id: string
+          token_id: string
+          condition_name: string
+          duration: number | null
+          description: string
+          icon: string
+          created_at: string
+        }
+        Insert: {
+          id?: string
+          session_id: string
+          token_id: string
+          condition_name: string
+          duration?: number | null
+          description: string
+          icon: string
+          created_at?: string
+        }
+        Update: {
+          id?: string
+          session_id?: string
+          token_id?: string
+          condition_name?: string
+          duration?: number | null
+          description?: string
+          icon?: string
+          created_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "token_conditions_session_id_fkey"
+            columns: ["session_id"]
+            isOneToOne: false
+            referencedRelation: "sessions"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "token_conditions_token_id_fkey"
+            columns: ["token_id"]
+            isOneToOne: false
+            referencedRelation: "board_tokens"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      token_health_logs: {
+        Row: {
+          id: string
+          session_id: string
+          token_id: string
+          player_id: string
+          player_name: string
+          action_type: string
+          amount: number
+          hp_before: number
+          hp_after: number
+          created_at: string
+        }
+        Insert: {
+          id?: string
+          session_id: string
+          token_id: string
+          player_id: string
+          player_name: string
+          action_type: string
+          amount: number
+          hp_before: number
+          hp_after: number
+          created_at?: string
+        }
+        Update: {
+          id?: string
+          session_id?: string
+          token_id?: string
+          player_id?: string
+          player_name?: string
+          action_type?: string
+          amount?: number
+          hp_before?: number
+          hp_after?: number
+          created_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "token_health_logs_session_id_fkey"
+            columns: ["session_id"]
+            isOneToOne: false
+            referencedRelation: "sessions"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "token_health_logs_token_id_fkey"
+            columns: ["token_id"]
+            isOneToOne: false
+            referencedRelation: "board_tokens"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "token_health_logs_player_id_fkey"
+            columns: ["player_id"]
+            isOneToOne: false
+            referencedRelation: "players"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      initiative_tracker: {
+        Row: {
+          id: string
+          session_id: string
+          token_id: string | null
+          name: string
+          initiative: number
+          is_active: boolean
+          hp_current: number | null
+          hp_max: number | null
+          created_at: string
+        }
+        Insert: {
+          id?: string
+          session_id: string
+          token_id?: string | null
+          name: string
+          initiative: number
+          is_active?: boolean
+          hp_current?: number | null
+          hp_max?: number | null
+          created_at?: string
+        }
+        Update: {
+          id?: string
+          session_id?: string
+          token_id?: string | null
+          name?: string
+          initiative?: number
+          is_active?: boolean
+          hp_current?: number | null
+          hp_max?: number | null
+          created_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "initiative_tracker_session_id_fkey"
+            columns: ["session_id"]
+            isOneToOne: false
+            referencedRelation: "sessions"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      character_sheets: {
+        Row: {
+          id: string
+          session_id: string
+          player_id: string
+          data: Json
+          updated_at: string
+        }
+        Insert: {
+          id?: string
+          session_id: string
+          player_id: string
+          data?: Json
+          updated_at?: string
+        }
+        Update: {
+          id?: string
+          session_id?: string
+          player_id?: string
+          data?: Json
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "character_sheets_session_id_fkey"
+            columns: ["session_id"]
+            isOneToOne: false
+            referencedRelation: "sessions"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "character_sheets_player_id_fkey"
+            columns: ["player_id"]
+            isOneToOne: false
+            referencedRelation: "players"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       board_drawings: {
         Row: {
           created_at: string
@@ -66,6 +258,14 @@ export type Database = {
           width: number
           x: number
           y: number
+          hp_current: number | null
+          hp_max: number | null
+          pe_current: number | null
+          pe_max: number | null
+          ps_current: number | null
+          ps_max: number | null
+          is_hidden: boolean
+          vision_radius: number
         }
         Insert: {
           created_at?: string
@@ -79,6 +279,14 @@ export type Database = {
           width?: number
           x?: number
           y?: number
+          hp_current?: number | null
+          hp_max?: number | null
+          pe_current?: number | null
+          pe_max?: number | null
+          ps_current?: number | null
+          ps_max?: number | null
+          is_hidden?: boolean
+          vision_radius?: number
         }
         Update: {
           created_at?: string
@@ -92,6 +300,14 @@ export type Database = {
           width?: number
           x?: number
           y?: number
+          hp_current?: number | null
+          hp_max?: number | null
+          pe_current?: number | null
+          pe_max?: number | null
+          ps_current?: number | null
+          ps_max?: number | null
+          is_hidden?: boolean
+          vision_radius?: number
         }
         Relationships: [
           {
@@ -191,6 +407,60 @@ export type Database = {
         }
         Relationships: []
       }
+      session_messages: {
+        Row: {
+          id: string
+          session_id: string
+          player_id: string
+          player_name: string
+          player_avatar: string | null
+          content: string
+          is_whisper: boolean
+          whisper_to_player_id: string | null
+          whisper_to_name: string | null
+          created_at: string
+        }
+        Insert: {
+          id?: string
+          session_id: string
+          player_id: string
+          player_name: string
+          player_avatar?: string | null
+          content: string
+          is_whisper?: boolean
+          whisper_to_player_id?: string | null
+          whisper_to_name?: string | null
+          created_at?: string
+        }
+        Update: {
+          id?: string
+          session_id?: string
+          player_id?: string
+          player_name?: string
+          player_avatar?: string | null
+          content?: string
+          is_whisper?: boolean
+          whisper_to_player_id?: string | null
+          whisper_to_name?: string | null
+          created_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "session_messages_session_id_fkey"
+            columns: ["session_id"]
+            isOneToOne: false
+            referencedRelation: "sessions"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "session_messages_player_id_fkey"
+            columns: ["player_id"]
+            isOneToOne: false
+            referencedRelation: "players"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       session_participants: {
         Row: {
           id: string
@@ -243,6 +513,10 @@ export type Database = {
           name: string
           password: string
           show_grid: boolean
+          system: string
+          combat_round: number
+          fog_enabled: boolean
+          default_vision_radius: number
         }
         Insert: {
           active_map_url?: string | null
@@ -256,6 +530,10 @@ export type Database = {
           name: string
           password: string
           show_grid?: boolean
+          system?: string
+          combat_round?: number
+          fog_enabled?: boolean
+          default_vision_radius?: number
         }
         Update: {
           active_map_url?: string | null
@@ -269,6 +547,10 @@ export type Database = {
           name?: string
           password?: string
           show_grid?: boolean
+          system?: string
+          combat_round?: number
+          fog_enabled?: boolean
+          default_vision_radius?: number
         }
         Relationships: [
           {
