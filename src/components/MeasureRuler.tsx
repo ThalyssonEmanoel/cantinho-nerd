@@ -12,6 +12,8 @@ interface MeasureRulerProps {
   onClose: () => void;
   sessionId: string;
   playerId: string;
+  // Counter-scale for in-board overlay UI so it remains readable on mobile.
+  uiScale?: number;
 }
 
 interface RulerState {
@@ -34,6 +36,7 @@ export default function MeasureRuler({
   onClose,
   sessionId,
   playerId,
+  uiScale = 1,
 }: MeasureRulerProps) {
   const [start, setStart] = useState<{ x: number; y: number } | null>(null);
   const [end, setEnd] = useState<{ x: number; y: number } | null>(null);
@@ -124,22 +127,28 @@ export default function MeasureRuler({
   ) => {
     const sq = gridCellSize > 0 ? Math.round(dist / gridCellSize) : 0;
     const feetVal = sq * 5;
+    // Counter-scale the label box/text so it stays a consistent on-screen size
+    // regardless of how much the virtual board is shrunk to fit the viewport.
+    const labelScale = uiScale;
+    const boxW = 140 * labelScale;
+    const boxH = 48 * labelScale;
+    const fontSz = 20 * labelScale;
     return (
       <g key={key}>
         <line
           x1={s.x} y1={s.y}
           x2={e.x} y2={e.y}
           stroke={color}
-          strokeWidth={3}
-          strokeDasharray="12 6"
+          strokeWidth={3 * labelScale}
+          strokeDasharray={`${12 * labelScale} ${6 * labelScale}`}
           opacity={0.85}
         />
-        <circle cx={s.x} cy={s.y} r={6} fill={color} />
-        <circle cx={e.x} cy={e.y} r={6} fill={color} />
+        <circle cx={s.x} cy={s.y} r={6 * labelScale} fill={color} />
+        <circle cx={e.x} cy={e.y} r={6 * labelScale} fill={color} />
         {dist > 5 && (
           <g transform={`translate(${(s.x + e.x) / 2}, ${(s.y + e.y) / 2})`}>
-            <rect x={-70} y={-40} width={140} height={48} rx={8} fill="hsl(var(--card))" stroke="hsl(var(--border))" strokeWidth={2} opacity={0.95} />
-            <text textAnchor="middle" y={-12} fill={color} fontSize={20} fontFamily="var(--font-display)">
+            <rect x={-boxW / 2} y={-boxH - 4} width={boxW} height={boxH} rx={8 * labelScale} fill="hsl(var(--card))" stroke="hsl(var(--border))" strokeWidth={2 * labelScale} opacity={0.95} />
+            <text textAnchor="middle" y={-boxH / 2 + fontSz / 3} fill={color} fontSize={fontSz} fontFamily="var(--font-display)">
               {Math.round(dist)}px · {feetVal}ft
             </text>
           </g>
@@ -175,12 +184,17 @@ export default function MeasureRuler({
         })}
       </svg>
 
-      {/* Close hint */}
-      <div className="absolute top-2 left-1/2 -translate-x-1/2 z-40 bg-card/90 border border-border rounded-lg px-3 py-1.5 text-xs text-muted-foreground font-display whitespace-nowrap">
-        Clique e arraste para medir ·{' '}
-        <button onClick={onClose} className="text-gold hover:underline">
-          Fechar régua
-        </button>
+      {/* Close hint — counter-scaled so it stays readable on small viewports */}
+      <div className="absolute top-2 left-1/2 -translate-x-1/2 z-40">
+        <div
+          style={{ transform: `scale(${uiScale})`, transformOrigin: 'center top' }}
+          className="bg-card/90 border border-border rounded-lg px-3 py-1.5 text-sm text-muted-foreground font-display whitespace-nowrap"
+        >
+          Clique e arraste para medir ·{' '}
+          <button onClick={onClose} className="text-gold hover:underline">
+            Fechar régua
+          </button>
+        </div>
       </div>
     </>
   );
