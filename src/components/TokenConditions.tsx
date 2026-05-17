@@ -21,6 +21,7 @@ interface TokenConditionsProps {
   canEdit: boolean;
   showPanel: boolean;
   onClose: () => void;
+  uiScale?: number;
 }
 
 const CONDITIONS = [
@@ -38,7 +39,7 @@ const CONDITIONS = [
   { name: 'Sangrando', icon: '🩸', description: 'Perde HP no início de cada turno' },
 ];
 
-export default function TokenConditions({ tokenId, sessionId, canEdit, showPanel, onClose }: TokenConditionsProps) {
+export default function TokenConditions({ tokenId, sessionId, canEdit, showPanel, onClose, uiScale = 1 }: TokenConditionsProps) {
   const [conditions, setConditions] = useState<Condition[]>([]);
   const [showAddPanel, setShowAddPanel] = useState(false);
   const [selectedCondition, setSelectedCondition] = useState('');
@@ -106,16 +107,18 @@ export default function TokenConditions({ tokenId, sessionId, canEdit, showPanel
   if (!showPanel) return null;
 
   return (
+    <div className="absolute -top-20 left-1/2 -translate-x-1/2 z-50 pointer-events-none">
+    <div style={{ transform: `scale(${uiScale})`, transformOrigin: 'center bottom' }} className="pointer-events-auto">
     <motion.div
       initial={{ opacity: 0, scale: 0.9 }}
       animate={{ opacity: 1, scale: 1 }}
       exit={{ opacity: 0, scale: 0.9 }}
-      className="absolute -top-20 left-1/2 -translate-x-1/2 bg-card border border-border rounded-xl shadow-2xl p-3 z-50 min-w-[200px] max-w-[280px]"
+      className="bg-card border border-border rounded-xl shadow-2xl p-3 min-w-[220px] max-w-[300px]"
       onClick={e => e.stopPropagation()}
     >
       <div className="flex items-center justify-between mb-2">
-        <h4 className="font-display text-xs text-gold">Condições</h4>
-        <button onClick={onClose}><X className="w-3 h-3 text-muted-foreground" /></button>
+        <h4 className="font-display text-sm text-gold">Condições</h4>
+        <button onClick={onClose}><X className="w-4 h-4 text-muted-foreground" /></button>
       </div>
 
       {/* Lista de condições ativas */}
@@ -127,13 +130,13 @@ export default function TokenConditions({ tokenId, sessionId, canEdit, showPanel
               initial={{ opacity: 0, x: -10 }}
               animate={{ opacity: 1, x: 0 }}
               exit={{ opacity: 0, x: 10 }}
-              className="flex items-center gap-2 bg-secondary/50 rounded-lg px-2 py-1"
+              className="flex items-center gap-2 bg-secondary/50 rounded-lg px-2 py-1.5"
             >
-              <span className="text-lg">{condition.icon}</span>
+              <span className="text-xl">{condition.icon}</span>
               <div className="flex-1 min-w-0">
-                <div className="text-xs font-display truncate">{condition.condition_name}</div>
+                <div className="text-sm font-display truncate">{condition.condition_name}</div>
                 {condition.duration && (
-                  <div className="text-[10px] text-muted-foreground">
+                  <div className="text-xs text-muted-foreground">
                     {condition.duration} {condition.duration === 1 ? 'turno' : 'turnos'}
                   </div>
                 )}
@@ -143,7 +146,7 @@ export default function TokenConditions({ tokenId, sessionId, canEdit, showPanel
                   {condition.duration && (
                     <button
                       onClick={() => decrementDuration(condition)}
-                      className="w-5 h-5 flex items-center justify-center rounded hover:bg-muted text-[10px]"
+                      className="w-6 h-6 flex items-center justify-center rounded hover:bg-muted text-xs"
                       title="Decrementar turno"
                     >
                       -1
@@ -151,9 +154,9 @@ export default function TokenConditions({ tokenId, sessionId, canEdit, showPanel
                   )}
                   <button
                     onClick={() => removeCondition(condition.id)}
-                    className="w-5 h-5 flex items-center justify-center rounded hover:bg-destructive/20"
+                    className="w-6 h-6 flex items-center justify-center rounded hover:bg-destructive/20"
                   >
-                    <X className="w-3 h-3 text-destructive" />
+                    <X className="w-4 h-4 text-destructive" />
                   </button>
                 </div>
               )}
@@ -162,7 +165,7 @@ export default function TokenConditions({ tokenId, sessionId, canEdit, showPanel
         </AnimatePresence>
 
         {conditions.length === 0 && (
-          <p className="text-xs text-muted-foreground text-center py-2">Nenhuma condição</p>
+          <p className="text-sm text-muted-foreground text-center py-2">Nenhuma condição</p>
         )}
       </div>
 
@@ -173,17 +176,17 @@ export default function TokenConditions({ tokenId, sessionId, canEdit, showPanel
             <Button
               size="sm"
               variant="outline"
-              className="w-full h-7 text-xs"
+              className="w-full h-8 text-sm"
               onClick={() => setShowAddPanel(true)}
             >
-              <Plus className="w-3 h-3 mr-1" /> Adicionar Condição
+              <Plus className="w-4 h-4 mr-1" /> Adicionar Condição
             </Button>
           ) : (
             <div className="space-y-1">
               <select
                 value={selectedCondition}
                 onChange={(e) => setSelectedCondition(e.target.value)}
-                className="w-full h-7 text-xs bg-secondary border border-border rounded px-2"
+                className="w-full h-8 text-sm bg-secondary border border-border rounded px-2"
               >
                 <option value="">Selecione...</option>
                 {CONDITIONS.map(c => (
@@ -197,12 +200,12 @@ export default function TokenConditions({ tokenId, sessionId, canEdit, showPanel
                 placeholder="Duração (turnos)"
                 value={duration}
                 onChange={(e) => setDuration(e.target.value)}
-                className="h-7 text-xs"
+                className="h-8 text-sm"
               />
               <div className="flex gap-1">
                 <Button
                   size="sm"
-                  className="h-6 text-xs flex-1"
+                  className="h-7 text-sm flex-1"
                   onClick={addCondition}
                   disabled={!selectedCondition}
                 >
@@ -211,7 +214,7 @@ export default function TokenConditions({ tokenId, sessionId, canEdit, showPanel
                 <Button
                   size="sm"
                   variant="ghost"
-                  className="h-6 text-xs"
+                  className="h-7 text-sm"
                   onClick={() => { setShowAddPanel(false); setSelectedCondition(''); setDuration(''); }}
                 >
                   Cancelar
@@ -222,5 +225,7 @@ export default function TokenConditions({ tokenId, sessionId, canEdit, showPanel
         </>
       )}
     </motion.div>
+    </div>
+    </div>
   );
 }

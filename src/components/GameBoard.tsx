@@ -28,6 +28,7 @@ import {
   Image, Plus, Trash2, LogOut, Dices, ScrollText, Pencil, Ruler,
   ZoomIn, ZoomOut, Menu, X, Grid3x3, MessageCircle,
   Calculator, Settings, Smile, ClipboardList, Users, Swords, Activity, AlertCircle, Shield, UserPlus, Eye, BookOpen,
+  Move, ArrowUp, ArrowDown, ArrowLeft, ArrowRight, RotateCcw,
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
 
@@ -61,6 +62,10 @@ interface Token {
   ps_max: number | null;
   is_hidden: boolean;
   vision_radius: number;
+  // Offset (-1..1) used as object-position percentage so users can reframe
+  // the avatar inside the circular token without re-uploading the image.
+  image_offset_x?: number;
+  image_offset_y?: number;
 }
 
 interface Session {
@@ -111,6 +116,7 @@ export default function GameBoard({ sessionId, onLeave }: GameBoardProps) {
   const [sessionPlayers, setSessionPlayers] = useState<{ id: string; name: string; avatar_url: string | null }[]>([]);
   const [showMobileMenu, setShowMobileMenu] = useState(false);
   const [showReactionPicker, setShowReactionPicker] = useState<string | null>(null); // tokenId
+  const [showImageAdjust, setShowImageAdjust] = useState<string | null>(null); // tokenId being reframed
   const [tokenReactions, setTokenReactions] = useState<TokenReaction[]>([]);
   const [tokenConditions, setTokenConditions] = useState<Record<string, any[]>>({});
   const [selectedToken, setSelectedToken] = useState<string | null>(null);
@@ -147,6 +153,15 @@ export default function GameBoard({ sessionId, onLeave }: GameBoardProps) {
     obs.observe(container);
     return () => obs.disconnect();
   }, []);
+
+  // Counter-scale factor for in-board UI overlays (labels, controls, health,
+  // conditions). Full inverse-scale on mobile (~5x) made the UI overpowering
+  // relative to the tiny map; instead we partially compensate so the UI
+  // grows on smaller viewports but never balloons. Floor 1.6 keeps the
+  // desktop sweet spot; ceiling 2.8 caps phones to ~2.5x natural size.
+  const uiScale = scale > 0
+    ? Math.max(1.6, Math.min(2.8, 1 / scale * 0.5))
+    : 1.6;
 
   useEffect(() => {
     const load = async () => {
@@ -255,6 +270,31 @@ export default function GameBoard({ sessionId, onLeave }: GameBoardProps) {
   const setActiveMap = async (url: string) => {
     await supabase.from('sessions').update({ active_map_url: url }).eq('id', sessionId);
     setShowMapPicker(false);
+  };
+
+  const removeMap = async (url: string) => {
+    if (!isDm || !session) return;
+    if (!confirm('Excluir este mapa da sessão? Esta ação não pode ser desfeita.')) return;
+    const nextMaps = (session.maps || []).filter(m => m !== url);
+    const nextActiveMap = session.active_map_url === url
+      ? (nextMaps[0] ?? null)
+      : session.active_map_url;
+    const { error } = await supabase
+      .from('sessions')
+      .update({ maps: nextMaps, active_map_url: nextActiveMap })
+      .eq('id', sessionId);
+    if (error) {
+      toast.error('Erro ao excluir mapa');
+      return;
+    }
+    setSession(prev => prev ? { ...prev, maps: nextMaps, active_map_url: nextActiveMap } : prev);
+    // Best-effort: try to remove the file from storage. Ignore errors so the
+    // DB stays consistent even if the object was already deleted.
+    try {
+      const match = url.match(/\/vtt-assets\/(.+)$/);
+      if (match) await supabase.storage.from('vtt-assets').remove([match[1]]);
+    } catch { /* noop */ }
+    toast.success('Mapa removido');
   };
 
   const addPlayerToken = async () => {
@@ -375,6 +415,30 @@ export default function GameBoard({ sessionId, onLeave }: GameBoardProps) {
     await supabase.from('board_tokens').update({ width: newSize, height: newSize }).eq('id', tokenId);
   };
 
+  // Reframe the avatar inside the circular token. dx/dy are in offset units
+  // (-1..1) and shift the visible center of the image. Pass nulls to reset.
+  const adjustTokenImage = async (tokenId: string, dx: number | null, dy: number | null) => {
+    const token = tokens.find(t => t.id === tokenId);
+    if (!token) return;
+    const clamp = (v: number) => Math.max(-1, Math.min(1, v));
+    const prevX = token.image_offset_x ?? 0;
+    const prevY = token.image_offset_y ?? 0;
+    const nextX = dx === null ? 0 : clamp(prevX + dx);
+    const nextY = dy === null ? 0 : clamp(prevY + dy);
+    setTokens(prev => prev.map(t => t.id === tokenId ? { ...t, image_offset_x: nextX, image_offset_y: nextY } : t));
+    const { error } = await supabase
+      .from('board_tokens')
+      .update({ image_offset_x: nextX, image_offset_y: nextY })
+      .eq('id', tokenId);
+    if (error) {
+      // Most common cause: the 20260515000001_token_image_offset migration
+      // hasn't been applied yet, so the columns don't exist. Revert locally
+      // so the user isn't fooled into thinking it persisted.
+      setTokens(prev => prev.map(t => t.id === tokenId ? { ...t, image_offset_x: prevX, image_offset_y: prevY } : t));
+      toast.error('Não foi possível salvar o ajuste. Aplique a migration mais recente do banco.');
+    }
+  };
+
   const handlePointerDown = useCallback((e: React.PointerEvent, token: Token) => {
     if (showDrawing || showRuler) return;
     if (!isDm && token.owner_id !== player?.id) return;
@@ -437,11 +501,11 @@ export default function GameBoard({ sessionId, onLeave }: GameBoardProps) {
     setEditLabelValue(token.label);
   };
 
-  // Toolbar button helper
+  // Toolbar button helper — larger on mobile for usable tap targets
   const TB = ({ icon: Icon, label, active, onClick, className = '' }: { icon: any; label: string; active?: boolean; onClick: () => void; className?: string }) => (
     <Button variant={active ? 'default' : 'ghost'} size="sm" onClick={onClick} title={label}
-      className={`h-8 w-8 p-0 ${active ? 'bg-primary text-primary-foreground' : ''} ${className}`}>
-      <Icon className="w-4 h-4" />
+      className={`h-10 w-10 sm:h-9 sm:w-9 p-0 ${active ? 'bg-primary text-primary-foreground' : ''} ${className}`}>
+      <Icon className="w-5 h-5 sm:w-4 sm:h-4" />
     </Button>
   );
 
@@ -493,8 +557,8 @@ export default function GameBoard({ sessionId, onLeave }: GameBoardProps) {
 
       <div className="h-screen w-screen flex flex-col bg-background overflow-hidden">
         {/* Top bar */}
-        <div className="h-12 bg-card border-b border-border flex items-center px-2 sm:px-3 gap-1 shrink-0 z-20">
-          <span className="font-display text-gold text-xs sm:text-sm tracking-wider truncate max-w-[110px] sm:max-w-none">
+        <div className="h-14 sm:h-12 bg-card border-b border-border flex items-center px-2 sm:px-3 gap-1 shrink-0 z-20">
+          <span className="font-display text-gold text-sm sm:text-sm tracking-wider truncate max-w-[110px] sm:max-w-none">
             {session?.name || '...'}
           </span>
           <div className="flex-1" />
@@ -510,8 +574,8 @@ export default function GameBoard({ sessionId, onLeave }: GameBoardProps) {
               </>
             )}
             {!isDm && (
-              <Button variant="ghost" size="sm" onClick={addPlayerToken} className="h-8 text-xs px-2">
-                <Plus className="w-3.5 h-3.5 mr-1" /> Token
+              <Button variant="ghost" size="sm" onClick={addPlayerToken} className="h-9 text-sm px-2">
+                <Plus className="w-4 h-4 mr-1" /> Token
               </Button>
             )}
 
@@ -540,7 +604,7 @@ export default function GameBoard({ sessionId, onLeave }: GameBoardProps) {
             ) : (
               <>
                 <TB icon={ClipboardList} label="Minha Ficha" onClick={() => player && setCharSheetTarget({ playerId: player.id, playerName: player.name, readOnly: false })} />
-                <TB icon={Users} label="Fichas dos Outros" active={showPlayerSheets} onClick={() => setShowPlayerSheets(v => !v)} />
+                <TB icon={Users} label="Jogadores na Sessão" active={showPlayerSheets} onClick={() => setShowPlayerSheets(v => !v)} />
               </>
             )}
             <TB icon={Settings} label="Perfil" onClick={() => setShowProfile(true)} />
@@ -562,7 +626,7 @@ export default function GameBoard({ sessionId, onLeave }: GameBoardProps) {
               initial={{ opacity: 0, y: -8 }}
               animate={{ opacity: 1, y: 0 }}
               exit={{ opacity: 0, y: -8 }}
-              className="sm:hidden absolute top-12 right-0 z-50 bg-card border border-border rounded-bl-xl shadow-2xl p-3 flex flex-col gap-1 min-w-[200px]"
+              className="sm:hidden absolute top-14 right-0 z-50 bg-card border border-border rounded-bl-xl shadow-2xl p-3 flex flex-col gap-1.5 min-w-[230px]"
             >
               {isDm && (
                 <>
@@ -590,7 +654,7 @@ export default function GameBoard({ sessionId, onLeave }: GameBoardProps) {
               ) : (
                 <>
                   <MobileMenuItem icon={ClipboardList} label="Minha Ficha" onClick={() => { if (player) { setCharSheetTarget({ playerId: player.id, playerName: player.name, readOnly: false }); setShowMobileMenu(false); } }} />
-                  <MobileMenuItem icon={Users} label="Fichas dos Outros" onClick={() => { setShowPlayerSheets(v => !v); setShowMobileMenu(false); }} active={showPlayerSheets} />
+                  <MobileMenuItem icon={Users} label="Jogadores na Sessão" onClick={() => { setShowPlayerSheets(v => !v); setShowMobileMenu(false); }} active={showPlayerSheets} />
                 </>
               )}
               <MobileMenuItem icon={Settings} label="Perfil" onClick={() => { setShowProfile(true); setShowMobileMenu(false); }} />
@@ -621,7 +685,7 @@ export default function GameBoard({ sessionId, onLeave }: GameBoardProps) {
             }}
             onPointerMove={!showDrawing && !showRuler ? handlePointerMove : undefined}
             onPointerUp={!showDrawing && !showRuler ? handlePointerUp : undefined}
-            onClick={() => { if (!draggingToken) setSelectedToken(null); setShowReactionPicker(null); }}
+            onClick={() => { if (!draggingToken) setSelectedToken(null); setShowReactionPicker(null); setShowImageAdjust(null); }}
           >
             {/* Background map (rendered as <img> so it lives in virtual space) */}
             {session?.active_map_url && (
@@ -653,6 +717,7 @@ export default function GameBoard({ sessionId, onLeave }: GameBoardProps) {
               onClose={() => setShowDrawing(false)}
               sessionId={sessionId}
               playerId={player?.id ?? ''}
+              uiScale={uiScale}
             />
 
             {/* Fog of War */}
@@ -696,6 +761,7 @@ export default function GameBoard({ sessionId, onLeave }: GameBoardProps) {
                   <ConditionIcons
                     conditions={myConditions}
                     onClick={() => setShowConditionsPanel(showConditionsPanel === token.id ? null : token.id)}
+                    uiScale={uiScale}
                   />
 
                   {/* Conditions panel */}
@@ -706,6 +772,7 @@ export default function GameBoard({ sessionId, onLeave }: GameBoardProps) {
                       canEdit={isDm || token.owner_id === player?.id}
                       showPanel={true}
                       onClose={() => setShowConditionsPanel(null)}
+                      uiScale={uiScale}
                     />
                   )}
                   {/* Health bars */}
@@ -731,12 +798,21 @@ export default function GameBoard({ sessionId, onLeave }: GameBoardProps) {
                       }}
                       canEdit={isDm || token.owner_id === player?.id}
                       showControls={selectedToken === token.id}
+                      uiScale={uiScale}
                     />
                   )}
                   <div className={`w-full h-full rounded-full overflow-hidden border-2 ${
                     token.token_type === 'player' ? 'border-gold glow-gold' : 'border-blood'
                   } shadow-lg transition-all ${selectedToken === token.id ? 'ring-2 ring-gold ring-offset-2 ring-offset-background' : ''}`}>
-                    <img src={token.image_url} alt={token.label} className="w-full h-full object-cover pointer-events-none" draggable={false} />
+                    <img
+                      src={token.image_url}
+                      alt={token.label}
+                      className="w-full h-full object-cover pointer-events-none"
+                      style={{
+                        objectPosition: `${50 + (token.image_offset_x ?? 0) * 50}% ${50 + (token.image_offset_y ?? 0) * 50}%`,
+                      }}
+                      draggable={false}
+                    />
                   </div>
 
                   {/* Token reactions */}
@@ -756,92 +832,180 @@ export default function GameBoard({ sessionId, onLeave }: GameBoardProps) {
                   </AnimatePresence>
 
                   {/* Token label */}
-                  <div
-                    className="absolute -bottom-5 left-1/2 -translate-x-1/2 whitespace-nowrap text-xs font-display bg-card/90 px-1.5 py-0.5 rounded text-foreground border border-border cursor-text"
-                    onDoubleClick={(e) => {
-                      e.stopPropagation();
-                      if (canInteractToken(token)) { setEditingLabel(token.id); setEditLabelValue(token.label); }
-                    }}
-                  >
-                    {editingLabel === token.id ? (
-                      <input
-                        autoFocus
-                        value={editLabelValue}
-                        onChange={e => setEditLabelValue(e.target.value)}
-                        onBlur={async () => {
-                          if (editLabelValue.trim() && editLabelValue !== token.label)
-                            await supabase.from('board_tokens').update({ label: editLabelValue.trim() }).eq('id', token.id);
-                          setEditingLabel(null);
+                  <div className="absolute -bottom-5 left-1/2 -translate-x-1/2 pointer-events-none">
+                    <div
+                      style={{ transform: `scale(${uiScale})`, transformOrigin: 'center top' }}
+                      className="pointer-events-auto"
+                    >
+                      <div
+                        className="whitespace-nowrap text-sm font-display bg-card/90 px-1.5 py-0.5 rounded text-foreground border border-border cursor-text"
+                        onDoubleClick={(e) => {
+                          e.stopPropagation();
+                          if (canInteractToken(token)) { setEditingLabel(token.id); setEditLabelValue(token.label); }
                         }}
-                        onKeyDown={async (e) => {
-                          if (e.key === 'Enter') {
-                            if (editLabelValue.trim() && editLabelValue !== token.label)
-                              await supabase.from('board_tokens').update({ label: editLabelValue.trim() }).eq('id', token.id);
-                            setEditingLabel(null);
-                          } else if (e.key === 'Escape') setEditingLabel(null);
-                        }}
-                        onClick={e => e.stopPropagation()}
-                        onPointerDown={e => e.stopPropagation()}
-                        className="bg-transparent border-none outline-none text-xs text-foreground w-20 text-center"
-                      />
-                    ) : token.label}
+                      >
+                        {editingLabel === token.id ? (
+                          <input
+                            autoFocus
+                            value={editLabelValue}
+                            onChange={e => setEditLabelValue(e.target.value)}
+                            onBlur={async () => {
+                              if (editLabelValue.trim() && editLabelValue !== token.label)
+                                await supabase.from('board_tokens').update({ label: editLabelValue.trim() }).eq('id', token.id);
+                              setEditingLabel(null);
+                            }}
+                            onKeyDown={async (e) => {
+                              if (e.key === 'Enter') {
+                                if (editLabelValue.trim() && editLabelValue !== token.label)
+                                  await supabase.from('board_tokens').update({ label: editLabelValue.trim() }).eq('id', token.id);
+                                setEditingLabel(null);
+                              } else if (e.key === 'Escape') setEditingLabel(null);
+                            }}
+                            onClick={e => e.stopPropagation()}
+                            onPointerDown={e => e.stopPropagation()}
+                            className="bg-transparent border-none outline-none text-sm text-foreground w-20 text-center"
+                          />
+                        ) : token.label}
+                      </div>
+                    </div>
                   </div>
 
                   {/* Controls: resize/rename/react/conditions/visibility/delete */}
                   {selectedToken === token.id && canInteractToken(token) && (
-                    <div className="absolute -top-8 left-1/2 -translate-x-1/2 flex items-center gap-1 bg-card/95 border border-border rounded-lg px-1 py-0.5 shadow-lg z-50">
-                      <button onClick={e => { e.stopPropagation(); resizeToken(token.id, -10); }}
-                        className="w-5 h-5 flex items-center justify-center rounded hover:bg-muted" title="Diminuir">
-                        <ZoomOut className="w-3 h-3 text-muted-foreground" />
-                      </button>
-                      <span className="text-[10px] text-muted-foreground w-6 text-center">{token.width}</span>
-                      <button onClick={e => { e.stopPropagation(); resizeToken(token.id, 10); }}
-                        className="w-5 h-5 flex items-center justify-center rounded hover:bg-muted" title="Aumentar">
-                        <ZoomIn className="w-3 h-3 text-muted-foreground" />
-                      </button>
-                      <button onClick={e => { e.stopPropagation(); startEditingLabel(token); }}
-                        className="w-5 h-5 flex items-center justify-center rounded hover:bg-muted" title="Renomear">
-                        <Pencil className="w-3 h-3 text-muted-foreground" />
-                      </button>
-                      <button onClick={e => { e.stopPropagation(); setShowConditionsPanel(showConditionsPanel === token.id ? null : token.id); }}
-                        className="w-5 h-5 flex items-center justify-center rounded hover:bg-muted" title="Condições">
-                        <Shield className="w-3 h-3 text-muted-foreground" />
-                      </button>
-                      {isDm && (
-                        <button
-                          onClick={async (e) => {
-                            e.stopPropagation();
-                            await supabase.from('board_tokens').update({ is_hidden: !token.is_hidden }).eq('id', token.id);
-                          }}
-                          className="w-5 h-5 flex items-center justify-center rounded hover:bg-muted"
-                          title={token.is_hidden ? 'Revelar' : 'Ocultar'}
-                        >
-                          <Eye className={`w-3 h-3 ${token.is_hidden ? 'text-destructive' : 'text-muted-foreground'}`} />
-                        </button>
-                      )}
-                      <button onClick={e => { e.stopPropagation(); setShowReactionPicker(showReactionPicker === token.id ? null : token.id); }}
-                        className="w-5 h-5 flex items-center justify-center rounded hover:bg-muted" title="Reagir">
-                        <Smile className="w-3 h-3 text-muted-foreground" />
-                      </button>
-                      {isDm && (
-                        <button onClick={e => { e.stopPropagation(); removeToken(token.id); }}
-                          className="w-5 h-5 flex items-center justify-center rounded hover:bg-destructive/20 ml-0.5" title="Remover">
-                          <Trash2 className="w-3 h-3 text-destructive" />
-                        </button>
-                      )}
+                    <div className="absolute -top-8 left-1/2 -translate-x-1/2 z-50 pointer-events-none">
+                      <div
+                        style={{ transform: `scale(${uiScale})`, transformOrigin: 'center bottom' }}
+                        className="pointer-events-auto"
+                      >
+                        <div className="flex items-center gap-1 bg-card/95 border border-border rounded-lg px-1 py-0.5 shadow-lg">
+                          <button onClick={e => { e.stopPropagation(); resizeToken(token.id, -10); }}
+                            className="w-6 h-6 flex items-center justify-center rounded hover:bg-muted" title="Diminuir">
+                            <ZoomOut className="w-4 h-4 text-muted-foreground" />
+                          </button>
+                          <span className="text-xs text-muted-foreground w-7 text-center">{token.width}</span>
+                          <button onClick={e => { e.stopPropagation(); resizeToken(token.id, 10); }}
+                            className="w-6 h-6 flex items-center justify-center rounded hover:bg-muted" title="Aumentar">
+                            <ZoomIn className="w-4 h-4 text-muted-foreground" />
+                          </button>
+                          <button onClick={e => { e.stopPropagation(); startEditingLabel(token); }}
+                            className="w-6 h-6 flex items-center justify-center rounded hover:bg-muted" title="Renomear">
+                            <Pencil className="w-4 h-4 text-muted-foreground" />
+                          </button>
+                          <button onClick={e => { e.stopPropagation(); setShowImageAdjust(showImageAdjust === token.id ? null : token.id); setShowReactionPicker(null); setShowConditionsPanel(null); }}
+                            className="w-6 h-6 flex items-center justify-center rounded hover:bg-muted" title="Ajustar imagem">
+                            <Move className="w-4 h-4 text-muted-foreground" />
+                          </button>
+                          <button onClick={e => { e.stopPropagation(); setShowConditionsPanel(showConditionsPanel === token.id ? null : token.id); }}
+                            className="w-6 h-6 flex items-center justify-center rounded hover:bg-muted" title="Condições">
+                            <Shield className="w-4 h-4 text-muted-foreground" />
+                          </button>
+                          {isDm && (
+                            <button
+                              onClick={async (e) => {
+                                e.stopPropagation();
+                                await supabase.from('board_tokens').update({ is_hidden: !token.is_hidden }).eq('id', token.id);
+                              }}
+                              className="w-6 h-6 flex items-center justify-center rounded hover:bg-muted"
+                              title={token.is_hidden ? 'Revelar' : 'Ocultar'}
+                            >
+                              <Eye className={`w-4 h-4 ${token.is_hidden ? 'text-destructive' : 'text-muted-foreground'}`} />
+                            </button>
+                          )}
+                          <button onClick={e => { e.stopPropagation(); setShowReactionPicker(showReactionPicker === token.id ? null : token.id); }}
+                            className="w-6 h-6 flex items-center justify-center rounded hover:bg-muted" title="Reagir">
+                            <Smile className="w-4 h-4 text-muted-foreground" />
+                          </button>
+                          {isDm && (
+                            <button onClick={e => { e.stopPropagation(); removeToken(token.id); }}
+                              className="w-6 h-6 flex items-center justify-center rounded hover:bg-destructive/20 ml-0.5" title="Remover">
+                              <Trash2 className="w-4 h-4 text-destructive" />
+                            </button>
+                          )}
+                        </div>
+                      </div>
                     </div>
                   )}
 
                   {/* Reaction picker */}
                   {showReactionPicker === token.id && (
-                    <div className="absolute -top-16 left-1/2 -translate-x-1/2 bg-card border border-border rounded-xl p-1.5 flex gap-1 shadow-xl z-50"
-                      onClick={e => e.stopPropagation()}>
-                      {REACTIONS.map(emoji => (
-                        <button key={emoji} onClick={() => sendReaction(token.id, emoji)}
-                          className="text-lg hover:scale-125 transition-transform w-7 h-7 flex items-center justify-center rounded">
-                          {emoji}
-                        </button>
-                      ))}
+                    <div className="absolute -top-16 left-1/2 -translate-x-1/2 z-50 pointer-events-none">
+                      <div
+                        style={{ transform: `scale(${uiScale})`, transformOrigin: 'center bottom' }}
+                        className="pointer-events-auto"
+                      >
+                        <div className="bg-card border border-border rounded-xl p-1.5 flex gap-1 shadow-xl"
+                          onClick={e => e.stopPropagation()}>
+                          {REACTIONS.map(emoji => (
+                            <button key={emoji} onClick={() => sendReaction(token.id, emoji)}
+                              className="text-xl hover:scale-125 transition-transform w-8 h-8 flex items-center justify-center rounded">
+                              {emoji}
+                            </button>
+                          ))}
+                        </div>
+                      </div>
+                    </div>
+                  )}
+
+                  {/* Image position adjuster — D-pad style controls.
+                      pointerDown is stopped here so clicking an arrow doesn't
+                      start a token drag, whose pointerUp would push a stale
+                      row back through realtime and undo our offset update. */}
+                  {showImageAdjust === token.id && selectedToken === token.id && canInteractToken(token) && (
+                    <div className="absolute -top-16 left-1/2 -translate-x-1/2 z-50 pointer-events-none">
+                      <div
+                        style={{ transform: `scale(${uiScale})`, transformOrigin: 'center bottom' }}
+                        className="pointer-events-auto"
+                      >
+                        <div
+                          className="bg-card border border-border rounded-xl p-2 shadow-xl flex flex-col items-center gap-1"
+                          onClick={e => e.stopPropagation()}
+                          onPointerDown={e => e.stopPropagation()}
+                        >
+                          <div className="text-[10px] text-muted-foreground font-display mb-0.5">Ajustar imagem</div>
+                          <button
+                            onPointerDown={e => e.stopPropagation()}
+                            onClick={() => adjustTokenImage(token.id, 0, -0.1)}
+                            className="w-6 h-6 flex items-center justify-center rounded hover:bg-muted"
+                            title="Subir"
+                          >
+                            <ArrowUp className="w-4 h-4 text-muted-foreground" />
+                          </button>
+                          <div className="flex gap-1">
+                            <button
+                              onPointerDown={e => e.stopPropagation()}
+                              onClick={() => adjustTokenImage(token.id, -0.1, 0)}
+                              className="w-6 h-6 flex items-center justify-center rounded hover:bg-muted"
+                              title="Esquerda"
+                            >
+                              <ArrowLeft className="w-4 h-4 text-muted-foreground" />
+                            </button>
+                            <button
+                              onPointerDown={e => e.stopPropagation()}
+                              onClick={() => adjustTokenImage(token.id, null, null)}
+                              className="w-6 h-6 flex items-center justify-center rounded hover:bg-muted"
+                              title="Centralizar"
+                            >
+                              <RotateCcw className="w-3.5 h-3.5 text-muted-foreground" />
+                            </button>
+                            <button
+                              onPointerDown={e => e.stopPropagation()}
+                              onClick={() => adjustTokenImage(token.id, 0.1, 0)}
+                              className="w-6 h-6 flex items-center justify-center rounded hover:bg-muted"
+                              title="Direita"
+                            >
+                              <ArrowRight className="w-4 h-4 text-muted-foreground" />
+                            </button>
+                          </div>
+                          <button
+                            onPointerDown={e => e.stopPropagation()}
+                            onClick={() => adjustTokenImage(token.id, 0, 0.1)}
+                            className="w-6 h-6 flex items-center justify-center rounded hover:bg-muted"
+                            title="Descer"
+                          >
+                            <ArrowDown className="w-4 h-4 text-muted-foreground" />
+                          </button>
+                        </div>
+                      </div>
                     </div>
                   )}
                 </div>
@@ -858,6 +1022,7 @@ export default function GameBoard({ sessionId, onLeave }: GameBoardProps) {
                 onClose={() => setShowRuler(false)}
                 sessionId={sessionId}
                 playerId={player?.id ?? ''}
+                uiScale={uiScale}
               />
             )}
           </div>
@@ -865,13 +1030,13 @@ export default function GameBoard({ sessionId, onLeave }: GameBoardProps) {
           {/* Grid size control (DM only) */}
           {showGrid && isDm && (
             <div className="absolute bottom-4 right-4 z-30 bg-card/90 border border-border rounded-lg px-3 py-2 flex items-center gap-2 shadow-lg">
-              <Grid3x3 className="w-3.5 h-3.5 text-gold" />
-              <span className="text-xs font-display text-muted-foreground">Grade:</span>
-              <button onClick={() => updateGridSize(gridSize - 10)} className="text-xs text-muted-foreground hover:text-foreground w-5">−</button>
-              <span className="text-xs text-gold font-display w-8 text-center">{gridSize}px</span>
-              <button onClick={() => updateGridSize(gridSize + 10)} className="text-xs text-muted-foreground hover:text-foreground w-5">+</button>
+              <Grid3x3 className="w-4 h-4 text-gold" />
+              <span className="text-sm font-display text-muted-foreground">Grade:</span>
+              <button onClick={() => updateGridSize(gridSize - 10)} className="text-base text-muted-foreground hover:text-foreground w-6">−</button>
+              <span className="text-sm text-gold font-display w-10 text-center">{gridSize}px</span>
+              <button onClick={() => updateGridSize(gridSize + 10)} className="text-base text-muted-foreground hover:text-foreground w-6">+</button>
               <button onClick={toggleGrid} className="text-muted-foreground hover:text-foreground ml-1">
-                <X className="w-3 h-3" />
+                <X className="w-4 h-4" />
               </button>
             </div>
           )}
@@ -905,10 +1070,25 @@ export default function GameBoard({ sessionId, onLeave }: GameBoardProps) {
               />
               <div className="grid grid-cols-3 gap-2 max-h-60 overflow-auto">
                 {(session.maps || []).map((url, i) => (
-                  <button key={i} onClick={() => setActiveMap(url)}
-                    className={`rounded-lg overflow-hidden border-2 transition-all ${session.active_map_url === url ? 'border-gold' : 'border-border hover:border-gold/50'}`}>
-                    <img src={url} alt="" className="w-full h-16 object-cover" />
-                  </button>
+                  <div
+                    key={i}
+                    className={`relative rounded-lg overflow-hidden border-2 transition-all group ${session.active_map_url === url ? 'border-gold' : 'border-border hover:border-gold/50'}`}
+                  >
+                    <button
+                      onClick={() => setActiveMap(url)}
+                      className="block w-full"
+                      title="Usar este mapa"
+                    >
+                      <img src={url} alt="" className="w-full h-16 object-cover" />
+                    </button>
+                    <button
+                      onClick={(e) => { e.stopPropagation(); removeMap(url); }}
+                      className="absolute top-1 right-1 bg-destructive/90 hover:bg-destructive text-destructive-foreground rounded p-1 opacity-100 sm:opacity-0 sm:group-hover:opacity-100 sm:focus:opacity-100 transition-opacity"
+                      title="Excluir mapa"
+                    >
+                      <Trash2 className="w-3.5 h-3.5" />
+                    </button>
+                  </div>
                 ))}
               </div>
               {(session.maps || []).length === 0 && (
@@ -1005,12 +1185,12 @@ export default function GameBoard({ sessionId, onLeave }: GameBoardProps) {
             </div>
           )}
 
-          {/* Player Sheet Viewer Panel (non-DM) — allows viewing other players' sheets */}
+          {/* Player roster (non-DM) — players see only names; sheets are private */}
           {!isDm && showPlayerSheets && (
             <div className="absolute top-2 left-2 bg-card border border-border rounded-xl p-4 z-30 shadow-2xl w-64">
               <div className="flex items-center justify-between mb-3">
                 <h3 className="font-display text-sm text-gold flex items-center gap-2">
-                  <Users className="w-4 h-4" /> Outros Jogadores
+                  <Users className="w-4 h-4" /> Jogadores na Sessão
                 </h3>
                 <button onClick={() => setShowPlayerSheets(false)}><X className="w-4 h-4 text-muted-foreground" /></button>
               </div>
@@ -1025,18 +1205,15 @@ export default function GameBoard({ sessionId, onLeave }: GameBoardProps) {
                       </div>
                     )}
                     <span className="flex-1 text-sm font-display truncate">{p.name}</span>
-                    <button
-                      onClick={() => { setCharSheetTarget({ playerId: p.id, playerName: p.name, readOnly: true }); setShowPlayerSheets(false); }}
-                      className="text-xs text-muted-foreground hover:text-foreground font-display border border-border rounded px-2 py-0.5 transition-colors"
-                    >
-                      Ver
-                    </button>
                   </div>
                 ))}
                 {sessionPlayers.filter(p => p.id !== player?.id).length === 0 && (
                   <p className="text-xs text-muted-foreground text-center py-2">Nenhum outro jogador na sessão.</p>
                 )}
               </div>
+              <p className="text-[11px] text-muted-foreground text-center mt-3 italic">
+                Apenas o mestre pode visualizar as fichas dos outros jogadores.
+              </p>
             </div>
           )}
 
@@ -1112,11 +1289,11 @@ function MobileMenuItem({
   return (
     <button
       onClick={onClick}
-      className={`flex items-center gap-3 px-3 py-2 rounded-lg text-sm font-display transition-colors w-full text-left ${
+      className={`flex items-center gap-3 px-3 py-2.5 rounded-lg text-base font-display transition-colors w-full text-left ${
         active ? 'bg-primary/10 text-primary' : `hover:bg-secondary text-foreground ${className}`
       }`}
     >
-      <Icon className="w-4 h-4" />
+      <Icon className="w-5 h-5" />
       {label}
     </button>
   );

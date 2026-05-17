@@ -266,6 +266,8 @@ export type Database = {
           ps_max: number | null
           is_hidden: boolean
           vision_radius: number
+          image_offset_x: number
+          image_offset_y: number
         }
         Insert: {
           created_at?: string
@@ -287,6 +289,8 @@ export type Database = {
           ps_max?: number | null
           is_hidden?: boolean
           vision_radius?: number
+          image_offset_x?: number
+          image_offset_y?: number
         }
         Update: {
           created_at?: string
@@ -308,6 +312,8 @@ export type Database = {
           ps_max?: number | null
           is_hidden?: boolean
           vision_radius?: number
+          image_offset_x?: number
+          image_offset_y?: number
         }
         Relationships: [
           {

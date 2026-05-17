@@ -15,6 +15,9 @@ interface DrawingCanvasProps {
   onClose: () => void;
   sessionId: string;
   playerId: string;
+  // Counter-scale for the toolbar so it stays readable when the virtual
+  // board is shrunk to fit a small viewport.
+  uiScale?: number;
 }
 
 const COLORS = [
@@ -41,6 +44,7 @@ export default function DrawingCanvas({
   onClose,
   sessionId,
   playerId,
+  uiScale = 1,
 }: DrawingCanvasProps) {
   const svgRef = useRef<SVGSVGElement>(null);
   const [tool, setTool] = useState<Tool>('pencil');
@@ -275,14 +279,23 @@ export default function DrawingCanvas({
 
       {active && (
         <>
-          {/* Sync indicator */}
-          <div className="absolute top-12 left-1/2 -translate-x-1/2 z-40 bg-card/80 border border-gold/20 rounded-full px-3 py-1 flex items-center gap-1.5 pointer-events-none">
-            <span className="w-1.5 h-1.5 rounded-full bg-green-500 animate-pulse" />
-            <span className="text-[10px] text-muted-foreground font-display">Sincronizado</span>
+          {/* Sync indicator — counter-scaled to remain visible on small viewports */}
+          <div className="absolute top-16 sm:top-12 left-1/2 -translate-x-1/2 z-40 pointer-events-none">
+            <div
+              style={{ transform: `scale(${uiScale})`, transformOrigin: 'center top' }}
+              className="bg-card/80 border border-gold/20 rounded-full px-3 py-1 flex items-center gap-1.5"
+            >
+              <span className="w-1.5 h-1.5 rounded-full bg-green-500 animate-pulse" />
+              <span className="text-xs text-muted-foreground font-display">Sincronizado</span>
+            </div>
           </div>
 
-          {/* Drawing toolbar */}
-          <div className="absolute bottom-4 left-1/2 -translate-x-1/2 z-40 bg-card/95 backdrop-blur border border-border rounded-xl p-2 flex items-center gap-1 shadow-2xl flex-wrap justify-center max-w-[95vw]">
+          {/* Drawing toolbar — counter-scaled to remain usable on phones */}
+          <div className="absolute bottom-4 left-1/2 -translate-x-1/2 z-40">
+          <div
+            style={{ transform: `scale(${uiScale})`, transformOrigin: 'center bottom' }}
+            className="bg-card/95 backdrop-blur border border-border rounded-xl p-2 flex items-center gap-1.5 shadow-2xl flex-wrap justify-center max-w-[95vw]"
+          >
             {tools.map(t => (
               <Button
                 key={t.id}
@@ -290,40 +303,41 @@ export default function DrawingCanvas({
                 size="sm"
                 onClick={() => setTool(t.id)}
                 title={t.label}
-                className={`h-8 w-8 p-0 ${tool === t.id ? 'bg-primary text-primary-foreground' : ''}`}
+                className={`h-10 w-10 sm:h-9 sm:w-9 p-0 ${tool === t.id ? 'bg-primary text-primary-foreground' : ''}`}
               >
-                <t.icon className="w-3.5 h-3.5" />
+                <t.icon className="w-5 h-5 sm:w-4 sm:h-4" />
               </Button>
             ))}
 
-            <div className="w-px h-6 bg-border" />
+            <div className="w-px h-7 bg-border" />
 
-            <div className="flex gap-1 flex-wrap justify-center">
+            <div className="flex gap-1.5 flex-wrap justify-center">
               {COLORS.map(c => (
                 <button
                   key={c}
                   onClick={() => setColor(c)}
-                  className={`w-5 h-5 rounded-full border-2 transition-all ${color === c ? 'border-gold scale-125' : 'border-border'}`}
+                  className={`w-7 h-7 sm:w-6 sm:h-6 rounded-full border-2 transition-all ${color === c ? 'border-gold scale-125' : 'border-border'}`}
                   style={{ backgroundColor: c }}
                 />
               ))}
             </div>
 
-            <div className="w-px h-6 bg-border" />
+            <div className="w-px h-7 bg-border" />
 
-            <div className="flex items-center gap-2 w-20">
+            <div className="flex items-center gap-2 w-28 sm:w-24">
               <Slider value={[brushSize]} onValueChange={v => setBrushSize(v[0])} min={1} max={20} step={1} />
-              <span className="text-xs text-muted-foreground w-4">{brushSize}</span>
+              <span className="text-sm text-muted-foreground w-5">{brushSize}</span>
             </div>
 
-            <div className="w-px h-6 bg-border" />
+            <div className="w-px h-7 bg-border" />
 
-            <Button variant="ghost" size="sm" onClick={clearMine} title="Apagar meus desenhos" className="h-8 w-8 p-0">
-              <Trash2 className="w-3.5 h-3.5" />
+            <Button variant="ghost" size="sm" onClick={clearMine} title="Apagar meus desenhos" className="h-10 w-10 sm:h-9 sm:w-9 p-0">
+              <Trash2 className="w-5 h-5 sm:w-4 sm:h-4" />
             </Button>
-            <Button variant="ghost" size="sm" onClick={onClose} title="Fechar" className="h-8 w-8 p-0">
-              <X className="w-3.5 h-3.5" />
+            <Button variant="ghost" size="sm" onClick={onClose} title="Fechar" className="h-10 w-10 sm:h-9 sm:w-9 p-0">
+              <X className="w-5 h-5 sm:w-4 sm:h-4" />
             </Button>
+          </div>
           </div>
         </>
       )}

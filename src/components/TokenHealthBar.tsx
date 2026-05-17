@@ -20,12 +20,13 @@ interface TokenHealthBarProps {
   onUpdate: (hp: number, pe?: number, ps?: number) => void;
   canEdit: boolean;
   showControls: boolean;
+  uiScale?: number;
 }
 
 export default function TokenHealthBar({
   tokenId, sessionId, playerId, playerName,
   hp_current, hp_max, pe_current, pe_max, ps_current, ps_max,
-  system, onUpdate, canEdit, showControls
+  system, onUpdate, canEdit, showControls, uiScale = 1,
 }: TokenHealthBarProps) {
   const [damageInput, setDamageInput] = useState('');
   const [showDamagePanel, setShowDamagePanel] = useState(false);
@@ -79,16 +80,20 @@ export default function TokenHealthBar({
   };
 
   return (
-    <div className="absolute -top-12 left-1/2 -translate-x-1/2 pointer-events-auto" onClick={e => e.stopPropagation()}>
+    <div className="absolute -top-12 left-1/2 -translate-x-1/2 pointer-events-none" onClick={e => e.stopPropagation()}>
+      <div
+        style={{ transform: `scale(${uiScale})`, transformOrigin: 'center bottom' }}
+        className="pointer-events-auto"
+      >
       {/* Health bars */}
-      <div className="bg-card/95 border border-border rounded-lg px-2 py-1 shadow-lg min-w-[100px]">
+      <div className="bg-card/95 border border-border rounded-lg px-2 py-1 shadow-lg min-w-[120px]">
         {/* HP Bar */}
         <div className="flex items-center gap-1 mb-0.5">
-          <Heart className="w-3 h-3 text-red-500" />
-          <div className="flex-1 h-2 bg-secondary rounded-full overflow-hidden">
+          <Heart className="w-4 h-4 text-red-500" />
+          <div className="flex-1 h-2.5 bg-secondary rounded-full overflow-hidden">
             <div className={`h-full ${getHpColor()} transition-all`} style={{ width: `${hpPercent}%` }} />
           </div>
-          <span className="text-[10px] font-bold text-foreground min-w-[32px] text-right">
+          <span className="text-xs font-bold text-foreground min-w-[38px] text-right">
             {hp_current}/{hp_max}
           </span>
         </div>
@@ -96,11 +101,11 @@ export default function TokenHealthBar({
         {/* PE Bar (Ordem Paranormal) */}
         {system === 'ordem_paranormal' && pe_max && (
           <div className="flex items-center gap-1 mb-0.5">
-            <Zap className="w-3 h-3 text-blue-500" />
-            <div className="flex-1 h-2 bg-secondary rounded-full overflow-hidden">
+            <Zap className="w-4 h-4 text-blue-500" />
+            <div className="flex-1 h-2.5 bg-secondary rounded-full overflow-hidden">
               <div className="h-full bg-blue-500 transition-all" style={{ width: `${pePercent}%` }} />
             </div>
-            <span className="text-[10px] font-bold text-foreground min-w-[32px] text-right">
+            <span className="text-xs font-bold text-foreground min-w-[38px] text-right">
               {pe_current}/{pe_max}
             </span>
           </div>
@@ -109,11 +114,11 @@ export default function TokenHealthBar({
         {/* PS Bar (Ordem Paranormal) */}
         {system === 'ordem_paranormal' && ps_max && (
           <div className="flex items-center gap-1">
-            <Brain className="w-3 h-3 text-purple-500" />
-            <div className="flex-1 h-2 bg-secondary rounded-full overflow-hidden">
+            <Brain className="w-4 h-4 text-purple-500" />
+            <div className="flex-1 h-2.5 bg-secondary rounded-full overflow-hidden">
               <div className="h-full bg-purple-500 transition-all" style={{ width: `${psPercent}%` }} />
             </div>
-            <span className="text-[10px] font-bold text-foreground min-w-[32px] text-right">
+            <span className="text-xs font-bold text-foreground min-w-[38px] text-right">
               {ps_current}/{ps_max}
             </span>
           </div>
@@ -127,25 +132,25 @@ export default function TokenHealthBar({
             initial={{ opacity: 0, y: -5 }}
             animate={{ opacity: 1, y: 0 }}
             exit={{ opacity: 0, y: -5 }}
-            className="absolute top-full mt-1 left-1/2 -translate-x-1/2 bg-card border border-border rounded-lg p-2 shadow-xl z-50 min-w-[140px]"
+            className="absolute top-full mt-1 left-1/2 -translate-x-1/2 bg-card border border-border rounded-lg p-2 shadow-xl z-50 min-w-[160px]"
           >
             {!showDamagePanel ? (
               <div className="flex gap-1">
                 <Button
                   size="sm"
                   variant="destructive"
-                  className="h-7 px-2 text-xs flex-1"
+                  className="h-8 px-2 text-sm flex-1"
                   onClick={() => setShowDamagePanel(true)}
                 >
-                  <Minus className="w-3 h-3 mr-1" /> Dano
+                  <Minus className="w-4 h-4 mr-1" /> Dano
                 </Button>
                 <Button
                   size="sm"
                   variant="default"
-                  className="h-7 px-2 text-xs flex-1 bg-green-600 hover:bg-green-700"
+                  className="h-8 px-2 text-sm flex-1 bg-green-600 hover:bg-green-700"
                   onClick={() => setShowDamagePanel(true)}
                 >
-                  <Plus className="w-3 h-3 mr-1" /> Cura
+                  <Plus className="w-4 h-4 mr-1" /> Cura
                 </Button>
               </div>
             ) : (
@@ -155,14 +160,14 @@ export default function TokenHealthBar({
                   placeholder="Valor"
                   value={damageInput}
                   onChange={(e) => setDamageInput(e.target.value)}
-                  className="h-7 text-xs"
+                  className="h-8 text-sm"
                   autoFocus
                 />
                 <div className="flex gap-1">
                   <Button
                     size="sm"
                     variant="destructive"
-                    className="h-6 px-2 text-xs flex-1"
+                    className="h-7 px-2 text-sm flex-1"
                     onClick={() => {
                       const val = parseInt(damageInput);
                       if (!isNaN(val) && val > 0) applyDamage(val);
@@ -172,7 +177,7 @@ export default function TokenHealthBar({
                   </Button>
                   <Button
                     size="sm"
-                    className="h-6 px-2 text-xs flex-1 bg-green-600 hover:bg-green-700"
+                    className="h-7 px-2 text-sm flex-1 bg-green-600 hover:bg-green-700"
                     onClick={() => {
                       const val = parseInt(damageInput);
                       if (!isNaN(val) && val > 0) applyHealing(val);
@@ -183,7 +188,7 @@ export default function TokenHealthBar({
                   <Button
                     size="sm"
                     variant="ghost"
-                    className="h-6 px-2 text-xs"
+                    className="h-7 px-2 text-sm"
                     onClick={() => { setShowDamagePanel(false); setDamageInput(''); }}
                   >
                     ✕
@@ -194,6 +199,7 @@ export default function TokenHealthBar({
           </motion.div>
         )}
       </AnimatePresence>
+      </div>
     </div>
   );
 }
