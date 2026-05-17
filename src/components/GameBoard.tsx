@@ -25,7 +25,7 @@ import CharacterSheet from './CharacterSheet';
 import CharacterSheetOP from './CharacterSheetOP';
 import { Button } from '@/components/ui/button';
 import {
-  Image, Plus, Trash2, LogOut, Dices, ScrollText, Pencil, Ruler,
+  Image, ImagePlus, Plus, Trash2, LogOut, Dices, ScrollText, Pencil, Ruler,
   ZoomIn, ZoomOut, Menu, X, Grid3x3, MessageCircle,
   Calculator, Settings, Smile, ClipboardList, Users, Swords, Activity, AlertCircle, Shield, UserPlus, Eye, BookOpen,
   Move, ArrowUp, ArrowDown, ArrowLeft, ArrowRight, RotateCcw,
@@ -127,10 +127,13 @@ export default function GameBoard({ sessionId, onLeave }: GameBoardProps) {
   const [scale, setScale] = useState(1);
   const [uploadingMaps, setUploadingMaps] = useState(false);
   const [uploadingMonsters, setUploadingMonsters] = useState(false);
+  const [uploadingTokenImage, setUploadingTokenImage] = useState(false);
   const containerRef = useRef<HTMLDivElement>(null);
   const boardRef = useRef<HTMLDivElement>(null);
   const mapUploadInputRef = useRef<HTMLInputElement>(null);
   const monsterUploadInputRef = useRef<HTMLInputElement>(null);
+  const tokenImageInputRef = useRef<HTMLInputElement>(null);
+  const tokenImageTargetRef = useRef<string | null>(null);
   const reactionChannelRef = useRef<ReturnType<typeof supabase.channel> | null>(null);
   const isDm = role === 'dm';
   const showGrid = !!session?.show_grid;
@@ -439,6 +442,48 @@ export default function GameBoard({ sessionId, onLeave }: GameBoardProps) {
     }
   };
 
+  const requestTokenImageChange = (tokenId: string) => {
+    tokenImageTargetRef.current = tokenId;
+    if (tokenImageInputRef.current) {
+      tokenImageInputRef.current.value = '';
+      tokenImageInputRef.current.click();
+    }
+  };
+
+  const handleTokenImageFile = async (files: FileList | null) => {
+    const tokenId = tokenImageTargetRef.current;
+    const file = files?.[0];
+    if (!tokenId || !file) return;
+    const token = tokens.find(t => t.id === tokenId);
+    if (!token) return;
+    setUploadingTokenImage(true);
+    try {
+      const ext = file.name.split('.').pop();
+      const path = `tokens/${sessionId}/${Date.now()}-${Math.random().toString(36).slice(2)}.${ext}`;
+      const { error: upErr } = await supabase.storage.from('vtt-assets').upload(path, file);
+      if (upErr) throw upErr;
+      const { data } = supabase.storage.from('vtt-assets').getPublicUrl(path);
+      const newUrl = data.publicUrl;
+      const prevUrl = token.image_url;
+      setTokens(prev => prev.map(t => t.id === tokenId ? { ...t, image_url: newUrl } : t));
+      const { error: updErr } = await supabase
+        .from('board_tokens')
+        .update({ image_url: newUrl })
+        .eq('id', tokenId);
+      if (updErr) {
+        setTokens(prev => prev.map(t => t.id === tokenId ? { ...t, image_url: prevUrl } : t));
+        throw updErr;
+      }
+      toast.success('Foto do token atualizada');
+    } catch (err: any) {
+      toast.error(err?.message || 'Erro ao atualizar foto do token');
+    } finally {
+      setUploadingTokenImage(false);
+      tokenImageTargetRef.current = null;
+      if (tokenImageInputRef.current) tokenImageInputRef.current.value = '';
+    }
+  };
+
   const handlePointerDown = useCallback((e: React.PointerEvent, token: Token) => {
     if (showDrawing || showRuler) return;
     if (!isDm && token.owner_id !== player?.id) return;
@@ -511,6 +556,14 @@ export default function GameBoard({ sessionId, onLeave }: GameBoardProps) {
 
   return (
     <>
+      {/* Hidden input used by the token toolbar to upload a new token image. */}
+      <input
+        ref={tokenImageInputRef}
+        type="file"
+        accept="image/*"
+        className="hidden"
+        onChange={(e) => handleTokenImageFile(e.target.files)}
+      />
       {showProfile && <ProfileSettings onClose={() => setShowProfile(false)} />}
       {showPullPlayersModal && player && (
         <PullPlayersModal
@@ -890,6 +943,14 @@ export default function GameBoard({ sessionId, onLeave }: GameBoardProps) {
                           <button onClick={e => { e.stopPropagation(); startEditingLabel(token); }}
                             className="w-6 h-6 flex items-center justify-center rounded hover:bg-muted" title="Renomear">
                             <Pencil className="w-4 h-4 text-muted-foreground" />
+                          </button>
+                          <button
+                            onClick={e => { e.stopPropagation(); requestTokenImageChange(token.id); }}
+                            disabled={uploadingTokenImage}
+                            className="w-6 h-6 flex items-center justify-center rounded hover:bg-muted disabled:opacity-50"
+                            title="Trocar foto"
+                          >
+                            <ImagePlus className="w-4 h-4 text-muted-foreground" />
                           </button>
                           <button onClick={e => { e.stopPropagation(); setShowImageAdjust(showImageAdjust === token.id ? null : token.id); setShowReactionPicker(null); setShowConditionsPanel(null); }}
                             className="w-6 h-6 flex items-center justify-center rounded hover:bg-muted" title="Ajustar imagem">
