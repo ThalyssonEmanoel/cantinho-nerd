@@ -16,6 +16,48 @@ export default function PullPlayersModal({ sessionId, dmId, onClose, onSuccess }
   const [loading, setLoading] = useState(false);
   const [syncStats, setSyncStats] = useState(true);
 
+  // After the RPC creates tokens using the player's account profile, replace
+  // each token's name + avatar with the values stored on the player's
+  // character sheet (data.characterName / data.nomePersonagem,
+  // data.tokenImageUrl, data.tokenImageOffsetX/Y). This is what makes the
+  // sheet the durable source of truth — the DM can remove and re-pull
+  // tokens freely and the avatars/names stick.
+  const applySheetPersonas = async () => {
+    const { data: sheets, error } = await supabase
+      .from('character_sheets')
+      .select('player_id, data')
+      .eq('session_id', sessionId);
+    if (error || !sheets) return;
+    for (const row of sheets) {
+      const sheet = (row.data ?? {}) as {
+        characterName?: string;
+        nomePersonagem?: string;
+        tokenImageUrl?: string | null;
+        tokenImageOffsetX?: number;
+        tokenImageOffsetY?: number;
+      };
+      const charName = (sheet.characterName || sheet.nomePersonagem || '').trim();
+      const charImage = (sheet.tokenImageUrl || '').trim();
+      const updates: {
+        label?: string;
+        image_url?: string;
+        image_offset_x?: number;
+        image_offset_y?: number;
+      } = {};
+      if (charName) updates.label = charName;
+      if (charImage) updates.image_url = charImage;
+      if (sheet.tokenImageOffsetX != null) updates.image_offset_x = sheet.tokenImageOffsetX;
+      if (sheet.tokenImageOffsetY != null) updates.image_offset_y = sheet.tokenImageOffsetY;
+      if (Object.keys(updates).length === 0) continue;
+      await supabase
+        .from('board_tokens')
+        .update(updates)
+        .eq('session_id', sessionId)
+        .eq('owner_id', row.player_id)
+        .eq('token_type', 'player');
+    }
+  };
+
   const pullPlayers = async () => {
     setLoading(true);
 
@@ -32,6 +74,7 @@ export default function PullPlayersModal({ sessionId, dmId, onClose, onSuccess }
         if (data && data.length > 0) {
           const result = data[0];
           if (result.success) {
+            await applySheetPersonas();
             toast.success(result.message);
             onSuccess();
             onClose();
@@ -51,6 +94,7 @@ export default function PullPlayersModal({ sessionId, dmId, onClose, onSuccess }
         if (data && data.length > 0) {
           const result = data[0];
           if (result.success) {
+            await applySheetPersonas();
             toast.success(result.message);
             onSuccess();
             onClose();

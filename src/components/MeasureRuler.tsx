@@ -125,13 +125,18 @@ export default function MeasureRuler({
     dist: number,
     key: string | number
   ) => {
-    const sq = gridCellSize > 0 ? Math.round(dist / gridCellSize) : 0;
-    const feetVal = sq * 5;
+    // Cada quadrado do grid representa 1,5 m (padrão D&D/Tormenta/Ordem).
+    // Mostramos o valor em metros com uma casa decimal para distâncias curtas
+    // e arredondamos para inteiro quando >= 10 m, para o label não ficar denso.
+    const METERS_PER_SQUARE = 1.5;
+    const sqExact = gridCellSize > 0 ? dist / gridCellSize : 0;
+    const meters = sqExact * METERS_PER_SQUARE;
+    const metersLabel = meters >= 10 ? `${Math.round(meters)} m` : `${meters.toFixed(1)} m`;
     // Counter-scale the label box/text so it stays a consistent on-screen size
     // regardless of how much the virtual board is shrunk to fit the viewport.
     const labelScale = uiScale;
-    const boxW = 140 * labelScale;
-    const boxH = 48 * labelScale;
+    const boxW = 110 * labelScale;
+    const boxH = 44 * labelScale;
     const fontSz = 20 * labelScale;
     return (
       <g key={key}>
@@ -149,7 +154,7 @@ export default function MeasureRuler({
           <g transform={`translate(${(s.x + e.x) / 2}, ${(s.y + e.y) / 2})`}>
             <rect x={-boxW / 2} y={-boxH - 4} width={boxW} height={boxH} rx={8 * labelScale} fill="hsl(var(--card))" stroke="hsl(var(--border))" strokeWidth={2 * labelScale} opacity={0.95} />
             <text textAnchor="middle" y={-boxH / 2 + fontSz / 3} fill={color} fontSize={fontSz} fontFamily="var(--font-display)">
-              {Math.round(dist)}px · {feetVal}ft
+              {metersLabel}
             </text>
           </g>
         )}

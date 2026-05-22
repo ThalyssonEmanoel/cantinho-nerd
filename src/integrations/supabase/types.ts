@@ -516,6 +516,7 @@ export type Database = {
           is_active: boolean
           maps: string[] | null
           monster_images: string[] | null
+          npc_images: string[] | null
           name: string
           password: string
           show_grid: boolean
@@ -533,6 +534,7 @@ export type Database = {
           is_active?: boolean
           maps?: string[] | null
           monster_images?: string[] | null
+          npc_images?: string[] | null
           name: string
           password: string
           show_grid?: boolean
@@ -550,6 +552,7 @@ export type Database = {
           is_active?: boolean
           maps?: string[] | null
           monster_images?: string[] | null
+          npc_images?: string[] | null
           name?: string
           password?: string
           show_grid?: boolean

@@ -2,8 +2,9 @@ import { useState, useRef, useEffect, useCallback } from 'react';
 import { supabase } from '@/integrations/supabase/client';
 import type { Json } from '@/integrations/supabase/types';
 import { Button } from '@/components/ui/button';
-import { Pencil, Trash2, X, Circle, Square, Minus } from 'lucide-react';
+import { Pencil, Trash2, X, Circle, Square, Minus, Eraser, Undo2, History } from 'lucide-react';
 import { Slider } from '@/components/ui/slider';
+import { toast } from 'sonner';
 
 interface DrawingCanvasProps {
   // Virtual coordinate space — all stored ops live in this space.
@@ -15,6 +16,9 @@ interface DrawingCanvasProps {
   onClose: () => void;
   sessionId: string;
   playerId: string;
+  // Whether the current player is the session DM — only the DM can wipe
+  // every drawing in the session, players can only wipe their own.
+  isDm?: boolean;
   // Counter-scale for the toolbar so it stays readable when the virtual
   // board is shrunk to fit a small viewport.
   uiScale?: number;
@@ -25,7 +29,7 @@ const COLORS = [
   '#9b59b6', '#ecf0f1', '#1a1a2e', '#ff6b9d', '#00d2ff',
 ];
 
-type Tool = 'pencil' | 'line' | 'circle' | 'rectangle';
+type Tool = 'pencil' | 'line' | 'circle' | 'rectangle' | 'eraser';
 
 type DrawOp =
   | { type: 'path'; points: { x: number; y: number }[]; color: string; size: number }
@@ -44,6 +48,7 @@ export default function DrawingCanvas({
   onClose,
   sessionId,
   playerId,
+  isDm = false,
   uiScale = 1,
 }: DrawingCanvasProps) {
   const svgRef = useRef<SVGSVGElement>(null);
@@ -54,6 +59,9 @@ export default function DrawingCanvas({
   const [pendingPath, setPendingPath] = useState<{ x: number; y: number }[] | null>(null);
   const [pendingShape, setPendingShape] = useState<{ start: { x: number; y: number }; end: { x: number; y: number } } | null>(null);
   const isDrawingRef = useRef(false);
+  // Stack of IDs of drawings the local user created in this session, in
+  // insertion order. Ctrl+Z pops the last one off and deletes it.
+  const undoStackRef = useRef<string[]>([]);
 
   // Load existing drawings on mount.
   useEffect(() => {
@@ -89,6 +97,8 @@ export default function DrawingCanvas({
         (payload) => {
           const oldRow = payload.old as { id: string };
           setDrawings(prev => prev.filter(d => d.id !== oldRow.id));
+          // Drop the id from the undo stack if it was there.
+          undoStackRef.current = undoStackRef.current.filter(id => id !== oldRow.id);
         }
       )
       .subscribe();
@@ -104,6 +114,13 @@ export default function DrawingCanvas({
     const sy = virtualHeight / rect.height;
     return { x: (e.clientX - rect.left) * sx, y: (e.clientY - rect.top) * sy };
   }, [virtualWidth, virtualHeight]);
+
+  const eraseDrawing = useCallback(async (id: string) => {
+    // Optimistic local removal so the eraser feels instant on slow networks.
+    setDrawings(prev => prev.filter(d => d.id !== id));
+    undoStackRef.current = undoStackRef.current.filter(uid => uid !== id);
+    await supabase.from('board_drawings').delete().eq('id', id);
+  }, []);
 
   const insertOp = useCallback(async (op: DrawOp) => {
     // Optimistic insert with a temporary id so the local user sees it
@@ -121,6 +138,8 @@ export default function DrawingCanvas({
       return;
     }
     const canonical = data as unknown as DrawingRow;
+    // Track the canonical id on the undo stack so Ctrl+Z can pop it later.
+    undoStackRef.current.push(canonical.id);
     setDrawings(prev => {
       // Drop the temp op and add the canonical one (unless realtime already added it).
       const withoutTemp = prev.filter(d => d.id !== tempId);
@@ -129,8 +148,41 @@ export default function DrawingCanvas({
     });
   }, [sessionId, playerId]);
 
+  const undoLast = useCallback(async () => {
+    // Walk back through the stack, skipping ids that no longer exist (e.g.
+    // already deleted by realtime), and remove the most recent surviving op.
+    while (undoStackRef.current.length > 0) {
+      const lastId = undoStackRef.current.pop()!;
+      const exists = drawings.some(d => d.id === lastId);
+      if (!exists) continue;
+      await eraseDrawing(lastId);
+      return;
+    }
+  }, [drawings, eraseDrawing]);
+
+  // Ctrl+Z (or Cmd+Z on macOS) — only while the drawing tool is active so it
+  // doesn't hijack the shortcut from text inputs elsewhere on the page.
+  useEffect(() => {
+    if (!active) return;
+    const onKeyDown = (e: KeyboardEvent) => {
+      const targetTag = (e.target as HTMLElement | null)?.tagName?.toLowerCase();
+      if (targetTag === 'input' || targetTag === 'textarea') return;
+      if ((e.ctrlKey || e.metaKey) && !e.shiftKey && e.key.toLowerCase() === 'z') {
+        e.preventDefault();
+        void undoLast();
+      }
+    };
+    window.addEventListener('keydown', onKeyDown);
+    return () => window.removeEventListener('keydown', onKeyDown);
+  }, [active, undoLast]);
+
   const handlePointerDown = (e: React.PointerEvent) => {
     if (!active) return;
+    if (tool === 'eraser') {
+      // Eraser clicks are handled by the per-element overlay (renderOp);
+      // empty-area clicks do nothing.
+      return;
+    }
     const pos = getPos(e);
     isDrawingRef.current = true;
     (e.target as Element).setPointerCapture(e.pointerId);
@@ -146,7 +198,7 @@ export default function DrawingCanvas({
     const pos = getPos(e);
     if (tool === 'pencil') {
       setPendingPath(prev => (prev ? [...prev, pos] : [pos]));
-    } else {
+    } else if (tool !== 'eraser') {
       setPendingShape(prev => (prev ? { start: prev.start, end: pos } : null));
     }
   };
@@ -157,7 +209,7 @@ export default function DrawingCanvas({
     if (tool === 'pencil' && pendingPath && pendingPath.length > 0) {
       insertOp({ type: 'path', points: pendingPath, color, size: brushSize });
       setPendingPath(null);
-    } else if (tool !== 'pencil' && pendingShape) {
+    } else if (tool !== 'pencil' && tool !== 'eraser' && pendingShape) {
       insertOp({
         type: 'shape',
         shapeType: tool,
@@ -176,6 +228,7 @@ export default function DrawingCanvas({
     if (!confirm('Apagar todos os SEUS desenhos?')) return;
     const mineIds = drawings.filter(d => d.player_id === playerId).map(d => d.id);
     setDrawings(prev => prev.filter(d => d.player_id !== playerId));
+    undoStackRef.current = [];
     if (mineIds.length === 0) return;
     await supabase
       .from('board_drawings')
@@ -184,30 +237,75 @@ export default function DrawingCanvas({
       .eq('player_id', playerId);
   };
 
+  // DM-only: wipe the entire drawing history for the session.
+  const clearAll = async () => {
+    if (!isDm) return;
+    if (!confirm('Apagar TODO o histórico de desenhos da sessão? Esta ação não pode ser desfeita.')) return;
+    setDrawings([]);
+    undoStackRef.current = [];
+    const { error } = await supabase
+      .from('board_drawings')
+      .delete()
+      .eq('session_id', sessionId);
+    if (error) toast.error('Erro ao limpar histórico');
+    else toast.success('Histórico de desenhos limpo');
+  };
+
   const renderOp = (id: string, op: DrawOp) => {
+    // When the eraser tool is active, each drawn element gets a click target
+    // that deletes the element. We give a wider invisible stroke ("hit area")
+    // on top of the visible one so thin strokes are still clickable.
+    const eraserActive = active && tool === 'eraser';
+    const interactiveStyle: React.CSSProperties | undefined = eraserActive
+      ? { cursor: 'pointer', pointerEvents: 'auto' }
+      : { pointerEvents: 'none' };
+    const onClickErase = eraserActive
+      ? (e: React.MouseEvent) => { e.stopPropagation(); void eraseDrawing(id); }
+      : undefined;
     if (op.type === 'path') {
       if (op.points.length === 0) return null;
       const d = op.points
         .map((p, i) => `${i === 0 ? 'M' : 'L'}${p.x},${p.y}`)
         .join(' ');
       return (
-        <path
-          key={id}
-          d={d}
-          fill="none"
-          stroke={op.color}
-          strokeWidth={op.size}
-          strokeLinecap="round"
-          strokeLinejoin="round"
-        />
+        <g key={id}>
+          <path
+            d={d}
+            fill="none"
+            stroke={op.color}
+            strokeWidth={op.size}
+            strokeLinecap="round"
+            strokeLinejoin="round"
+            style={{ pointerEvents: 'none' }}
+          />
+          {eraserActive && (
+            <path
+              d={d}
+              fill="none"
+              stroke="transparent"
+              strokeWidth={Math.max(op.size + 14, 18)}
+              strokeLinecap="round"
+              strokeLinejoin="round"
+              style={interactiveStyle}
+              onClick={onClickErase}
+            />
+          )}
+        </g>
       );
     }
     if (op.type === 'shape') {
       const { start, end, color: c, size, shapeType } = op;
       if (shapeType === 'line') {
         return (
-          <line key={id} x1={start.x} y1={start.y} x2={end.x} y2={end.y}
-            stroke={c} strokeWidth={size} strokeLinecap="round" />
+          <g key={id}>
+            <line x1={start.x} y1={start.y} x2={end.x} y2={end.y}
+              stroke={c} strokeWidth={size} strokeLinecap="round" style={{ pointerEvents: 'none' }} />
+            {eraserActive && (
+              <line x1={start.x} y1={start.y} x2={end.x} y2={end.y}
+                stroke="transparent" strokeWidth={Math.max(size + 14, 18)} strokeLinecap="round"
+                style={interactiveStyle} onClick={onClickErase} />
+            )}
+          </g>
         );
       }
       if (shapeType === 'circle') {
@@ -216,22 +314,44 @@ export default function DrawingCanvas({
         const rx = Math.abs(end.x - start.x) / 2;
         const ry = Math.abs(end.y - start.y) / 2;
         return (
-          <ellipse key={id} cx={cx} cy={cy} rx={rx} ry={ry}
-            fill="none" stroke={c} strokeWidth={size} />
+          <g key={id}>
+            <ellipse cx={cx} cy={cy} rx={rx} ry={ry}
+              fill="none" stroke={c} strokeWidth={size} style={{ pointerEvents: 'none' }} />
+            {eraserActive && (
+              <ellipse cx={cx} cy={cy} rx={rx} ry={ry}
+                fill="none" stroke="transparent" strokeWidth={Math.max(size + 14, 18)}
+                style={interactiveStyle} onClick={onClickErase} />
+            )}
+          </g>
         );
       }
       if (shapeType === 'rectangle') {
         return (
-          <rect
-            key={id}
-            x={Math.min(start.x, end.x)}
-            y={Math.min(start.y, end.y)}
-            width={Math.abs(end.x - start.x)}
-            height={Math.abs(end.y - start.y)}
-            fill="none"
-            stroke={c}
-            strokeWidth={size}
-          />
+          <g key={id}>
+            <rect
+              x={Math.min(start.x, end.x)}
+              y={Math.min(start.y, end.y)}
+              width={Math.abs(end.x - start.x)}
+              height={Math.abs(end.y - start.y)}
+              fill="none"
+              stroke={c}
+              strokeWidth={size}
+              style={{ pointerEvents: 'none' }}
+            />
+            {eraserActive && (
+              <rect
+                x={Math.min(start.x, end.x)}
+                y={Math.min(start.y, end.y)}
+                width={Math.abs(end.x - start.x)}
+                height={Math.abs(end.y - start.y)}
+                fill="none"
+                stroke="transparent"
+                strokeWidth={Math.max(size + 14, 18)}
+                style={interactiveStyle}
+                onClick={onClickErase}
+              />
+            )}
+          </g>
         );
       }
     }
@@ -243,6 +363,7 @@ export default function DrawingCanvas({
     { id: 'line', icon: Minus, label: 'Linha' },
     { id: 'circle', icon: Circle, label: 'Círculo' },
     { id: 'rectangle', icon: Square, label: 'Retângulo' },
+    { id: 'eraser', icon: Eraser, label: 'Borracha (clique no traço para apagar)' },
   ];
 
   return (
@@ -256,7 +377,7 @@ export default function DrawingCanvas({
         // otherwise tokens, ruler, etc. must remain interactive underneath.
         style={{
           pointerEvents: active ? 'auto' : 'none',
-          cursor: active ? 'crosshair' : undefined,
+          cursor: active ? (tool === 'eraser' ? 'cell' : 'crosshair') : undefined,
           zIndex: 20,
         }}
         onPointerDown={handlePointerDown}
@@ -267,7 +388,7 @@ export default function DrawingCanvas({
         {pendingPath && pendingPath.length > 0 && renderOp('pending-path', {
           type: 'path', points: pendingPath, color, size: brushSize,
         })}
-        {pendingShape && tool !== 'pencil' && renderOp('pending-shape', {
+        {pendingShape && tool !== 'pencil' && tool !== 'eraser' && renderOp('pending-shape', {
           type: 'shape',
           shapeType: tool,
           start: pendingShape.start,
@@ -286,7 +407,7 @@ export default function DrawingCanvas({
               className="bg-card/80 border border-gold/20 rounded-full px-3 py-1 flex items-center gap-1.5"
             >
               <span className="w-1.5 h-1.5 rounded-full bg-green-500 animate-pulse" />
-              <span className="text-xs text-muted-foreground font-display">Sincronizado</span>
+              <span className="text-xs text-muted-foreground font-display">Sincronizado · Ctrl+Z desfaz</span>
             </div>
           </div>
 
@@ -331,9 +452,23 @@ export default function DrawingCanvas({
 
             <div className="w-px h-7 bg-border" />
 
+            <Button variant="ghost" size="sm" onClick={undoLast} title="Desfazer (Ctrl+Z)" className="h-10 w-10 sm:h-9 sm:w-9 p-0">
+              <Undo2 className="w-5 h-5 sm:w-4 sm:h-4" />
+            </Button>
             <Button variant="ghost" size="sm" onClick={clearMine} title="Apagar meus desenhos" className="h-10 w-10 sm:h-9 sm:w-9 p-0">
               <Trash2 className="w-5 h-5 sm:w-4 sm:h-4" />
             </Button>
+            {isDm && (
+              <Button
+                variant="ghost"
+                size="sm"
+                onClick={clearAll}
+                title="Limpar histórico (todos os desenhos da sessão)"
+                className="h-10 w-10 sm:h-9 sm:w-9 p-0 text-destructive hover:text-destructive"
+              >
+                <History className="w-5 h-5 sm:w-4 sm:h-4" />
+              </Button>
+            )}
             <Button variant="ghost" size="sm" onClick={onClose} title="Fechar" className="h-10 w-10 sm:h-9 sm:w-9 p-0">
               <X className="w-5 h-5 sm:w-4 sm:h-4" />
             </Button>
