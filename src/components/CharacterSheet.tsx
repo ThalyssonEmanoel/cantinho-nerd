@@ -4,6 +4,7 @@ import { useAuth } from '@/lib/auth-context';
 import { Button } from '@/components/ui/button';
 import { X, Save, Sword, BookOpen, Package, Sparkles, Shield } from 'lucide-react';
 import { toast } from 'sonner';
+import TokenImagePicker from './TokenImagePicker';
 
 /* ─────────────────────────────────────────────
    D&D 5e Helpers
@@ -750,6 +751,11 @@ export interface SheetData {
   // Story
   alliesOrgs: string;
   backstory: string;
+  // Token image — used as the source of truth for the player's board token,
+  // so even if the DM deletes/re-pulls the token, the avatar persists.
+  tokenImageUrl: string | null;
+  tokenImageOffsetX: number;
+  tokenImageOffsetY: number;
 }
 
 const defaultSheet = (): SheetData => ({
@@ -771,6 +777,7 @@ const defaultSheet = (): SheetData => ({
   spells: [], notes: '',
   age: '', height: '', weight: '', eyes: '', skin: '', hair: '',
   alliesOrgs: '', backstory: '',
+  tokenImageUrl: null, tokenImageOffsetX: 0, tokenImageOffsetY: 0,
 });
 
 /* ─────────────────────────────────────────────
@@ -1186,7 +1193,18 @@ export default function CharacterSheet({ sessionId, onClose, targetPlayerId, tar
 
         {/* Header */}
         <div className="p-4 border-b border-border flex items-center gap-3 shrink-0">
-          <div className="flex-1">
+          <TokenImagePicker
+            sessionId={sessionId}
+            imageUrl={sheet.tokenImageUrl}
+            offsetX={sheet.tokenImageOffsetX}
+            offsetY={sheet.tokenImageOffsetY}
+            readOnly={!canEdit}
+            onChange={({ imageUrl, offsetX, offsetY }) => {
+              setSheet(prev => ({ ...prev, tokenImageUrl: imageUrl, tokenImageOffsetX: offsetX, tokenImageOffsetY: offsetY }));
+              setDirty(true);
+            }}
+          />
+          <div className="flex-1 min-w-0">
             <div className="text-[10px] text-muted-foreground font-display mb-0.5">{headerLabel}{readOnly ? ' (somente leitura)' : ''}</div>
             <input
               value={sheet.characterName}
@@ -1196,7 +1214,7 @@ export default function CharacterSheet({ sessionId, onClose, targetPlayerId, tar
               className="bg-transparent text-xl font-display text-foreground focus:outline-none w-full placeholder:text-muted-foreground/40"
             />
           </div>
-          <div className="flex items-center gap-2">
+          <div className="flex items-center gap-2 shrink-0">
             {dirty && canEdit && (
               <Button size="sm" onClick={save} disabled={saving} className="font-display text-xs h-7">
                 <Save className="w-3 h-3 mr-1" />{saving ? 'Salvando...' : 'Salvar'}

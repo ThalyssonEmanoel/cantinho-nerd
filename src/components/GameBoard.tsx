@@ -28,7 +28,7 @@ import {
   Image, ImagePlus, Plus, Trash2, LogOut, Dices, ScrollText, Pencil, Ruler,
   ZoomIn, ZoomOut, Menu, X, Grid3x3, MessageCircle,
   Calculator, Settings, Smile, ClipboardList, Users, Swords, Activity, AlertCircle, Shield, UserPlus, Eye, BookOpen,
-  Move, ArrowUp, ArrowDown, ArrowLeft, ArrowRight, RotateCcw,
+  Move, ArrowUp, ArrowDown, ArrowLeft, ArrowRight, RotateCcw, User, Check, Maximize2,
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
 
@@ -75,6 +75,7 @@ interface Session {
   active_map_url: string | null;
   maps: string[];
   monster_images: string[];
+  npc_images: string[];
   show_grid: boolean;
   grid_size: number;
   system: string;
@@ -98,6 +99,7 @@ export default function GameBoard({ sessionId, onLeave }: GameBoardProps) {
   const [showLog, setShowLog] = useState(false);
   const [showMapPicker, setShowMapPicker] = useState(false);
   const [showMonsters, setShowMonsters] = useState(false);
+  const [showNpcs, setShowNpcs] = useState(false);
   const [showDrawing, setShowDrawing] = useState(false);
   const [showRuler, setShowRuler] = useState(false);
   const [showChat, setShowChat] = useState(false);
@@ -122,16 +124,30 @@ export default function GameBoard({ sessionId, onLeave }: GameBoardProps) {
   const [selectedToken, setSelectedToken] = useState<string | null>(null);
   const [editingLabel, setEditingLabel] = useState<string | null>(null);
   const [editLabelValue, setEditLabelValue] = useState('');
+  // Token whose avatar is being shown in the full-size preview modal. Any user
+  // (player or DM) can open this — it's read-only, so we don't restrict it to
+  // tokens the viewer owns.
+  const [previewToken, setPreviewToken] = useState<Token | null>(null);
   const [draggingToken, setDraggingToken] = useState<string | null>(null);
   const [dragOffset, setDragOffset] = useState({ x: 0, y: 0 });
   const [scale, setScale] = useState(1);
   const [uploadingMaps, setUploadingMaps] = useState(false);
   const [uploadingMonsters, setUploadingMonsters] = useState(false);
+  const [uploadingNpcs, setUploadingNpcs] = useState(false);
   const [uploadingTokenImage, setUploadingTokenImage] = useState(false);
+  // Dynamic zoom + pan applied on top of the auto-fit scale. zoomLevel=1 keeps
+  // the auto-fit behavior; >1 zooms in. panX/panY shift the centered view so
+  // users can see edges when zoomed in.
+  const [zoomLevel, setZoomLevel] = useState(1);
+  const [panX, setPanX] = useState(0);
+  const [panY, setPanY] = useState(0);
+  const [isPanning, setIsPanning] = useState(false);
+  const panStartRef = useRef<{ x: number; y: number; panX: number; panY: number } | null>(null);
   const containerRef = useRef<HTMLDivElement>(null);
   const boardRef = useRef<HTMLDivElement>(null);
   const mapUploadInputRef = useRef<HTMLInputElement>(null);
   const monsterUploadInputRef = useRef<HTMLInputElement>(null);
+  const npcUploadInputRef = useRef<HTMLInputElement>(null);
   const tokenImageInputRef = useRef<HTMLInputElement>(null);
   const tokenImageTargetRef = useRef<string | null>(null);
   const reactionChannelRef = useRef<ReturnType<typeof supabase.channel> | null>(null);
@@ -162,9 +178,12 @@ export default function GameBoard({ sessionId, onLeave }: GameBoardProps) {
   // relative to the tiny map; instead we partially compensate so the UI
   // grows on smaller viewports but never balloons. Floor 1.6 keeps the
   // desktop sweet spot; ceiling 2.8 caps phones to ~2.5x natural size.
-  const uiScale = scale > 0
+  // Divide by zoomLevel so labels/controls don't grow huge as the user zooms in.
+  const baseUiScale = scale > 0
     ? Math.max(1.6, Math.min(2.8, 1 / scale * 0.5))
     : 1.6;
+  const uiScale = baseUiScale / Math.max(1, zoomLevel);
+  const effectiveScale = scale * zoomLevel;
 
   useEffect(() => {
     const load = async () => {
@@ -304,11 +323,32 @@ export default function GameBoard({ sessionId, onLeave }: GameBoardProps) {
     if (!player) return;
     const existing = tokens.find(t => t.owner_id === player.id && t.token_type === 'player');
     if (existing) { toast.info('Seu token já está no mapa!'); return; }
+    // Source of truth for the player token's name and avatar is the
+    // character sheet (data.characterName / data.nomePersonagem and
+    // data.tokenImageUrl). The account profile is only the fallback for
+    // brand-new players who haven't filled their sheet yet.
+    const { data: sheetRow } = await supabase
+      .from('character_sheets')
+      .select('data')
+      .eq('session_id', sessionId)
+      .eq('player_id', player.id)
+      .maybeSingle();
+    const sheetData = (sheetRow?.data ?? {}) as {
+      characterName?: string;
+      nomePersonagem?: string;
+      tokenImageUrl?: string | null;
+      tokenImageOffsetX?: number;
+      tokenImageOffsetY?: number;
+    };
+    const sheetName = (sheetData.characterName || sheetData.nomePersonagem || '').trim();
+    const sheetImage = (sheetData.tokenImageUrl || '').trim();
     await supabase.from('board_tokens').insert({
       session_id: sessionId,
       owner_id: player.id,
-      image_url: player.avatar_url || '',
-      label: player.name,
+      image_url: sheetImage || player.avatar_url || '',
+      label: sheetName || player.name,
+      image_offset_x: sheetData.tokenImageOffsetX ?? 0,
+      image_offset_y: sheetData.tokenImageOffsetY ?? 0,
       x: 200, y: 200,
       token_type: 'player',
     });
@@ -328,7 +368,21 @@ export default function GameBoard({ sessionId, onLeave }: GameBoardProps) {
     setShowMonsters(false);
   };
 
-  const uploadFiles = async (files: File[], folder: 'maps' | 'monsters') => {
+  const addNpcToken = async (imageUrl: string) => {
+    await supabase.from('board_tokens').insert({
+      session_id: sessionId,
+      owner_id: player?.id,
+      image_url: imageUrl,
+      label: 'NPC',
+      x: 300 + Math.random() * 200,
+      y: 300 + Math.random() * 200,
+      width: 50, height: 50,
+      token_type: 'npc',
+    });
+    setShowNpcs(false);
+  };
+
+  const uploadFiles = async (files: File[], folder: 'maps' | 'monsters' | 'npcs') => {
     const urls: string[] = [];
     for (const file of files) {
       const ext = file.name.split('.').pop();
@@ -390,6 +444,30 @@ export default function GameBoard({ sessionId, onLeave }: GameBoardProps) {
     }
   };
 
+  const addNpcsToSession = async (files: FileList | null) => {
+    if (!isDm || !session || !files || files.length === 0) return;
+    setUploadingNpcs(true);
+    try {
+      const uploadedUrls = await uploadFiles(Array.from(files), 'npcs');
+      const nextNpcs = [...(session.npc_images || []), ...uploadedUrls];
+
+      const { error } = await supabase
+        .from('sessions')
+        .update({ npc_images: nextNpcs })
+        .eq('id', sessionId);
+
+      if (error) throw error;
+
+      setSession(prev => prev ? { ...prev, npc_images: nextNpcs } : prev);
+      toast.success('NPC(s) adicionado(s) à sessão');
+    } catch (err: any) {
+      toast.error(err?.message || 'Erro ao adicionar NPCs');
+    } finally {
+      setUploadingNpcs(false);
+      if (npcUploadInputRef.current) npcUploadInputRef.current.value = '';
+    }
+  };
+
   const removeToken = async (tokenId: string) => {
     // Optimistic update — don't wait for the realtime DELETE event, which is
     // unreliable on tables without REPLICA IDENTITY FULL and breaks the trash
@@ -399,6 +477,25 @@ export default function GameBoard({ sessionId, onLeave }: GameBoardProps) {
     const { error } = await supabase.from('board_tokens').delete().eq('id', tokenId);
     if (error) toast.error('Erro ao remover token');
   };
+
+  // Save the token label to board_tokens. Used by both Enter-in-input and
+  // the explicit ✓ button. The character sheet (data.characterName) remains
+  // the source of truth for the next time the token is created — players
+  // rename on the sheet, not here.
+  const saveTokenLabel = useCallback(async (token: Token, rawLabel: string) => {
+    const next = rawLabel.trim();
+    if (!next || next === token.label) return true;
+    const { error } = await supabase
+      .from('board_tokens')
+      .update({ label: next })
+      .eq('id', token.id);
+    if (error) {
+      toast.error('Erro ao salvar nome');
+      return false;
+    }
+    toast.success('Nome salvo');
+    return true;
+  }, []);
 
   // Convert a pointer event into virtual board coordinates.
   const getVirtualPos = useCallback((clientX: number, clientY: number) => {
@@ -474,7 +571,7 @@ export default function GameBoard({ sessionId, onLeave }: GameBoardProps) {
         setTokens(prev => prev.map(t => t.id === tokenId ? { ...t, image_url: prevUrl } : t));
         throw updErr;
       }
-      toast.success('Foto do token atualizada');
+      toast.success('Foto do token atualizada — para que persista nas próximas vezes, atualize a foto na ficha do personagem');
     } catch (err: any) {
       toast.error(err?.message || 'Erro ao atualizar foto do token');
     } finally {
@@ -486,11 +583,13 @@ export default function GameBoard({ sessionId, onLeave }: GameBoardProps) {
 
   const handlePointerDown = useCallback((e: React.PointerEvent, token: Token) => {
     if (showDrawing || showRuler) return;
-    if (!isDm && token.owner_id !== player?.id) return;
-    if (!isDm && token.token_type === 'monster') return;
+    // Always select the token so any user can at least open the image preview.
+    // Drag is still gated on whether the viewer can actually move the token.
+    setSelectedToken(token.id);
+    const canDrag = isDm || (token.owner_id === player?.id && token.token_type !== 'monster' && token.token_type !== 'npc');
+    if (!canDrag) return;
     const pos = getVirtualPos(e.clientX, e.clientY);
     setDraggingToken(token.id);
-    setSelectedToken(token.id);
     setDragOffset({ x: pos.x - token.x, y: pos.y - token.y });
     (e.target as HTMLElement).setPointerCapture(e.pointerId);
   }, [isDm, player, showDrawing, showRuler, getVirtualPos]);
@@ -511,6 +610,77 @@ export default function GameBoard({ sessionId, onLeave }: GameBoardProps) {
     if (token) await supabase.from('board_tokens').update({ x: token.x, y: token.y }).eq('id', token.id);
     setDraggingToken(null);
   }, [draggingToken, tokens]);
+
+  // Zoom helpers — keep the cursor anchored so users zoom toward where they
+  // are looking, not toward the origin.
+  const applyZoom = useCallback((nextZoom: number, anchor?: { x: number; y: number }) => {
+    const clamped = Math.max(1, Math.min(4, nextZoom));
+    const container = containerRef.current;
+    if (!container) { setZoomLevel(clamped); return; }
+    if (!anchor) {
+      setZoomLevel(clamped);
+      return;
+    }
+    const rect = container.getBoundingClientRect();
+    // Convert anchor to coordinates relative to container center (where the
+    // board is translated to). The pan offset needs to compensate so the
+    // anchor stays under the cursor after the zoom change.
+    const cx = anchor.x - rect.left - rect.width / 2;
+    const cy = anchor.y - rect.top - rect.height / 2;
+    const ratio = clamped / zoomLevel;
+    setPanX(prev => cx - (cx - prev) * ratio);
+    setPanY(prev => cy - (cy - prev) * ratio);
+    setZoomLevel(clamped);
+  }, [zoomLevel]);
+
+  const resetView = useCallback(() => {
+    setZoomLevel(1);
+    setPanX(0);
+    setPanY(0);
+  }, []);
+
+  // Wheel zoom on the board container.
+  useEffect(() => {
+    const container = containerRef.current;
+    if (!container) return;
+    const onWheel = (e: WheelEvent) => {
+      // Only intercept when no modal-ish overlay tools are active (drawing/
+      // ruler already capture pointer events). Always allow zoom otherwise.
+      e.preventDefault();
+      const factor = e.deltaY < 0 ? 1.15 : 1 / 1.15;
+      applyZoom(zoomLevel * factor, { x: e.clientX, y: e.clientY });
+    };
+    container.addEventListener('wheel', onWheel, { passive: false });
+    return () => container.removeEventListener('wheel', onWheel);
+  }, [applyZoom, zoomLevel]);
+
+  // Middle-mouse / right-click pan, plus shift+drag pan. Avoids conflicting
+  // with token dragging (left button on a token).
+  const handleBoardPointerDown = useCallback((e: React.PointerEvent) => {
+    if (showDrawing || showRuler) return;
+    const middleButton = e.button === 1;
+    const rightButton = e.button === 2;
+    const shiftLeft = e.button === 0 && e.shiftKey;
+    if (!middleButton && !rightButton && !shiftLeft) return;
+    e.preventDefault();
+    setIsPanning(true);
+    panStartRef.current = { x: e.clientX, y: e.clientY, panX, panY };
+    (e.currentTarget as HTMLElement).setPointerCapture(e.pointerId);
+  }, [panX, panY, showDrawing, showRuler]);
+
+  const handleBoardPointerMove = useCallback((e: React.PointerEvent) => {
+    if (!isPanning || !panStartRef.current) return;
+    const dx = e.clientX - panStartRef.current.x;
+    const dy = e.clientY - panStartRef.current.y;
+    setPanX(panStartRef.current.panX + dx);
+    setPanY(panStartRef.current.panY + dy);
+  }, [isPanning]);
+
+  const handleBoardPointerUp = useCallback(() => {
+    if (!isPanning) return;
+    setIsPanning(false);
+    panStartRef.current = null;
+  }, [isPanning]);
 
   const canInteractToken = (token: Token) => isDm || token.owner_id === player?.id;
 
@@ -564,6 +734,48 @@ export default function GameBoard({ sessionId, onLeave }: GameBoardProps) {
         className="hidden"
         onChange={(e) => handleTokenImageFile(e.target.files)}
       />
+      {/* Token image preview modal — read-only for any user. Closes on
+          backdrop click or the X button. Uses object-contain so very tall or
+          wide avatars stay un-stretched. */}
+      {previewToken && (
+        <div
+          className="fixed inset-0 z-[100] bg-black/85 backdrop-blur-sm flex items-center justify-center p-4 sm:p-8"
+          onClick={() => setPreviewToken(null)}
+        >
+          <div
+            className="relative max-w-[90vw] max-h-[88vh] flex flex-col items-center gap-2"
+            onClick={e => e.stopPropagation()}
+          >
+            <button
+              onClick={() => setPreviewToken(null)}
+              className="absolute -top-2 -right-2 sm:-top-3 sm:-right-3 bg-card border border-border rounded-full p-1.5 shadow-lg hover:bg-muted z-10"
+              title="Fechar"
+            >
+              <X className="w-5 h-5 text-foreground" />
+            </button>
+            <div className={`rounded-2xl overflow-hidden border-4 shadow-2xl ${
+              previewToken.token_type === 'player'
+                ? 'border-gold'
+                : previewToken.token_type === 'npc'
+                  ? 'border-blue-400'
+                  : 'border-blood'
+            }`}>
+              <img
+                src={previewToken.image_url}
+                alt={previewToken.label}
+                draggable={false}
+                className="block max-w-[88vw] max-h-[78vh] object-contain bg-background"
+                style={{
+                  objectPosition: `${50 + (previewToken.image_offset_x ?? 0) * 50}% ${50 + (previewToken.image_offset_y ?? 0) * 50}%`,
+                }}
+              />
+            </div>
+            <div className="bg-card/95 border border-border rounded-lg px-3 py-1.5 font-display text-gold text-sm">
+              {previewToken.label}
+            </div>
+          </div>
+        </div>
+      )}
       {showProfile && <ProfileSettings onClose={() => setShowProfile(false)} />}
       {showPullPlayersModal && player && (
         <PullPlayersModal
@@ -621,7 +833,8 @@ export default function GameBoard({ sessionId, onLeave }: GameBoardProps) {
             {isDm && (
               <>
                 <TB icon={Image} label="Trocar Mapa" active={showMapPicker} onClick={() => { setShowMapPicker(v => !v); setShowMobileMenu(false); }} />
-                <TB icon={Plus} label="Monstros" active={showMonsters} onClick={() => { setShowMonsters(v => !v); setShowMobileMenu(false); }} />
+                <TB icon={Plus} label="Monstros" active={showMonsters} onClick={() => { setShowMonsters(v => !v); setShowNpcs(false); setShowMobileMenu(false); }} />
+                <TB icon={User} label="NPCs" active={showNpcs} onClick={() => { setShowNpcs(v => !v); setShowMonsters(false); setShowMobileMenu(false); }} />
                 <TB icon={UserPlus} label="Puxar Jogadores" onClick={() => setShowPullPlayersModal(true)} />
                 <TB icon={Swords} label="Encontros" active={showEncounterBuilder} onClick={() => setShowEncounterBuilder(v => !v)} />
               </>
@@ -684,7 +897,8 @@ export default function GameBoard({ sessionId, onLeave }: GameBoardProps) {
               {isDm && (
                 <>
                   <MobileMenuItem icon={Image} label="Trocar Mapa" onClick={() => { setShowMapPicker(v => !v); setShowMobileMenu(false); }} active={showMapPicker} />
-                  <MobileMenuItem icon={Plus} label="Monstros" onClick={() => { setShowMonsters(v => !v); setShowMobileMenu(false); }} active={showMonsters} />
+                  <MobileMenuItem icon={Plus} label="Monstros" onClick={() => { setShowMonsters(v => !v); setShowNpcs(false); setShowMobileMenu(false); }} active={showMonsters} />
+                  <MobileMenuItem icon={User} label="NPCs" onClick={() => { setShowNpcs(v => !v); setShowMonsters(false); setShowMobileMenu(false); }} active={showNpcs} />
                   <MobileMenuItem icon={UserPlus} label="Puxar Jogadores" onClick={() => { setShowPullPlayersModal(true); setShowMobileMenu(false); }} />
                   <MobileMenuItem icon={Swords} label="Encontros" onClick={() => { setShowEncounterBuilder(v => !v); setShowMobileMenu(false); }} active={showEncounterBuilder} />
                 </>
@@ -721,8 +935,29 @@ export default function GameBoard({ sessionId, onLeave }: GameBoardProps) {
         <div
           ref={containerRef}
           className="flex-1 relative overflow-hidden"
-          style={{ backgroundColor: 'hsl(220, 20%, 6%)' }}
+          style={{ backgroundColor: 'hsl(220, 20%, 6%)', cursor: isPanning ? 'grabbing' : undefined }}
+          onPointerDown={handleBoardPointerDown}
+          onPointerMove={isPanning ? handleBoardPointerMove : undefined}
+          onPointerUp={handleBoardPointerUp}
+          onContextMenu={e => { if (zoomLevel > 1) e.preventDefault(); }}
         >
+          {/* Blurred background extension of the active map — fills the area
+              that object-contain would otherwise leave as black bars, so wide
+              or tall maps look cinematic instead of letterboxed. Rendered in
+              container space (not virtual) so it always reaches the edges. */}
+          {session?.active_map_url && (
+            <div
+              aria-hidden
+              className="absolute inset-0 pointer-events-none"
+              style={{
+                backgroundImage: `url(${session.active_map_url})`,
+                backgroundSize: 'cover',
+                backgroundPosition: 'center',
+                filter: 'blur(28px) brightness(0.55)',
+                transform: 'scale(1.15)',
+              }}
+            />
+          )}
           {/* Inner virtual board: fixed VIRTUAL_W x VIRTUAL_H, scaled to fit */}
           <div
             ref={boardRef}
@@ -732,9 +967,9 @@ export default function GameBoard({ sessionId, onLeave }: GameBoardProps) {
               height: VIRTUAL_H,
               left: '50%',
               top: '50%',
-              transform: `translate(-50%, -50%) scale(${scale})`,
+              transform: `translate(calc(-50% + ${panX}px), calc(-50% + ${panY}px)) scale(${effectiveScale})`,
               transformOrigin: 'center center',
-              backgroundColor: 'hsl(220, 25%, 4%)',
+              backgroundColor: 'transparent',
             }}
             onPointerMove={!showDrawing && !showRuler ? handlePointerMove : undefined}
             onPointerUp={!showDrawing && !showRuler ? handlePointerUp : undefined}
@@ -770,6 +1005,7 @@ export default function GameBoard({ sessionId, onLeave }: GameBoardProps) {
               onClose={() => setShowDrawing(false)}
               sessionId={sessionId}
               playerId={player?.id ?? ''}
+              isDm={isDm}
               uiScale={uiScale}
             />
 
@@ -808,7 +1044,7 @@ export default function GameBoard({ sessionId, onLeave }: GameBoardProps) {
                   className={`absolute group ${!showDrawing && !showRuler && canInteractToken(token) ? 'cursor-grab active:cursor-grabbing' : ''} ${draggingToken === token.id ? 'z-50' : 'z-10'} ${selectedToken === token.id ? 'z-40' : ''}`}
                   style={{ left: token.x, top: token.y, width: token.width, height: token.height }}
                   onPointerDown={e => handlePointerDown(e, token)}
-                  onClick={e => { e.stopPropagation(); if (canInteractToken(token)) setSelectedToken(token.id); }}
+                  onClick={e => { e.stopPropagation(); setSelectedToken(token.id); }}
                 >
                   {/* Condition icons */}
                   <ConditionIcons
@@ -855,7 +1091,11 @@ export default function GameBoard({ sessionId, onLeave }: GameBoardProps) {
                     />
                   )}
                   <div className={`w-full h-full rounded-full overflow-hidden border-2 ${
-                    token.token_type === 'player' ? 'border-gold glow-gold' : 'border-blood'
+                    token.token_type === 'player'
+                      ? 'border-gold glow-gold'
+                      : token.token_type === 'npc'
+                        ? 'border-blue-400'
+                        : 'border-blood'
                   } shadow-lg transition-all ${selectedToken === token.id ? 'ring-2 ring-gold ring-offset-2 ring-offset-background' : ''}`}>
                     <img
                       src={token.image_url}
@@ -884,7 +1124,9 @@ export default function GameBoard({ sessionId, onLeave }: GameBoardProps) {
                     ))}
                   </AnimatePresence>
 
-                  {/* Token label */}
+                  {/* Token label — edit mode requires an explicit Save click
+                      (or Enter) to persist; blur cancels so accidental clicks
+                      elsewhere don't lock in a half-typed name. */}
                   <div className="absolute -bottom-5 left-1/2 -translate-x-1/2 pointer-events-none">
                     <div
                       style={{ transform: `scale(${uiScale})`, transformOrigin: 'center top' }}
@@ -898,30 +1140,67 @@ export default function GameBoard({ sessionId, onLeave }: GameBoardProps) {
                         }}
                       >
                         {editingLabel === token.id ? (
-                          <input
-                            autoFocus
-                            value={editLabelValue}
-                            onChange={e => setEditLabelValue(e.target.value)}
-                            onBlur={async () => {
-                              if (editLabelValue.trim() && editLabelValue !== token.label)
-                                await supabase.from('board_tokens').update({ label: editLabelValue.trim() }).eq('id', token.id);
-                              setEditingLabel(null);
-                            }}
-                            onKeyDown={async (e) => {
-                              if (e.key === 'Enter') {
-                                if (editLabelValue.trim() && editLabelValue !== token.label)
-                                  await supabase.from('board_tokens').update({ label: editLabelValue.trim() }).eq('id', token.id);
-                                setEditingLabel(null);
-                              } else if (e.key === 'Escape') setEditingLabel(null);
-                            }}
-                            onClick={e => e.stopPropagation()}
-                            onPointerDown={e => e.stopPropagation()}
-                            className="bg-transparent border-none outline-none text-sm text-foreground w-20 text-center"
-                          />
+                          <div className="flex items-center gap-1" onClick={e => e.stopPropagation()} onPointerDown={e => e.stopPropagation()}>
+                            <input
+                              autoFocus
+                              value={editLabelValue}
+                              onChange={e => setEditLabelValue(e.target.value)}
+                              onKeyDown={async (e) => {
+                                if (e.key === 'Enter') {
+                                  const ok = await saveTokenLabel(token, editLabelValue);
+                                  if (ok || !editLabelValue.trim() || editLabelValue.trim() === token.label) setEditingLabel(null);
+                                } else if (e.key === 'Escape') setEditingLabel(null);
+                              }}
+                              className="bg-transparent border-b border-border outline-none text-sm text-foreground w-20 text-center"
+                            />
+                            <button
+                              type="button"
+                              onClick={async (e) => {
+                                e.stopPropagation();
+                                const ok = await saveTokenLabel(token, editLabelValue);
+                                if (ok || !editLabelValue.trim() || editLabelValue.trim() === token.label) setEditingLabel(null);
+                              }}
+                              title="Salvar nome"
+                              className="text-gold hover:text-gold/80"
+                            >
+                              <Check className="w-3.5 h-3.5" />
+                            </button>
+                            <button
+                              type="button"
+                              onClick={(e) => { e.stopPropagation(); setEditingLabel(null); }}
+                              title="Cancelar"
+                              className="text-muted-foreground hover:text-foreground"
+                            >
+                              <X className="w-3.5 h-3.5" />
+                            </button>
+                          </div>
                         ) : token.label}
                       </div>
                     </div>
                   </div>
+
+                  {/* Read-only toolbar — shown to viewers who can't interact
+                      with this token (e.g., a player looking at another player
+                      or a monster). Contains only the "expand image" action so
+                      anyone can inspect the avatar in detail. */}
+                  {selectedToken === token.id && !canInteractToken(token) && (
+                    <div className="absolute -top-8 left-1/2 -translate-x-1/2 z-50 pointer-events-none">
+                      <div
+                        style={{ transform: `scale(${uiScale})`, transformOrigin: 'center bottom' }}
+                        className="pointer-events-auto"
+                      >
+                        <div className="flex items-center gap-1 bg-card/95 border border-border rounded-lg px-1 py-0.5 shadow-lg">
+                          <button
+                            onClick={e => { e.stopPropagation(); setPreviewToken(token); }}
+                            className="w-6 h-6 flex items-center justify-center rounded hover:bg-muted"
+                            title="Ampliar imagem"
+                          >
+                            <Maximize2 className="w-4 h-4 text-muted-foreground" />
+                          </button>
+                        </div>
+                      </div>
+                    </div>
+                  )}
 
                   {/* Controls: resize/rename/react/conditions/visibility/delete */}
                   {selectedToken === token.id && canInteractToken(token) && (
@@ -939,6 +1218,13 @@ export default function GameBoard({ sessionId, onLeave }: GameBoardProps) {
                           <button onClick={e => { e.stopPropagation(); resizeToken(token.id, 10); }}
                             className="w-6 h-6 flex items-center justify-center rounded hover:bg-muted" title="Aumentar">
                             <ZoomIn className="w-4 h-4 text-muted-foreground" />
+                          </button>
+                          <button
+                            onClick={e => { e.stopPropagation(); setPreviewToken(token); }}
+                            className="w-6 h-6 flex items-center justify-center rounded hover:bg-muted"
+                            title="Ampliar imagem"
+                          >
+                            <Maximize2 className="w-4 h-4 text-muted-foreground" />
                           </button>
                           <button onClick={e => { e.stopPropagation(); startEditingLabel(token); }}
                             className="w-6 h-6 flex items-center justify-center rounded hover:bg-muted" title="Renomear">
@@ -1102,6 +1388,41 @@ export default function GameBoard({ sessionId, onLeave }: GameBoardProps) {
             </div>
           )}
 
+          {/* Zoom controls (everyone) — wheel/pinch zoom, shift+drag or middle-
+              mouse to pan. Hidden under the grid panel when both visible. */}
+          <div
+            className={`absolute z-30 bg-card/90 border border-border rounded-lg px-2 py-1.5 flex items-center gap-1.5 shadow-lg ${showGrid && isDm ? 'bottom-16 right-4' : 'bottom-4 right-4'}`}
+            title="Use a roda do mouse para aproximar. Shift+arraste ou botão do meio para mover."
+          >
+            <button
+              onClick={() => applyZoom(zoomLevel / 1.2)}
+              disabled={zoomLevel <= 1.01}
+              className="w-7 h-7 flex items-center justify-center rounded hover:bg-muted disabled:opacity-40"
+              title="Diminuir zoom"
+            >
+              <ZoomOut className="w-4 h-4 text-muted-foreground" />
+            </button>
+            <span className="text-xs font-display text-gold w-10 text-center">
+              {Math.round(zoomLevel * 100)}%
+            </span>
+            <button
+              onClick={() => applyZoom(zoomLevel * 1.2)}
+              disabled={zoomLevel >= 3.99}
+              className="w-7 h-7 flex items-center justify-center rounded hover:bg-muted disabled:opacity-40"
+              title="Aumentar zoom"
+            >
+              <ZoomIn className="w-4 h-4 text-muted-foreground" />
+            </button>
+            <button
+              onClick={resetView}
+              disabled={zoomLevel === 1 && panX === 0 && panY === 0}
+              className="w-7 h-7 flex items-center justify-center rounded hover:bg-muted disabled:opacity-40"
+              title="Redefinir zoom"
+            >
+              <Maximize2 className="w-4 h-4 text-muted-foreground" />
+            </button>
+          </div>
+
           {/* Map picker (DM) */}
           {showMapPicker && session && (
             <div className="absolute top-2 left-2 bg-card border border-border rounded-xl p-4 z-30 shadow-2xl w-64">
@@ -1195,6 +1516,47 @@ export default function GameBoard({ sessionId, onLeave }: GameBoardProps) {
               </div>
               {(session.monster_images || []).length === 0 && (
                 <p className="text-xs text-muted-foreground mt-2">Nenhum monstro ainda. Use Adicionar para enviar.</p>
+              )}
+            </div>
+          )}
+
+          {/* NPC picker (DM) */}
+          {showNpcs && session && (
+            <div className="absolute top-2 right-2 bg-card border border-border rounded-xl p-4 z-30 shadow-2xl w-56">
+              <div className="flex items-center justify-between mb-3">
+                <h3 className="font-display text-sm text-gold">Adicionar NPC</h3>
+                <div className="flex items-center gap-2">
+                  <Button
+                    size="sm"
+                    variant="secondary"
+                    className="h-7 px-2 text-[11px]"
+                    onClick={() => npcUploadInputRef.current?.click()}
+                    disabled={uploadingNpcs}
+                  >
+                    <Plus className="w-3 h-3 mr-1" />
+                    {uploadingNpcs ? 'Enviando...' : 'Adicionar'}
+                  </Button>
+                  <button onClick={() => setShowNpcs(false)}><X className="w-4 h-4 text-muted-foreground" /></button>
+                </div>
+              </div>
+              <input
+                ref={npcUploadInputRef}
+                type="file"
+                accept="image/*"
+                multiple
+                className="hidden"
+                onChange={(e) => addNpcsToSession(e.target.files)}
+              />
+              <div className="grid grid-cols-4 gap-2 max-h-60 overflow-auto">
+                {(session.npc_images || []).map((url, i) => (
+                  <button key={i} onClick={() => addNpcToken(url)}
+                    className="w-12 h-12 rounded-full overflow-hidden border-2 border-border hover:border-blue-400 transition-all">
+                    <img src={url} alt="" className="w-full h-full object-cover" />
+                  </button>
+                ))}
+              </div>
+              {(session.npc_images || []).length === 0 && (
+                <p className="text-xs text-muted-foreground mt-2">Nenhum NPC ainda. Use Adicionar para enviar.</p>
               )}
             </div>
           )}

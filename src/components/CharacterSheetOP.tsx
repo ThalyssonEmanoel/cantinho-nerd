@@ -5,6 +5,7 @@ import { Button } from '@/components/ui/button';
 import { X, Save, BookOpen, Sword, Sparkles, Package, Skull, ScrollText } from 'lucide-react';
 import { toast } from 'sonner';
 import RitualCast from './RitualCast';
+import TokenImagePicker from './TokenImagePicker';
 import {
   Dialog,
   DialogContent,
@@ -65,6 +66,11 @@ interface OPBestiaryCreature {
 interface OPSheetExtra extends OPSheetData {
   condicoes?: string[];
   bestiario?: OPBestiaryCreature[];
+  // Avatar do personagem usado como token. Quando preenchido, sobrescreve
+  // a foto de perfil do jogador na hora de criar/recriar o token no mapa.
+  tokenImageUrl?: string | null;
+  tokenImageOffsetX?: number;
+  tokenImageOffsetY?: number;
 }
 
 export interface CharacterSheetOPProps {
@@ -867,7 +873,18 @@ export default function CharacterSheetOP({
     <div className="fixed inset-0 z-50 flex items-start justify-center bg-background/90 backdrop-blur-sm p-2 sm:p-4 overflow-auto">
       <div className="bg-card-gradient border border-border rounded-xl w-full max-w-5xl shadow-2xl flex flex-col max-h-[95vh]">
         <div className="p-4 border-b border-border flex items-center gap-3 shrink-0">
-          <div className="flex-1">
+          <TokenImagePicker
+            sessionId={sessionId}
+            imageUrl={sheet.tokenImageUrl ?? null}
+            offsetX={sheet.tokenImageOffsetX ?? 0}
+            offsetY={sheet.tokenImageOffsetY ?? 0}
+            readOnly={!canEdit}
+            onChange={({ imageUrl, offsetX, offsetY }) => {
+              setSheet(prev => ({ ...prev, tokenImageUrl: imageUrl, tokenImageOffsetX: offsetX, tokenImageOffsetY: offsetY }));
+              setDirty(true);
+            }}
+          />
+          <div className="flex-1 min-w-0">
             <div className="text-[10px] text-muted-foreground font-display mb-0.5">{headerLabel}{readOnly ? ' (somente leitura)' : ''}</div>
             <TF value={sheet.nomePersonagem} onChange={v => setField('nomePersonagem', v)} placeholder="Nome do Personagem" readOnly={!canEdit} className="bg-transparent border-none px-0 text-xl font-display" />
           </div>
