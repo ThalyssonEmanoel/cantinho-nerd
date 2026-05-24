@@ -1404,6 +1404,7 @@ export default function GameBoard({ sessionId, onLeave }: GameBoardProps) {
           <div
             className={`absolute z-30 bg-card/90 border border-border rounded-lg px-2 py-1.5 flex items-center gap-1.5 shadow-lg ${showGrid && isDm ? 'bottom-16 right-4' : 'bottom-4 right-4'}`}
             title="Use a roda do mouse para aproximar. Ative a mãozinha para arrastar com o clique esquerdo."
+            onPointerDown={e => e.stopPropagation()}
           >
             <button
               onClick={() => setPanMode(v => !v)}
