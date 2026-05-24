@@ -28,7 +28,7 @@ import {
   Image, ImagePlus, Plus, Trash2, LogOut, Dices, ScrollText, Pencil, Ruler,
   ZoomIn, ZoomOut, Menu, X, Grid3x3, MessageCircle,
   Calculator, Settings, Smile, ClipboardList, Users, Swords, Activity, AlertCircle, Shield, UserPlus, Eye, BookOpen,
-  Move, ArrowUp, ArrowDown, ArrowLeft, ArrowRight, RotateCcw, User, Check, Maximize2,
+  Move, ArrowUp, ArrowDown, ArrowLeft, ArrowRight, RotateCcw, User, Check, Maximize2, Hand,
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
 
@@ -142,6 +142,7 @@ export default function GameBoard({ sessionId, onLeave }: GameBoardProps) {
   const [panX, setPanX] = useState(0);
   const [panY, setPanY] = useState(0);
   const [isPanning, setIsPanning] = useState(false);
+  const [panMode, setPanMode] = useState(false);
   const panStartRef = useRef<{ x: number; y: number; panX: number; panY: number } | null>(null);
   const containerRef = useRef<HTMLDivElement>(null);
   const boardRef = useRef<HTMLDivElement>(null);
@@ -583,6 +584,9 @@ export default function GameBoard({ sessionId, onLeave }: GameBoardProps) {
 
   const handlePointerDown = useCallback((e: React.PointerEvent, token: Token) => {
     if (showDrawing || showRuler) return;
+    // In pan mode, let left-click bubble up to the board so the user can pan
+    // even when starting the drag from a token.
+    if (panMode && e.button === 0) return;
     // Always select the token so any user can at least open the image preview.
     // Drag is still gated on whether the viewer can actually move the token.
     setSelectedToken(token.id);
@@ -592,7 +596,7 @@ export default function GameBoard({ sessionId, onLeave }: GameBoardProps) {
     setDraggingToken(token.id);
     setDragOffset({ x: pos.x - token.x, y: pos.y - token.y });
     (e.target as HTMLElement).setPointerCapture(e.pointerId);
-  }, [isDm, player, showDrawing, showRuler, getVirtualPos]);
+  }, [isDm, player, showDrawing, showRuler, getVirtualPos, panMode]);
 
   const handlePointerMove = useCallback((e: React.PointerEvent) => {
     if (!draggingToken) return;
@@ -647,26 +651,33 @@ export default function GameBoard({ sessionId, onLeave }: GameBoardProps) {
       // Only intercept when no modal-ish overlay tools are active (drawing/
       // ruler already capture pointer events). Always allow zoom otherwise.
       e.preventDefault();
-      const factor = e.deltaY < 0 ? 1.15 : 1 / 1.15;
+      // Smaller step gives a much smoother feel than the original 1.15. We
+      // also scale the factor with deltaY so trackpads (small deltas) and
+      // mouse wheels (large deltas) both feel natural.
+      const intensity = Math.min(Math.abs(e.deltaY), 100) / 100;
+      const step = 1 + 0.08 * intensity;
+      const factor = e.deltaY < 0 ? step : 1 / step;
       applyZoom(zoomLevel * factor, { x: e.clientX, y: e.clientY });
     };
     container.addEventListener('wheel', onWheel, { passive: false });
     return () => container.removeEventListener('wheel', onWheel);
   }, [applyZoom, zoomLevel]);
 
-  // Middle-mouse / right-click pan, plus shift+drag pan. Avoids conflicting
-  // with token dragging (left button on a token).
+  // Middle-mouse / right-click pan, plus shift+drag pan. Also plain left-drag
+  // when the Hand tool is active. Avoids conflicting with token dragging
+  // (left button on a token) outside of pan mode.
   const handleBoardPointerDown = useCallback((e: React.PointerEvent) => {
     if (showDrawing || showRuler) return;
     const middleButton = e.button === 1;
     const rightButton = e.button === 2;
     const shiftLeft = e.button === 0 && e.shiftKey;
-    if (!middleButton && !rightButton && !shiftLeft) return;
+    const panModeLeft = e.button === 0 && panMode;
+    if (!middleButton && !rightButton && !shiftLeft && !panModeLeft) return;
     e.preventDefault();
     setIsPanning(true);
     panStartRef.current = { x: e.clientX, y: e.clientY, panX, panY };
     (e.currentTarget as HTMLElement).setPointerCapture(e.pointerId);
-  }, [panX, panY, showDrawing, showRuler]);
+  }, [panX, panY, showDrawing, showRuler, panMode]);
 
   const handleBoardPointerMove = useCallback((e: React.PointerEvent) => {
     if (!isPanning || !panStartRef.current) return;
@@ -935,7 +946,7 @@ export default function GameBoard({ sessionId, onLeave }: GameBoardProps) {
         <div
           ref={containerRef}
           className="flex-1 relative overflow-hidden"
-          style={{ backgroundColor: 'hsl(220, 20%, 6%)', cursor: isPanning ? 'grabbing' : undefined }}
+          style={{ backgroundColor: 'hsl(220, 20%, 6%)', cursor: isPanning ? 'grabbing' : (panMode ? 'grab' : undefined) }}
           onPointerDown={handleBoardPointerDown}
           onPointerMove={isPanning ? handleBoardPointerMove : undefined}
           onPointerUp={handleBoardPointerUp}
@@ -1392,8 +1403,17 @@ export default function GameBoard({ sessionId, onLeave }: GameBoardProps) {
               mouse to pan. Hidden under the grid panel when both visible. */}
           <div
             className={`absolute z-30 bg-card/90 border border-border rounded-lg px-2 py-1.5 flex items-center gap-1.5 shadow-lg ${showGrid && isDm ? 'bottom-16 right-4' : 'bottom-4 right-4'}`}
-            title="Use a roda do mouse para aproximar. Shift+arraste ou botão do meio para mover."
+            title="Use a roda do mouse para aproximar. Ative a mãozinha para arrastar com o clique esquerdo."
           >
+            <button
+              onClick={() => setPanMode(v => !v)}
+              className={`w-7 h-7 flex items-center justify-center rounded ${panMode ? 'bg-gold/20 text-gold' : 'hover:bg-muted text-muted-foreground'}`}
+              title={panMode ? 'Desativar modo arrastar (voltar ao zoom)' : 'Ativar modo arrastar'}
+              aria-pressed={panMode}
+            >
+              <Hand className="w-4 h-4" />
+            </button>
+            <div className="w-px h-5 bg-border" aria-hidden />
             <button
               onClick={() => applyZoom(zoomLevel / 1.2)}
               disabled={zoomLevel <= 1.01}
