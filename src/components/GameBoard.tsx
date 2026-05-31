@@ -1017,7 +1017,10 @@ export default function GameBoard({ sessionId, onLeave }: GameBoardProps) {
               sessionId={sessionId}
               playerId={player?.id ?? ''}
               isDm={isDm}
-              uiScale={uiScale}
+              // The drawing toolbar is portaled to the viewport (not the scaled
+              // board), so it should use the zoom-independent base scale —
+              // otherwise it would shrink as the user zooms in.
+              uiScale={baseUiScale}
             />
 
             {/* Fog of War */}

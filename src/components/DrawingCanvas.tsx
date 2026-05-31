@@ -1,8 +1,9 @@
 import { useState, useRef, useEffect, useCallback } from 'react';
+import { createPortal } from 'react-dom';
 import { supabase } from '@/integrations/supabase/client';
 import type { Json } from '@/integrations/supabase/types';
 import { Button } from '@/components/ui/button';
-import { Pencil, Trash2, X, Circle, Square, Minus, Eraser, Undo2, History } from 'lucide-react';
+import { Pencil, Trash2, X, Circle, Square, Minus, Plus, Eraser, Undo2, History } from 'lucide-react';
 import { Slider } from '@/components/ui/slider';
 import { toast } from 'sonner';
 
@@ -55,6 +56,19 @@ export default function DrawingCanvas({
   const [tool, setTool] = useState<Tool>('pencil');
   const [color, setColor] = useState(COLORS[0]);
   const [brushSize, setBrushSize] = useState(3);
+  // User-adjustable scale for the floating toolbar. It's viewport UI now, so it
+  // renders fairly large by default — let the user shrink/grow it and remember
+  // the choice across sessions. Default 0.75 keeps it compact.
+  const [toolbarScale, setToolbarScale] = useState<number>(() => {
+    const saved = typeof localStorage !== 'undefined' ? localStorage.getItem('drawingToolbarScale') : null;
+    const n = saved ? parseFloat(saved) : NaN;
+    return Number.isFinite(n) ? Math.min(1.5, Math.max(0.5, n)) : 0.75;
+  });
+  useEffect(() => {
+    try { localStorage.setItem('drawingToolbarScale', String(toolbarScale)); } catch { /* noop */ }
+  }, [toolbarScale]);
+  const adjustToolbarScale = (delta: number) =>
+    setToolbarScale(prev => Math.min(1.5, Math.max(0.5, Math.round((prev + delta) * 100) / 100)));
   const [drawings, setDrawings] = useState<DrawingRow[]>([]);
   const [pendingPath, setPendingPath] = useState<{ x: number; y: number }[] | null>(null);
   const [pendingShape, setPendingShape] = useState<{ start: { x: number; y: number }; end: { x: number; y: number } } | null>(null);
@@ -398,10 +412,13 @@ export default function DrawingCanvas({
         })}
       </svg>
 
-      {active && (
+      {active && createPortal(
         <>
-          {/* Sync indicator — counter-scaled to remain visible on small viewports */}
-          <div className="absolute top-16 sm:top-12 left-1/2 -translate-x-1/2 z-40 pointer-events-none">
+          {/* Sync indicator + toolbar are portaled to <body> and positioned with
+              position:fixed. They must NOT live inside the zoom/pan-transformed
+              board, otherwise they drift off-screen (and "disappear") as the
+              user zooms or pans — they're viewport UI, not board content. */}
+          <div className="fixed top-16 sm:top-12 left-1/2 -translate-x-1/2 z-[60] pointer-events-none">
             <div
               style={{ transform: `scale(${uiScale})`, transformOrigin: 'center top' }}
               className="bg-card/80 border border-gold/20 rounded-full px-3 py-1 flex items-center gap-1.5"
@@ -412,9 +429,9 @@ export default function DrawingCanvas({
           </div>
 
           {/* Drawing toolbar — counter-scaled to remain usable on phones */}
-          <div className="absolute bottom-4 left-1/2 -translate-x-1/2 z-40">
+          <div className="fixed bottom-4 left-1/2 -translate-x-1/2 z-[60]">
           <div
-            style={{ transform: `scale(${uiScale})`, transformOrigin: 'center bottom' }}
+            style={{ transform: `scale(${uiScale * toolbarScale})`, transformOrigin: 'center bottom' }}
             className="bg-card/95 backdrop-blur border border-border rounded-xl p-2 flex items-center gap-1.5 shadow-2xl flex-wrap justify-center max-w-[95vw]"
           >
             {tools.map(t => (
@@ -469,12 +486,37 @@ export default function DrawingCanvas({
                 <History className="w-5 h-5 sm:w-4 sm:h-4" />
               </Button>
             )}
+            <div className="w-px h-7 bg-border" />
+
+            {/* Toolbar size controls */}
+            <Button
+              variant="ghost"
+              size="sm"
+              onClick={() => adjustToolbarScale(-0.1)}
+              disabled={toolbarScale <= 0.5}
+              title="Diminuir barra"
+              className="h-10 w-10 sm:h-9 sm:w-9 p-0"
+            >
+              <Minus className="w-5 h-5 sm:w-4 sm:h-4" />
+            </Button>
+            <Button
+              variant="ghost"
+              size="sm"
+              onClick={() => adjustToolbarScale(0.1)}
+              disabled={toolbarScale >= 1.5}
+              title="Aumentar barra"
+              className="h-10 w-10 sm:h-9 sm:w-9 p-0"
+            >
+              <Plus className="w-5 h-5 sm:w-4 sm:h-4" />
+            </Button>
+
             <Button variant="ghost" size="sm" onClick={onClose} title="Fechar" className="h-10 w-10 sm:h-9 sm:w-9 p-0">
               <X className="w-5 h-5 sm:w-4 sm:h-4" />
             </Button>
           </div>
           </div>
-        </>
+        </>,
+        document.body
       )}
     </>
   );

@@ -1,8 +1,9 @@
 import { useState, useEffect } from 'react';
 import { supabase } from '@/integrations/supabase/client';
 import { useAuth } from '@/lib/auth-context';
-import { X, ScrollText, Eye, EyeOff } from 'lucide-react';
+import { X, ScrollText, Eye, EyeOff, Trash2 } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
+import { toast } from 'sonner';
 
 interface DiceRoll {
   id: string;
@@ -46,6 +47,14 @@ export default function DiceLog({ sessionId, onClose }: DiceLogProps) {
           setRolls(prev => [payload.new as DiceRoll, ...prev].slice(0, 50));
         }
       )
+      // When the DM wipes the history, propagate the removal to every client so
+      // their logs clear in real time instead of showing stale rolls.
+      .on('postgres_changes', { event: 'DELETE', schema: 'public', table: 'dice_rolls', filter: `session_id=eq.${sessionId}` },
+        (payload) => {
+          const oldRow = payload.old as { id?: string };
+          setRolls(prev => (oldRow.id ? prev.filter(r => r.id !== oldRow.id) : prev));
+        }
+      )
       .subscribe();
 
     return () => { supabase.removeChannel(channel); };
@@ -59,13 +68,34 @@ export default function DiceLog({ sessionId, onClose }: DiceLogProps) {
     return false;
   });
 
+  // DM-only: wipe the entire dice-roll history for the session.
+  const clearHistory = async () => {
+    if (!isDm) return;
+    if (!confirm('Apagar TODO o histórico de rolagens da sessão? Esta ação não pode ser desfeita.')) return;
+    setRolls([]);
+    const { error } = await supabase.from('dice_rolls').delete().eq('session_id', sessionId);
+    if (error) toast.error('Erro ao limpar histórico de dados');
+    else toast.success('Histórico de dados limpo');
+  };
+
   return (
     <div className="h-full bg-card/95 backdrop-blur-sm border-l border-border flex flex-col">
       <div className="p-3 border-b border-border flex items-center justify-between shrink-0">
         <h3 className="font-display text-gold text-sm flex items-center gap-2">
           <ScrollText className="w-4 h-4" /> Histórico de Dados
         </h3>
-        <button onClick={onClose}><X className="w-4 h-4 text-muted-foreground" /></button>
+        <div className="flex items-center gap-1">
+          {isDm && (
+            <button
+              onClick={clearHistory}
+              title="Limpar histórico de dados (apaga todas as rolagens da sessão)"
+              className="text-destructive hover:opacity-80 mr-[10px]"
+            >
+              <Trash2 className="w-4 h-4" />
+            </button>
+          )}
+          <button onClick={onClose}><X className="w-4 h-4 text-muted-foreground" /></button>
+        </div>
       </div>
 
       <div className="flex-1 overflow-auto p-3 space-y-2">
