@@ -10,7 +10,7 @@ import GridOverlay from './GridOverlay';
 import ChatPanel from './ChatPanel';
 import CombatCalculator from './CombatCalculator';
 import ProfileSettings from './ProfileSettings';
-import InitiativeTracker from './InitiativeTracker';
+import InitiativePanel from './InitiativePanel';
 import TokenHealthBar from './TokenHealthBar';
 import CombatLogPanel from './CombatLogPanel';
 import TokenConditions from './TokenConditions';
@@ -1692,14 +1692,12 @@ export default function GameBoard({ sessionId, onLeave }: GameBoardProps) {
             </div>
           )}
 
-          {/* Initiative Tracker */}
+          {/* Initiative Panel */}
           {showInitiative && (
             <div className="absolute top-14 right-4 z-30">
-              <InitiativeTracker
+              <InitiativePanel
                 sessionId={sessionId}
-                isDm={isDm}
-                tokens={tokens.map(t => ({ id: t.id, label: t.label }))}
-                onClose={() => setShowInitiative(false)}
+                isMaster={isDm}
               />
             </div>
           )}

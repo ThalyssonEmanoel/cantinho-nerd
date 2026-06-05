@@ -189,6 +189,9 @@ export default function CharacterSheetOP({
   const [generalAbilityDialogOpen, setGeneralAbilityDialogOpen] = useState(false);
   const [classAbilityClassFilter, setClassAbilityClassFilter] = useState<OPClasse | ''>('');
   const [castingRitual, setCastingRitual] = useState<OPRitual | null>(null);
+  const [showBonusDialog, setShowBonusDialog] = useState(false);
+  const [bonusDialogData, setBonusDialogData] = useState<{ label: string; baseModifier: number; attributeValue?: number; isInitiative?: boolean } | null>(null);
+  const [bonusInput, setBonusInput] = useState('0');
   const [originForm, setOriginForm] = useState({
     nome: '',
     pericia1: '',
@@ -239,9 +242,12 @@ export default function CharacterSheetOP({
           next.maxPV = Math.max(1, calcOPMaxPV(next.classe, next.vig, loadEffectiveNex) - (getOPAgePVPenaltyPerLevel(next.desvantagensIdade) * loadLevels));
           next.maxPE = Math.max(0, calcOPMaxPE(next.classe, loadEffectiveNex, next.pre) + getOPAgePEFlatBonus(next.regraIdadeAtiva, next.faixaEtaria) - (getOPAgePEPenaltyPerLevel(next.desvantagensIdade) * loadLevels));
           next.maxPS = calcOPMaxSAN(next.classe, loadEffectiveNex);
-          next.pvAtual = next.pvAtual > 0 ? Math.min(next.maxPV, next.pvAtual) : next.maxPV;
-          next.peAtual = next.peAtual > 0 ? Math.min(next.maxPE, next.peAtual) : next.maxPE;
-          next.psAtual = next.psAtual > 0 ? Math.min(next.maxPS, next.psAtual) : next.maxPS;
+          if (next.pvAtual === undefined || next.pvAtual === null) next.pvAtual = next.maxPV;
+          else next.pvAtual = Math.max(0, Math.min(next.maxPV, next.pvAtual));
+          if (next.peAtual === undefined || next.peAtual === null) next.peAtual = next.maxPE;
+          else next.peAtual = Math.max(0, Math.min(next.maxPE, next.peAtual));
+          if (next.psAtual === undefined || next.psAtual === null) next.psAtual = next.maxPS;
+          else next.psAtual = Math.max(0, Math.min(next.maxPS, next.psAtual));
         }
         setSheet(next);
       } else {
@@ -775,28 +781,130 @@ export default function CharacterSheetOP({
 
   const formatSigned = (value: number) => (value >= 0 ? `+${value}` : `${value}`);
 
-  const requestExtraBonus = (label: string) => {
-    const raw = window.prompt(`Bônus extra para ${label}?`, '0');
-    if (raw === null) return null;
-    const trimmed = raw.trim();
-    if (!trimmed) return 0;
-    if (!/^[+-]?\d+$/.test(trimmed)) {
-      toast.error('Bônus inválido. Use um número inteiro.');
-      return null;
+  const rollCheck = async (label: string, baseModifier: number, attributeValue?: number, isInitiative?: boolean) => {
+    if (!canRoll || !player) {
+      console.log('Rolagem bloqueada:', { canRoll, player: !!player, readOnly });
+      if (!canRoll) toast.error('Você não pode rolar dados nesta ficha');
+      if (!player) toast.error('Jogador não encontrado');
+      return;
     }
-    return parseInt(trimmed, 10);
+
+    // Abre o dialog para pedir bônus extra
+    setBonusDialogData({ label, baseModifier, attributeValue, isInitiative });
+    setBonusInput('0');
+    setShowBonusDialog(true);
   };
 
-  const rollCheck = async (label: string, baseModifier: number) => {
-    if (!canRoll || !player) return;
+  const executeRoll = async () => {
+    if (!bonusDialogData || !player) return;
 
-    const extraBonus = requestExtraBonus(label);
-    if (extraBonus === null) return;
+    const { label, baseModifier, attributeValue, isInitiative } = bonusDialogData;
+    const extraBonus = parseInt(bonusInput) || 0;
 
-    const d20 = Math.floor(Math.random() * 20) + 1;
+    console.log('Iniciando rolagem:', { label, baseModifier, attributeValue, extraBonus, isInitiative });
+
+    // Em Ordem Paranormal, rola número de d20s igual ao atributo (mínimo 1)
+    const numDice = attributeValue !== undefined ? Math.max(1, attributeValue) : 1;
+    const rolls: number[] = [];
+    
+    for (let i = 0; i < numDice; i++) {
+      rolls.push(Math.floor(Math.random() * 20) + 1);
+    }
+
+    console.log('Dados rolados:', rolls);
+
+    // Pega o maior resultado
+    const bestRoll = Math.max(...rolls);
     const totalModifier = baseModifier + extraBonus;
-    const total = d20 + totalModifier;
-    const formula = `1d20 ${formatSigned(totalModifier)} (${label}${extraBonus !== 0 ? `, bônus ${formatSigned(extraBonus)}` : ''})`;
+    const total = bestRoll + totalModifier;
+    
+    const diceStr = numDice > 1 ? `${numDice}d20 (melhor: ${bestRoll})` : `1d20`;
+    const formula = `${diceStr} ${formatSigned(totalModifier)} (${label}${extraBonus !== 0 ? `, bônus ${formatSigned(extraBonus)}` : ''})`;
+
+    console.log('Resultado final:', { formula, total });
+
+    // Se for iniciativa, adiciona na tabela de combate
+    if (isInitiative) {
+      const { data: combatState } = await supabase
+        .from('combat_state')
+        .select('is_active')
+        .eq('session_id', sessionId)
+        .single();
+
+      if (combatState?.is_active) {
+        // Verifica se já existe entrada de iniciativa para este jogador
+        const { data: existing } = await supabase
+          .from('combat_initiative')
+          .select('id')
+          .eq('session_id', sessionId)
+          .eq('player_id', player.id)
+          .maybeSingle();
+
+        if (existing) {
+          // Atualiza iniciativa existente
+          const { data: updData, error: updErr } = await supabase
+            .from('combat_initiative')
+            .update({
+              initiative_roll: bestRoll,
+              initiative_bonus: totalModifier,
+              initiative_total: total,
+              updated_at: new Date().toISOString(),
+            })
+            .eq('id', existing.id)
+            .select();
+          console.log('Atualizada iniciativa existente:', { updData, updErr });
+        } else {
+          // Cria nova entrada de iniciativa
+          const { data: allInitiatives } = await supabase
+            .from('combat_initiative')
+            .select('turn_order')
+            .eq('session_id', sessionId)
+            .order('turn_order', { ascending: false })
+            .limit(1);
+
+          const nextOrder = (allInitiatives?.[0]?.turn_order ?? 0) + 1;
+
+          const { data: insData, error: insErr } = await supabase.from('combat_initiative').insert({
+            session_id: sessionId,
+            combatant_type: 'player',
+            player_id: player.id,
+            character_name: sheet.nomePersonagem || player.name,
+            avatar_url: sheet.tokenImageUrl || player.avatar_url,
+            initiative_roll: bestRoll,
+            initiative_bonus: totalModifier,
+            initiative_total: total,
+            turn_order: nextOrder,
+            is_active: false,
+            hp_current: sheet.pvAtual,
+            hp_max: sheet.maxPV,
+          }).select();
+          console.log('Inserida nova iniciativa:', { insData, insErr });
+        }
+
+        // Reordena automaticamente por total de iniciativa
+        const { data: allEntries } = await supabase
+          .from('combat_initiative')
+          .select('*')
+          .eq('session_id', sessionId)
+          .order('initiative_total', { ascending: false });
+
+        if (allEntries) {
+          for (let i = 0; i < allEntries.length; i++) {
+            const { error: e } = await supabase
+              .from('combat_initiative')
+              .update({ turn_order: i + 1 })
+              .eq('id', allEntries[i].id);
+            if (e) console.error('Erro ao atualizar turn_order:', e);
+          }
+        }
+
+        console.log('Reordenação de iniciativas concluída');
+
+        toast.success(`Iniciativa ${total} adicionada ao combate!`);
+      } else {
+        toast.info(`${label}: ${total} (combate não iniciado)`);
+      }
+    }
 
     if (diceChannelRef.current) {
       diceChannelRef.current.send({
@@ -807,7 +915,7 @@ export default function CharacterSheetOP({
           playerName: player.name,
           formula,
           total,
-          critical: d20 === 20,
+          critical: bestRoll === 20,
         },
       });
     }
@@ -818,18 +926,26 @@ export default function CharacterSheetOP({
       player_name: player.name,
       player_avatar: player.avatar_url,
       dice_formula: formula,
-      results: [d20],
+      results: rolls,
       modifier: totalModifier,
       total,
       is_hidden: role === 'dm',
     });
 
     if (error) {
+      console.error('Erro ao salvar rolagem:', error);
       toast.error(`Erro ao registrar rolagem: ${error.message}`);
       return;
     }
 
-    toast.success(`${label}: ${total}`);
+    if (numDice > 1) {
+      toast.success(`${label}: ${total} (dados: ${rolls.join(', ')})`);
+    } else {
+      toast.success(`${label}: ${total}`);
+    }
+
+    setShowBonusDialog(false);
+    setBonusDialogData(null);
   };
 
   const addAtaque = () => {
@@ -1078,9 +1194,9 @@ export default function CharacterSheetOP({
                       <button
                         type="button"
                         disabled={!canRoll}
-                        onClick={() => rollCheck(OP_ATTR_LABELS[attr], sheet[attr])}
+                        onClick={() => rollCheck(OP_ATTR_LABELS[attr], sheet[attr], sheet[attr])}
                         className={`text-[10px] font-display text-gold/80 ${canRoll ? 'hover:text-gold hover:underline cursor-pointer' : 'cursor-default opacity-70'}`}
-                        title={canRoll ? 'Clique para rolar este atributo' : 'Rolar indisponível nesta ficha'}
+                        title={canRoll ? `Clique para rolar ${Math.max(1, sheet[attr])}d20 (pega o melhor)` : 'Rolar indisponível nesta ficha'}
                       >
                         {OP_ATTR_SHORT[attr]}
                       </button>
@@ -1098,6 +1214,7 @@ export default function CharacterSheetOP({
                   {OP_PERICIAS.map(per => {
                     const prof = (sheet.pericias[per.nome] ?? 0) as OPProficiencia;
                     const bonus = opSkillBonus(sheet, per);
+                    const attrValue = sheet[per.atributo];
                     const tags = [
                       per.somenteTreinada ? 'Treinada' : null,
                       per.aplicaCarga ? 'Carga' : null,
@@ -1119,9 +1236,9 @@ export default function CharacterSheetOP({
                         <button
                           type="button"
                           disabled={!canRoll}
-                          onClick={() => rollCheck(per.label, bonus)}
+                          onClick={() => rollCheck(per.label, bonus, attrValue, per.nome === 'iniciativa')}
                           className={`text-xs text-left text-foreground flex-1 ${canRoll ? 'hover:text-gold cursor-pointer' : 'cursor-default'}`}
-                          title={per.descricao}
+                          title={canRoll ? `Rolar ${Math.max(1, attrValue)}d20 (melhor) + ${bonus}${per.nome === 'iniciativa' ? ' (adiciona ao combate se ativo)' : ''}` : per.descricao}
                         >
                           <div className="leading-tight">{per.label}</div>
                           <div className="text-[10px] text-muted-foreground truncate">{per.descricao}</div>
@@ -1623,6 +1740,43 @@ export default function CharacterSheetOP({
           }}
         />
       )}
+
+      <Dialog open={showBonusDialog} onOpenChange={setShowBonusDialog}>
+        <DialogContent className="sm:max-w-md bg-card border-border">
+          <DialogHeader>
+            <DialogTitle className="font-display text-gold">Bônus Extra</DialogTitle>
+            <DialogDescription>
+              {bonusDialogData && `Rolando ${bonusDialogData.label}. Adicione um bônus ou penalidade extra (opcional).`}
+            </DialogDescription>
+          </DialogHeader>
+
+          <div className="grid gap-3 py-2">
+            <div className="grid gap-1.5">
+              <label className="text-xs font-display text-muted-foreground">Bônus/Penalidade (use - para penalidade)</label>
+              <Input
+                type="number"
+                value={bonusInput}
+                onChange={(e) => setBonusInput(e.target.value)}
+                onKeyDown={(e) => {
+                  if (e.key === 'Enter') executeRoll();
+                  if (e.key === 'Escape') setShowBonusDialog(false);
+                }}
+                placeholder="0"
+                autoFocus
+                className="text-center text-lg"
+              />
+              <div className="text-xs text-muted-foreground text-center">
+                Exemplos: +2 (vantagem), -3 (penalidade), 0 (sem modificador)
+              </div>
+            </div>
+          </div>
+
+          <DialogFooter>
+            <Button variant="secondary" onClick={() => setShowBonusDialog(false)}>Cancelar</Button>
+            <Button onClick={executeRoll}>Rolar Dados</Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }
