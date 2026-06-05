@@ -2,7 +2,7 @@ import { useState, useEffect, useCallback, useRef } from 'react';
 import { supabase } from '@/integrations/supabase/client';
 import { useAuth } from '@/lib/auth-context';
 import { Button } from '@/components/ui/button';
-import { X, Save, BookOpen, Sword, Sparkles, Package, Skull, ScrollText } from 'lucide-react';
+import { X, Save, BookOpen, Sword, Sparkles, Package, Skull, ScrollText, Plus, ChevronUp } from 'lucide-react';
 import { toast } from 'sonner';
 import RitualCast from './RitualCast';
 import TokenImagePicker from './TokenImagePicker';
@@ -116,6 +116,545 @@ const PROF_BONUS: Record<OPProficiencia, number> = {
 
 const ELEMENTOS_PADRAO = ['Morte', 'Sangue', 'Energia', 'Conhecimento'];
 
+interface OPInventoryCatalogItem {
+  catalog: OPCatalogType;
+  name: string;
+  group: string;
+  category: number;
+  damage: string;
+  critical: string;
+  range?: string;
+  damageType: string;
+  spaces: number;
+  ammo?: string;
+  description: string;
+  cost?: string;
+}
+
+type OPCatalogType = 'armas' | 'municao' | 'protecao' | 'itens_gerais' | 'itens_amaldicoados';
+
+const OP_CATALOG_TABS: Array<{ id: OPCatalogType; label: string }> = [
+  { id: 'armas', label: 'Armas' },
+  { id: 'municao', label: 'Municao' },
+  { id: 'protecao', label: 'Protecoes' },
+  { id: 'itens_gerais', label: 'Itens Gerais' },
+  { id: 'itens_amaldicoados', label: 'Itens Amaldicoados' },
+];
+
+const OP_ITEM_CATALOG: OPInventoryCatalogItem[] = [
+  {
+    catalog: 'armas',
+    name: 'Acha',
+    group: 'Armas Taticas - Corpo a Corpo - Duas Maos',
+    category: 1,
+    damage: '1d12',
+    critical: 'x3',
+    damageType: 'Corte',
+    spaces: 2,
+    description: 'Um machado grande e pesado, usado no corte de arvores largas.',
+  },
+  {
+    catalog: 'armas',
+    name: 'Arco',
+    group: 'Armas Simples - Arma de Disparo - Duas Maos',
+    category: 0,
+    damage: '1d6',
+    critical: 'x3',
+    range: 'Medio',
+    damageType: 'Perfuracao',
+    spaces: 2,
+    ammo: 'Flechas',
+    description: 'Um arco e flecha comum, proprio para tiro ao alvo.',
+  },
+  {
+    catalog: 'armas',
+    name: 'Arco Composto',
+    group: 'Armas Taticas - Arma de Disparo - Duas Maos',
+    category: 1,
+    damage: '1d10',
+    critical: 'x3',
+    range: 'Medio',
+    damageType: 'Perfuracao',
+    spaces: 2,
+    ammo: 'Flechas',
+    description: 'Arco moderno com roldanas. Permite aplicar Forca no dano.',
+  },
+  {
+    catalog: 'armas',
+    name: 'Balestra',
+    group: 'Armas Taticas - Arma de Disparo - Duas Maos',
+    category: 1,
+    damage: '1d12',
+    critical: '19',
+    range: 'Medio',
+    damageType: 'Perfuracao',
+    spaces: 2,
+    ammo: 'Flechas',
+    description: 'Besta pesada. Exige acao de movimento para recarregar a cada disparo.',
+  },
+  {
+    catalog: 'armas',
+    name: 'Bastao',
+    group: 'Armas Simples - Corpo a Corpo - Uma Mao',
+    category: 0,
+    damage: '1d6/1d8',
+    critical: 'x2',
+    damageType: 'Impacto',
+    spaces: 1,
+    description: 'Pode ser empunhado com uma mao (1d6) ou duas maos (1d8).',
+  },
+  {
+    catalog: 'armas',
+    name: 'Bazuca',
+    group: 'Armas Pesadas - Arma de Fogo - Duas Maos',
+    category: 3,
+    damage: '10d8',
+    critical: 'x2',
+    range: 'Medio',
+    damageType: 'Impacto',
+    spaces: 2,
+    ammo: 'Foguete',
+    description: 'Lanca-foguetes anti-tanque com dano em area (raio de 3m). Recarrega com acao de movimento.',
+  },
+  {
+    catalog: 'armas',
+    name: 'Besta',
+    group: 'Armas Simples - Arma de Disparo - Duas Maos',
+    category: 0,
+    damage: '1d8',
+    critical: '19',
+    range: 'Medio',
+    damageType: 'Perfuracao',
+    spaces: 2,
+    ammo: 'Flechas',
+    description: 'Arma antiga que exige acao de movimento para recarregar a cada disparo.',
+  },
+  {
+    catalog: 'armas',
+    name: 'Cajado',
+    group: 'Armas Simples - Corpo a Corpo - Duas Maos',
+    category: 0,
+    damage: '1d6/1d6',
+    critical: 'x2',
+    damageType: 'Impacto',
+    spaces: 2,
+    description: 'Arma agil que pode ser usada com Combater com Duas Armas para ataques adicionais.',
+  },
+  {
+    catalog: 'armas',
+    name: 'Coronhada',
+    group: 'Armas Simples - Corpo a Corpo - Leve',
+    category: 0,
+    damage: '1d4/1d6',
+    critical: 'x2',
+    damageType: 'Impacto',
+    spaces: 0,
+    description: 'Ataque corpo a corpo com arma de fogo. 1d4 para leves/uma mao e 1d6 para duas maos.',
+  },
+  {
+    catalog: 'armas',
+    name: 'Corrente',
+    group: 'Armas Taticas - Corpo a Corpo - Uma Mao',
+    category: 0,
+    damage: '1d8',
+    critical: 'x2',
+    damageType: 'Impacto',
+    spaces: 1,
+    description: 'Fornece +2 em testes para desarmar e derrubar.',
+  },
+  {
+    catalog: 'armas',
+    name: 'Espada',
+    group: 'Armas Taticas - Corpo a Corpo - Uma Mao',
+    category: 1,
+    damage: '1d8/1d10',
+    critical: '19',
+    damageType: 'Corte',
+    spaces: 1,
+    description: 'Pode ser empunhada com uma mao (1d8) ou duas maos (1d10).',
+  },
+  {
+    catalog: 'armas',
+    name: 'Espingarda',
+    group: 'Armas Taticas - Arma de Fogo - Duas Maos',
+    category: 1,
+    damage: '4d6',
+    critical: 'x3',
+    range: 'Curto',
+    damageType: 'Balistico',
+    spaces: 2,
+    ammo: 'Cartuchos',
+    description: 'Causa metade do dano em alcance medio ou maior.',
+  },
+  {
+    catalog: 'armas',
+    name: 'Faca',
+    group: 'Armas Simples - Corpo a Corpo - Leve',
+    category: 0,
+    damage: '1d4',
+    critical: '19',
+    range: 'Curto',
+    damageType: 'Corte',
+    spaces: 1,
+    description: 'Arma agil que pode ser arremessada.',
+  },
+  {
+    catalog: 'armas',
+    name: 'Florete',
+    group: 'Armas Taticas - Corpo a Corpo - Uma Mao',
+    category: 1,
+    damage: '1d6',
+    critical: '18',
+    damageType: 'Corte',
+    spaces: 1,
+    description: 'Espada de esgrima. E uma arma agil.',
+  },
+  {
+    catalog: 'armas',
+    name: 'Fuzil de Assalto',
+    group: 'Armas Taticas - Arma de Fogo - Duas Maos',
+    category: 2,
+    damage: '2d10',
+    critical: '19/x3',
+    range: 'Medio',
+    damageType: 'Balistico',
+    spaces: 2,
+    ammo: 'Balas Longas',
+    description: 'Arma automatica padrao de forcas militares.',
+  },
+  {
+    catalog: 'armas',
+    name: 'Fuzil de Caca',
+    group: 'Armas Simples - Arma de Fogo - Duas Maos',
+    category: 1,
+    damage: '2d8',
+    critical: '19/x3',
+    range: 'Medio',
+    damageType: 'Balistico',
+    spaces: 2,
+    ammo: 'Balas Longas',
+    description: 'Arma comum entre cacadores e atiradores esportivos.',
+  },
+  {
+    catalog: 'armas',
+    name: 'Fuzil de Precisao',
+    group: 'Armas Taticas - Arma de Fogo - Duas Maos',
+    category: 3,
+    damage: '2d10',
+    critical: '19/x3',
+    range: 'Longo',
+    damageType: 'Balistico',
+    spaces: 2,
+    ammo: 'Balas Longas',
+    description: 'Projetado para disparos longos e precisos.',
+  },
+  {
+    catalog: 'armas',
+    name: 'Gadanho',
+    group: 'Armas Taticas - Corpo a Corpo - Duas Maos',
+    category: 1,
+    damage: '2d4',
+    critical: 'x4',
+    damageType: 'Corte',
+    spaces: 2,
+    description: 'Ferramenta agricola adaptada para combate.',
+  },
+  {
+    catalog: 'armas',
+    name: 'Katana',
+    group: 'Armas Taticas - Corpo a Corpo - Duas Maos',
+    category: 1,
+    damage: '1d10',
+    critical: '19',
+    damageType: 'Corte',
+    spaces: 2,
+    description: 'Arma agil. Veterano em Luta pode usa-la com uma mao.',
+  },
+  {
+    catalog: 'armas',
+    name: 'Lanca',
+    group: 'Armas Simples - Corpo a Corpo - Uma Mao',
+    category: 0,
+    damage: '1d6',
+    critical: 'x2',
+    range: 'Curto',
+    damageType: 'Perfuracao',
+    spaces: 1,
+    description: 'Pode ser arremessada.',
+  },
+  {
+    catalog: 'armas',
+    name: 'Lanca-chamas',
+    group: 'Armas Pesadas - Arma de Fogo - Duas Maos',
+    category: 3,
+    damage: '6d6',
+    critical: 'x2',
+    range: 'Curto',
+    damageType: 'Fogo',
+    spaces: 2,
+    ammo: 'Combustivel',
+    description: 'Atinge linha de 1,5m de largura no alcance curto e pode deixar alvos em chamas.',
+  },
+  {
+    catalog: 'armas',
+    name: 'Maca',
+    group: 'Armas Taticas - Corpo a Corpo - Uma Mao',
+    category: 1,
+    damage: '2d4',
+    critical: 'x2',
+    damageType: 'Impacto',
+    spaces: 1,
+    description: 'Bastao com cabeca metalica cheia de protuberancias.',
+  },
+  {
+    catalog: 'armas',
+    name: 'Machadinha',
+    group: 'Armas Taticas - Corpo a Corpo - Leve',
+    category: 0,
+    damage: '1d6',
+    critical: 'x3',
+    range: 'Curto',
+    damageType: 'Corte',
+    spaces: 1,
+    description: 'Arma agil para corte. Pode ser arremessada.',
+  },
+  {
+    catalog: 'armas',
+    name: 'Machado',
+    group: 'Armas Taticas - Corpo a Corpo - Uma Mao',
+    category: 1,
+    damage: '1d8',
+    critical: 'x3',
+    damageType: 'Corte',
+    spaces: 1,
+    description: 'Ferramenta de lenhadores e bombeiros, capaz de ferimentos severos.',
+  },
+  {
+    catalog: 'armas',
+    name: 'Machete',
+    group: 'Armas Simples - Corpo a Corpo - Uma Mao',
+    category: 0,
+    damage: '1d6',
+    critical: '19',
+    damageType: 'Corte',
+    spaces: 1,
+    description: 'Lamina longa muito usada para abrir trilhas.',
+  },
+  {
+    catalog: 'armas',
+    name: 'Marreta',
+    group: 'Armas Taticas - Corpo a Corpo - Duas Maos',
+    category: 1,
+    damage: '3d4',
+    critical: 'x2',
+    damageType: 'Impacto',
+    spaces: 2,
+    description: 'Ferramenta de demolicao adaptada para combate.',
+  },
+  {
+    catalog: 'armas',
+    name: 'Martelo',
+    group: 'Armas Simples - Corpo a Corpo - Leve',
+    category: 0,
+    damage: '1d6',
+    critical: 'x2',
+    damageType: 'Impacto',
+    spaces: 1,
+    description: 'Ferramenta comum que pode ser usada como arma improvisada.',
+  },
+  {
+    catalog: 'armas',
+    name: 'Metralhadora',
+    group: 'Armas Pesadas - Arma de Fogo - Duas Maos',
+    category: 2,
+    damage: '2d12',
+    critical: '19/x3',
+    range: 'Medio',
+    damageType: 'Balistico',
+    spaces: 2,
+    ammo: 'Balas Longas',
+    description: 'Arma automatica pesada. Exige Forca 4 ou apoio em tripe para evitar penalidade.',
+  },
+  {
+    catalog: 'armas',
+    name: 'Montante',
+    group: 'Armas Taticas - Corpo a Corpo - Duas Maos',
+    category: 1,
+    damage: '2d6',
+    critical: '19',
+    damageType: 'Corte',
+    spaces: 2,
+    description: 'Espada enorme e pesada, historicamente muito poderosa.',
+  },
+  {
+    catalog: 'armas',
+    name: 'Motosserra',
+    group: 'Armas Taticas - Corpo a Corpo - Duas Maos',
+    category: 1,
+    damage: '3d6',
+    critical: 'x2',
+    damageType: 'Corte',
+    spaces: 2,
+    description: 'Sempre que sair 6 no dano, role um dado extra. Impoe -1d20 nos ataques e ligar gasta movimento.',
+  },
+  {
+    catalog: 'armas',
+    name: 'Nunchaku',
+    group: 'Armas Taticas - Corpo a Corpo - Leve',
+    category: 0,
+    damage: '1d8',
+    critical: 'x2',
+    damageType: 'Impacto',
+    spaces: 1,
+    description: 'Dois bastoes curtos ligados por corrente. E arma agil.',
+  },
+  {
+    catalog: 'armas',
+    name: 'Pistola',
+    group: 'Armas Simples - Arma de Fogo - Leve',
+    category: 1,
+    damage: '1d12',
+    critical: '18',
+    range: 'Curto',
+    damageType: 'Balistico',
+    spaces: 1,
+    ammo: 'Balas Curtas',
+    description: 'Arma de mao comum entre policiais e militares.',
+  },
+  {
+    catalog: 'armas',
+    name: 'Punhal',
+    group: 'Armas Simples - Corpo a Corpo - Leve',
+    category: 0,
+    damage: '1d4',
+    critical: 'x3',
+    damageType: 'Perfuracao',
+    spaces: 1,
+    description: 'Lamina longa e pontiaguda. E uma arma agil.',
+  },
+  {
+    catalog: 'armas',
+    name: 'Revolver',
+    group: 'Armas Simples - Arma de Fogo - Leve',
+    category: 1,
+    damage: '2d6',
+    critical: '19/x3',
+    range: 'Curto',
+    damageType: 'Balistico',
+    spaces: 1,
+    ammo: 'Balas Curtas',
+    description: 'Uma das armas de fogo mais comuns e confiaveis.',
+  },
+  {
+    catalog: 'armas',
+    name: 'Submetralhadora',
+    group: 'Armas Taticas - Arma de Fogo - Uma Mao',
+    category: 1,
+    damage: '2d6',
+    critical: '19/x3',
+    range: 'Curto',
+    damageType: 'Balistico',
+    spaces: 1,
+    ammo: 'Balas Curtas',
+    description: 'Arma de fogo automatica que pode ser empunhada com uma mao.',
+  },
+  {
+    catalog: 'municao',
+    name: 'Cartuchos Calibre 12',
+    group: 'Municao - Escopeta',
+    category: 1,
+    damage: '-',
+    critical: '-',
+    damageType: '-',
+    spaces: 1,
+    description: 'Caixa de cartuchos para escopetas calibre 12.',
+  },
+  {
+    catalog: 'municao',
+    name: 'Balas de Pistola',
+    group: 'Municao - Arma Curta',
+    category: 0,
+    damage: '-',
+    critical: '-',
+    damageType: '-',
+    spaces: 1,
+    description: 'Pacote de municao para armas curtas de uso tatico.',
+  },
+  {
+    catalog: 'protecao',
+    name: 'Colete Leve',
+    group: 'Protecoes - Tatico',
+    category: 1,
+    damage: '-',
+    critical: '-',
+    damageType: '-',
+    spaces: 2,
+    description: 'Colete de protecao balistica leve para operacoes de risco.',
+  },
+  {
+    catalog: 'protecao',
+    name: 'Escudo Tatico',
+    group: 'Protecoes - Defesa',
+    category: 2,
+    damage: '-',
+    critical: '-',
+    damageType: '-',
+    spaces: 2,
+    description: 'Escudo de impacto para cobertura em avancos de equipe.',
+  },
+  {
+    catalog: 'itens_gerais',
+    name: 'Kit Medico',
+    group: 'Itens Gerais - Suporte',
+    category: 1,
+    damage: '-',
+    critical: '-',
+    damageType: '-',
+    spaces: 1,
+    description: 'Conjunto de primeiros socorros para estabilizacao rapida.',
+  },
+  {
+    catalog: 'itens_gerais',
+    name: 'Lanterna Tatica',
+    group: 'Itens Gerais - Utilidade',
+    category: 0,
+    damage: '-',
+    critical: '-',
+    damageType: '-',
+    spaces: 1,
+    description: 'Lanterna resistente com foco ajustavel para areas escuras.',
+  },
+  {
+    catalog: 'itens_amaldicoados',
+    name: 'Faca Sussurrante',
+    group: 'Itens Amaldicoados - Lamina',
+    category: 2,
+    damage: '1d8',
+    critical: '19/x3',
+    damageType: 'Corte',
+    spaces: 1,
+    description: 'Lamina amaldiçoada que vibra com presencas paranormais.',
+  },
+  {
+    catalog: 'itens_amaldicoados',
+    name: 'Mascara do Vazio',
+    group: 'Itens Amaldicoados - Artefato',
+    category: 3,
+    damage: '-',
+    critical: '-',
+    damageType: '-',
+    spaces: 1,
+    description: 'Artefato ritualistico que distorce percepcoes ao redor.',
+  },
+];
+
+const OP_CATEGORY_ROMAN = ['0', 'I', 'II', 'III', 'IV'] as const;
+
+const formatCategory = (category: number) => {
+  const clamped = Math.max(0, Math.min(4, category));
+  return OP_CATEGORY_ROMAN[clamped];
+};
+
 const N = ({ value, onChange, min, max, readOnly = false, className = '' }: {
   value: number;
   onChange: (v: number) => void;
@@ -192,6 +731,20 @@ export default function CharacterSheetOP({
   const [showBonusDialog, setShowBonusDialog] = useState(false);
   const [bonusDialogData, setBonusDialogData] = useState<{ label: string; baseModifier: number; attributeValue?: number; isInitiative?: boolean } | null>(null);
   const [bonusInput, setBonusInput] = useState('0');
+  const [itemListDialogOpen, setItemListDialogOpen] = useState(false);
+  const [activeCatalog, setActiveCatalog] = useState<OPCatalogType>('armas');
+  const [createItemDialogOpen, setCreateItemDialogOpen] = useState(false);
+  const [customItemForm, setCustomItemForm] = useState<InventoryItem>({
+    name: '',
+    qty: 1,
+    weight: 0,
+    category: 0,
+    damage: '',
+    critical: '',
+    damageType: '',
+    cost: '',
+    notes: '',
+  });
   const [originForm, setOriginForm] = useState({
     nome: '',
     pericia1: '',
@@ -958,9 +1511,50 @@ export default function CharacterSheetOP({
     setField('rituais', novos);
   };
 
-  const addItem = () => {
-    const novos = [...sheet.equipamentos, { name: '', qty: 1, weight: 0, cost: '', notes: '' } as InventoryItem];
+  const addCatalogItem = (catalogItem: OPInventoryCatalogItem) => {
+    const composedNotes = `${catalogItem.group} | Dano ${catalogItem.damage} | Critico ${catalogItem.critical} | Tipo ${catalogItem.damageType}. ${catalogItem.description}`;
+    const novos = [
+      ...sheet.equipamentos,
+      {
+        name: catalogItem.name,
+        qty: 1,
+        weight: catalogItem.spaces,
+        category: catalogItem.category,
+        damage: catalogItem.damage,
+        critical: catalogItem.critical,
+        damageType: catalogItem.damageType,
+        cost: catalogItem.cost ?? '',
+        notes: composedNotes,
+      } as InventoryItem,
+    ];
     setField('equipamentos', novos);
+    setItemListDialogOpen(false);
+    toast.success(`${catalogItem.name} adicionado ao inventario`);
+  };
+
+  const createCustomItem = () => {
+    const normalizedName = customItemForm.name.trim();
+    if (!normalizedName) {
+      toast.error('Informe o nome do item');
+      return;
+    }
+
+    const newItem: InventoryItem = {
+      name: normalizedName,
+      qty: 1,
+      weight: Math.max(0, customItemForm.weight || 0),
+      category: Math.max(0, Math.min(4, customItemForm.category ?? 0)),
+      damage: customItemForm.damage?.trim() || '',
+      critical: customItemForm.critical?.trim() || '',
+      damageType: customItemForm.damageType?.trim() || '',
+      cost: customItemForm.cost.trim(),
+      notes: customItemForm.notes.trim(),
+    };
+
+    setField('equipamentos', [...sheet.equipamentos, newItem]);
+    setCustomItemForm({ name: '', qty: 1, weight: 0, category: 0, damage: '', critical: '', damageType: '', cost: '', notes: '' });
+    setCreateItemDialogOpen(false);
+    toast.success('Item customizado criado');
   };
 
   const addBestiario = () => {
@@ -1531,21 +2125,63 @@ export default function CharacterSheetOP({
               </div>
 
               <SectionTitle>Equipamentos</SectionTitle>
+              <div className="text-[10px] text-muted-foreground">Use categorias de 0 a 4 conforme regras da Ordem. Campos com titulo acima para evitar confusao.</div>
               <div className="space-y-2">
                 {sheet.equipamentos.map((item, i) => (
-                  <div key={i} className="grid grid-cols-1 sm:grid-cols-5 gap-2 bg-secondary/30 border border-border rounded p-2">
-                    <TF value={item.name} onChange={v => setField('equipamentos', sheet.equipamentos.map((it, idx) => idx === i ? { ...it, name: v } : it))} placeholder="Item" readOnly={!canEdit} />
-                    <N value={item.qty} onChange={v => setField('equipamentos', sheet.equipamentos.map((it, idx) => idx === i ? { ...it, qty: Math.max(1, v) } : it))} min={1} readOnly={!canEdit} className="w-full" />
-                    <N value={item.weight} onChange={v => setField('equipamentos', sheet.equipamentos.map((it, idx) => idx === i ? { ...it, weight: Math.max(0, v) } : it))} min={0} readOnly={!canEdit} className="w-full" />
-                    <TF value={item.cost} onChange={v => setField('equipamentos', sheet.equipamentos.map((it, idx) => idx === i ? { ...it, cost: v } : it))} placeholder="Valor" readOnly={!canEdit} />
-                    <div className="flex gap-1">
-                      <TF value={item.notes} onChange={v => setField('equipamentos', sheet.equipamentos.map((it, idx) => idx === i ? { ...it, notes: v } : it))} placeholder="Descricao" readOnly={!canEdit} />
-                      {canEdit && <button className="px-2 rounded bg-destructive/20 text-destructive" onClick={() => setField('equipamentos', sheet.equipamentos.filter((_, idx) => idx !== i))}>x</button>}
+                  <div key={i} className="space-y-2 bg-secondary/30 border border-border rounded p-2">
+                    <div className="grid grid-cols-1 sm:grid-cols-6 gap-2">
+                      <div>
+                        <label className="text-[10px] text-muted-foreground font-display">Item</label>
+                        <TF value={item.name} onChange={v => setField('equipamentos', sheet.equipamentos.map((it, idx) => idx === i ? { ...it, name: v } : it))} placeholder="" readOnly={!canEdit} />
+                      </div>
+                      <div>
+                        <label className="text-[10px] text-muted-foreground font-display">Peso</label>
+                        <N value={item.weight} onChange={v => setField('equipamentos', sheet.equipamentos.map((it, idx) => idx === i ? { ...it, weight: Math.max(0, v) } : it))} min={0} readOnly={!canEdit} className="w-full" />
+                      </div>
+                      <div>
+                        <label className="text-[10px] text-muted-foreground font-display">Categoria (0-4)</label>
+                        <N value={item.category ?? 0} onChange={v => setField('equipamentos', sheet.equipamentos.map((it, idx) => idx === i ? { ...it, category: Math.max(0, Math.min(4, v)) } : it))} min={0} max={4} readOnly={!canEdit} className="w-full" />
+                      </div>
+                      <div>
+                        <label className="text-[10px] text-muted-foreground font-display">Dano</label>
+                        <TF value={item.damage ?? ''} onChange={v => setField('equipamentos', sheet.equipamentos.map((it, idx) => idx === i ? { ...it, damage: v } : it))} placeholder="Ex: 1d12" readOnly={!canEdit} />
+                      </div>
+                      <div>
+                        <label className="text-[10px] text-muted-foreground font-display">Critico</label>
+                        <TF value={item.critical ?? ''} onChange={v => setField('equipamentos', sheet.equipamentos.map((it, idx) => idx === i ? { ...it, critical: v } : it))} placeholder="Ex: x3" readOnly={!canEdit} />
+                      </div>
+                      <div>
+                        <label className="text-[10px] text-muted-foreground font-display">Tipo</label>
+                        <TF value={item.damageType ?? ''} onChange={v => setField('equipamentos', sheet.equipamentos.map((it, idx) => idx === i ? { ...it, damageType: v } : it))} placeholder="Ex: Corte" readOnly={!canEdit} />
+                      </div>
+                    </div>
+
+                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+                      <div>
+                        <label className="text-[10px] text-muted-foreground font-display">Valor</label>
+                        <TF value={item.cost} onChange={v => setField('equipamentos', sheet.equipamentos.map((it, idx) => idx === i ? { ...it, cost: v } : it))} placeholder="" readOnly={!canEdit} />
+                      </div>
+                      <div>
+                        <label className="text-[10px] text-muted-foreground font-display">Descricao</label>
+                        <div className="flex gap-1">
+                          <TF value={item.notes} onChange={v => setField('equipamentos', sheet.equipamentos.map((it, idx) => idx === i ? { ...it, notes: v } : it))} placeholder="" readOnly={!canEdit} />
+                          {canEdit && <button className="px-2 rounded bg-destructive/20 text-destructive" onClick={() => setField('equipamentos', sheet.equipamentos.filter((_, idx) => idx !== i))}>x</button>}
+                        </div>
+                      </div>
                     </div>
                   </div>
                 ))}
               </div>
-              {canEdit && <Button size="sm" variant="secondary" onClick={addItem}>Adicionar Item</Button>}
+              {canEdit && (
+                <div className="flex flex-wrap gap-2">
+                  <Button size="sm" variant="secondary" onClick={() => { setActiveCatalog('armas'); setItemListDialogOpen(true); }}>
+                    <Package className="w-3.5 h-3.5 mr-1" /> Lista de Itens
+                  </Button>
+                  <Button size="sm" variant="secondary" onClick={() => setCreateItemDialogOpen(true)}>
+                    <Plus className="w-3.5 h-3.5 mr-1" /> Criar Item
+                  </Button>
+                </div>
+              )}
 
               <SectionTitle>Anotacoes</SectionTitle>
               <TA value={sheet.anotacoes} onChange={v => setField('anotacoes', v)} rows={5} readOnly={!canEdit} />
@@ -1774,6 +2410,140 @@ export default function CharacterSheetOP({
           <DialogFooter>
             <Button variant="secondary" onClick={() => setShowBonusDialog(false)}>Cancelar</Button>
             <Button onClick={executeRoll}>Rolar Dados</Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      <Dialog open={itemListDialogOpen} onOpenChange={setItemListDialogOpen}>
+        <DialogContent className="sm:max-w-3xl bg-card border-border">
+          <DialogHeader>
+            <DialogTitle className="font-display text-gold">Lista de Itens</DialogTitle>
+            <DialogDescription>
+              Clique no botao de adicionar para enviar o item direto para sua ficha.
+            </DialogDescription>
+          </DialogHeader>
+
+          <div className="flex flex-wrap gap-2">
+            {OP_CATALOG_TABS.map((tabItem) => (
+              <Button
+                key={tabItem.id}
+                size="sm"
+                variant={activeCatalog === tabItem.id ? 'default' : 'secondary'}
+                className={activeCatalog === tabItem.id ? 'bg-gold text-background hover:bg-gold/90' : ''}
+                onClick={() => setActiveCatalog(tabItem.id)}
+              >
+                {tabItem.label}
+              </Button>
+            ))}
+          </div>
+
+          <div className="max-h-[65vh] overflow-y-auto pr-1 space-y-3">
+            {OP_ITEM_CATALOG.filter((catalogItem) => catalogItem.catalog === activeCatalog).map((catalogItem) => (
+              <div key={catalogItem.name} className="bg-[#17171d] border border-gold/25 overflow-hidden">
+                <div className="px-3 py-2">
+                  <div className="flex items-start justify-between gap-3">
+                    <div className="min-w-0">
+                      <div className="flex items-center gap-2">
+                        <ChevronUp className="w-3.5 h-3.5 text-gold shrink-0" />
+                        <span className="text-xl leading-none font-display text-white">{catalogItem.name}</span>
+                        <span className="text-sm italic text-white/90 truncate">{catalogItem.group}</span>
+                      </div>
+                      <div className="mt-1.5 flex flex-wrap gap-x-4 gap-y-1 text-sm">
+                        <span className="text-gold">Categoria: <span className="text-white">{formatCategory(catalogItem.category)}</span></span>
+                        <span className="text-gold">Dano: <span className="text-white">{catalogItem.damage}</span></span>
+                        <span className="text-gold">Critico: <span className="text-white">{catalogItem.critical}</span></span>
+                        {catalogItem.range && <span className="text-gold">Alcance: <span className="text-white">{catalogItem.range}</span></span>}
+                        <span className="text-gold">Tipo: <span className="text-white">{catalogItem.damageType}</span></span>
+                        <span className="text-gold">Espacos: <span className="text-white">{catalogItem.spaces}</span></span>
+                        {catalogItem.ammo && <span className="text-gold">Munição: <span className="text-white">{catalogItem.ammo}</span></span>}
+                      </div>
+                    </div>
+
+                    <button
+                      className="h-8 w-8 flex items-center justify-center bg-gold hover:bg-gold/90 text-background transition-colors shrink-0"
+                      onClick={() => addCatalogItem(catalogItem)}
+                      title="Adicionar item"
+                    >
+                      <Plus className="w-4 h-4" />
+                    </button>
+                  </div>
+                </div>
+
+                <div className="h-px bg-gold/80" />
+
+                <div className="px-3 py-2 text-base text-white">
+                  {catalogItem.description}
+                </div>
+              </div>
+            ))}
+
+            {OP_ITEM_CATALOG.filter((catalogItem) => catalogItem.catalog === activeCatalog).length === 0 && (
+              <div className="rounded-md border border-border bg-secondary/20 p-3 text-sm text-muted-foreground">
+                Nenhum item cadastrado nesta categoria ainda.
+              </div>
+            )}
+          </div>
+
+          <DialogFooter>
+            <Button variant="secondary" onClick={() => setItemListDialogOpen(false)}>Fechar</Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      <Dialog open={createItemDialogOpen} onOpenChange={setCreateItemDialogOpen}>
+        <DialogContent className="sm:max-w-lg bg-card border-border">
+          <DialogHeader>
+            <DialogTitle className="font-display text-gold">Criar Item</DialogTitle>
+            <DialogDescription>
+              Use para itens que nao estao na lista pronta.
+            </DialogDescription>
+          </DialogHeader>
+
+          <div className="space-y-3">
+            <div>
+              <label className="text-[10px] text-muted-foreground font-display">Item</label>
+              <Input value={customItemForm.name} onChange={(e) => setCustomItemForm((prev) => ({ ...prev, name: e.target.value }))} placeholder="Nome do item" />
+            </div>
+
+            <div className="grid grid-cols-1 sm:grid-cols-3 gap-2">
+              <div>
+                <label className="text-[10px] text-muted-foreground font-display">Peso</label>
+                <Input type="number" min={0} value={customItemForm.weight} onChange={(e) => setCustomItemForm((prev) => ({ ...prev, weight: parseInt(e.target.value, 10) || 0 }))} />
+              </div>
+              <div>
+                <label className="text-[10px] text-muted-foreground font-display">Categoria (0-4)</label>
+                <Input type="number" min={0} max={4} value={customItemForm.category ?? 0} onChange={(e) => setCustomItemForm((prev) => ({ ...prev, category: Math.max(0, Math.min(4, parseInt(e.target.value, 10) || 0)) }))} />
+              </div>
+              <div>
+                <label className="text-[10px] text-muted-foreground font-display">Valor</label>
+                <Input value={customItemForm.cost} onChange={(e) => setCustomItemForm((prev) => ({ ...prev, cost: e.target.value }))} placeholder="Opcional" />
+              </div>
+            </div>
+
+            <div className="grid grid-cols-1 sm:grid-cols-3 gap-2">
+              <div>
+                <label className="text-[10px] text-muted-foreground font-display">Dano</label>
+                <Input value={customItemForm.damage ?? ''} onChange={(e) => setCustomItemForm((prev) => ({ ...prev, damage: e.target.value }))} placeholder="Ex: 1d12" />
+              </div>
+              <div>
+                <label className="text-[10px] text-muted-foreground font-display">Critico</label>
+                <Input value={customItemForm.critical ?? ''} onChange={(e) => setCustomItemForm((prev) => ({ ...prev, critical: e.target.value }))} placeholder="Ex: x3" />
+              </div>
+              <div>
+                <label className="text-[10px] text-muted-foreground font-display">Tipo</label>
+                <Input value={customItemForm.damageType ?? ''} onChange={(e) => setCustomItemForm((prev) => ({ ...prev, damageType: e.target.value }))} placeholder="Ex: Corte" />
+              </div>
+            </div>
+
+            <div>
+              <label className="text-[10px] text-muted-foreground font-display">Descricao</label>
+              <TA value={customItemForm.notes} onChange={(v) => setCustomItemForm((prev) => ({ ...prev, notes: v }))} rows={3} />
+            </div>
+          </div>
+
+          <DialogFooter>
+            <Button variant="secondary" onClick={() => setCreateItemDialogOpen(false)}>Cancelar</Button>
+            <Button onClick={createCustomItem}>Criar e Adicionar</Button>
           </DialogFooter>
         </DialogContent>
       </Dialog>

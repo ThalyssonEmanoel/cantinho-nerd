@@ -51,6 +51,10 @@ export interface InventoryItem {
   name: string;
   qty: number;
   weight: number;
+  category?: number;
+  damage?: string;
+  critical?: string;
+  damageType?: string;
   cost: string;
   notes: string;
 }
