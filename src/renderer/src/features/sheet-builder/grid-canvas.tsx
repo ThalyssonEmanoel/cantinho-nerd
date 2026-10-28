@@ -130,7 +130,10 @@ export function GridCanvas({
                   ? 'border-primary ring-primary/40 ring-2'
                   : 'hover:border-muted-foreground/40'
               )}
-              onMouseDown={() => onSelect(component.id)}
+              // pointerdown, e não mousedown: a react-draggable substitui o onMouseDown do
+              // item pelo dela (para começar o arrasto), e a seleção nunca disparava. O
+              // pointerdown vem antes do mousedown, então apertar já seleciona e arrasta.
+              onPointerDown={() => onSelect(component.id)}
             >
               {/*
                 Os campos aqui são só visuais: no construtor o clique seleciona e arrasta o

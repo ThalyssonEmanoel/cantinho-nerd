@@ -4,6 +4,7 @@ import {
   mergedValues,
   patchedIds,
   patchFields,
+  recomputeSheet,
   SheetPermissionError,
   type SheetAudience,
   type SheetMigrationResult,
@@ -14,6 +15,7 @@ import {
   type SheetValues
 } from '@/lib/sheet'
 import { errorMessage } from '@/lib/db/errors'
+import type { RemoteSheetChange } from '@/lib/db/sheet-rows'
 
 /**
  * Estado da ficha aberta (seção 5.7).
@@ -51,6 +53,8 @@ interface SheetFillState {
   loadError: string | null
   /** Campos esperando gravação, por id de componente. */
   pending: SheetValues
+  /** Campos já mandados ao banco e ainda sem resposta. */
+  inFlight: SheetValues
   /** Valor gravado de cada campo pendente, para desfazer se a gravação for recusada. */
   rollback: SheetValues
   /** Aviso de que a ficha subiu de versão ao abrir (5.7). */
@@ -66,6 +70,12 @@ interface SheetFillState {
   changeField: (componentId: string, value: SheetValue) => void
   /** Grava o que está pendente. A tela chama ao sair; o resto é automático. */
   flush: () => Promise<void>
+  /**
+   * Alguém gravou nesta ficha (tempo real, Fase 5). Entra o que veio do banco, e por cima
+   * o que esta tela ainda tem pendente ou em voo — senão a tela "voltaria" o que a pessoa
+   * acabou de digitar até a gravação dela chegar.
+   */
+  applyRemote: (change: RemoteSheetChange) => void
 }
 
 let saveTimer: ReturnType<typeof setTimeout> | undefined
@@ -85,6 +95,7 @@ const emptySheetState = {
   lastError: null,
   loadError: null,
   pending: {},
+  inFlight: {},
   rollback: {},
   migration: null
 }
@@ -181,13 +192,42 @@ export const useSheetStore = create<SheetFillState>()((set, get) => {
       scheduleFlush()
     },
 
+    applyRemote: (change) => {
+      const { sheet, schema, pending, inFlight } = get()
+      if (sheet === null || schema === null || change.sheetId !== sheet.id) return
+
+      // Versão nova do modelo (o mestre migrou a ficha): reabre para pegar o esquema dela.
+      if (
+        change.templateVersion !== undefined &&
+        change.templateVersion !== sheet.templateVersion
+      ) {
+        void get().open(sheet.id)
+        return
+      }
+
+      let next = recomputeSheet(
+        {
+          ...sheet,
+          ...(change.values === undefined ? {} : { values: change.values }),
+          ...(change.gmValues === undefined ? {} : { gmValues: change.gmValues }),
+          ...(change.orphaned === undefined ? {} : { orphaned: change.orphaned }),
+          ...(change.updatedAt === undefined ? {} : { updatedAt: change.updatedAt })
+        },
+        schema
+      )
+
+      const local = { ...inFlight, ...pending }
+      if (Object.keys(local).length > 0) next = patchFields(next, schema, buildPatch(schema, local))
+      set({ sheet: next })
+    },
+
     flush: async () => {
       clearSaveTimer()
       const { repository, sheet, schema, pending, rollback, audience } = get()
       if (repository === null || sheet === null || schema === null) return
       if (Object.keys(pending).length === 0) return
 
-      set({ saveState: 'saving', pending: {} })
+      set({ saveState: 'saving', pending: {}, inFlight: pending })
 
       try {
         const saved = await repository.patch(sheet.id, buildPatch(schema, pending), audience)
@@ -202,6 +242,7 @@ export const useSheetStore = create<SheetFillState>()((set, get) => {
 
         set({
           sheet: waiting ? patchFields(saved, schema, buildPatch(schema, stillPending)) : saved,
+          inFlight: {},
           rollback: waiting ? get().rollback : {},
           saveState: waiting ? 'dirty' : 'saved',
           lastError: null
@@ -216,6 +257,7 @@ export const useSheetStore = create<SheetFillState>()((set, get) => {
           sheet:
             current === null ? null : patchFields(current, schema, buildPatch(schema, rollback)),
           pending: {},
+          inFlight: {},
           rollback: {},
           saveState: 'error',
           lastError: describeSaveError(error)

@@ -7,6 +7,7 @@ import {
 } from '@/lib/sheet'
 import { getSupabase } from './client'
 import { describeDbError, FriendlyError, type DbErrorLike } from './errors'
+import { isTemplateInUse } from './sessions'
 import { schemaToJson, summaryFromRow, templateFromRow } from './sheet-template-rows'
 
 /**
@@ -140,8 +141,8 @@ export function createSupabaseTemplateRepository(): TemplateRepository {
       return data
     },
 
-    // As sessões chegam na Fase 5; aí uma chave estrangeira passa a impedir a exclusão.
-    isInUse: async () => false
+    // O banco também impede (chave estrangeira); perguntar antes dá uma mensagem melhor.
+    isInUse: (id) => (UUID.test(id) ? isTemplateInUse(id) : Promise.resolve(false))
   }
 }
 

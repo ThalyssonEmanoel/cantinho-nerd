@@ -236,3 +236,63 @@ describe('migração ao abrir', () => {
     expect(store().migration).toBeNull()
   })
 })
+
+describe('mudança que chega pelo tempo real', () => {
+  it('entra na tela: o mestre aplicou dano na vida', () => {
+    const sheet = store().sheet as SheetRecord
+    const values = { ...sheet.values, c_vida: { current: 1 } }
+    store().applyRemote({ sheetId, values })
+
+    const vida = store().sheet?.values.c_vida
+    expect(isResourceValue(vida) ? vida.current : null).toBe(1)
+    // O resumo dos papéis acompanha, sem esperar ninguém regravar.
+    expect(store().sheet?.summary.bars.hp?.current).toBe(1)
+  })
+
+  it('não desfaz o que esta tela ainda não gravou', () => {
+    store().changeField('c_nome', 'Vaz')
+    const sheet = store().sheet as SheetRecord
+    store().applyRemote({
+      sheetId,
+      values: { ...sheet.values, c_nome: 'Antigo', c_vida: { current: 2 } }
+    })
+
+    expect(store().sheet?.values.c_nome).toBe('Vaz')
+    const vida = store().sheet?.values.c_vida
+    expect(isResourceValue(vida) ? vida.current : null).toBe(2)
+  })
+
+  it('não desfaz o que está em voo para o banco', async () => {
+    let release: () => void = () => {}
+    const original = repository.patch
+    repository.patch = (id, patch, audience) =>
+      new Promise((resolve, reject) => {
+        release = () => void original(id, patch, audience).then(resolve, reject)
+      })
+
+    store().changeField('c_nome', 'Em voo')
+    const saving = store().flush()
+    // Chega o eco de outra gravação, feita antes da nossa, ainda com o nome velho.
+    store().applyRemote({
+      sheetId,
+      values: { ...(store().sheet as SheetRecord).values, c_nome: 'Velho' }
+    })
+    expect(store().sheet?.values.c_nome).toBe('Em voo')
+
+    release()
+    await saving
+    expect(store().sheet?.values.c_nome).toBe('Em voo')
+  })
+
+  it('ignora mudança de outra ficha', () => {
+    const before = store().sheet
+    store().applyRemote({ sheetId: 'outra', values: {} })
+    expect(store().sheet).toBe(before)
+  })
+
+  it('versão nova do modelo reabre a ficha', () => {
+    const open = vi.spyOn(store(), 'open')
+    store().applyRemote({ sheetId, values: {}, templateVersion: 99 })
+    expect(open).toHaveBeenCalledWith(sheetId)
+  })
+})

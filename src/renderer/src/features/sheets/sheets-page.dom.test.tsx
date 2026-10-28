@@ -1,136 +1,102 @@
 import { act } from 'react'
-import { createRoot } from 'react-dom/client'
-import { MemoryRouter } from 'react-router-dom'
-import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
-import {
-  createExampleSchema,
-  createLocalSheetRepository,
-  createLocalTemplateRepository,
-  type SheetRepository,
-  type TemplateRepository
-} from '@/lib/sheet'
+import { createRoot, type Root } from 'react-dom/client'
+import { MemoryRouter, Route, Routes } from 'react-router-dom'
+import { afterEach, describe, expect, it, vi } from 'vitest'
+import type { SheetRepository, SheetSummaryRow } from '@/lib/sheet'
 
 /**
- * Montagem da lista de fichas.
- *
- * O estado vazio importa tanto quanto a lista cheia: sem modelo publicado não há como
- * criar ficha, e a tela precisa dizer isso em vez de mostrar um botão que não funciona.
+ * Lista de fichas (Fase 5): os personagens das mesas em que a pessoa está. Abrir uma ficha
+ * leva para dentro da sessão dela, onde o tempo real funciona.
  */
 
-function createMemoryStorage(): Storage {
-  const map = new Map<string, string>()
-  return {
-    get length(): number {
-      return map.size
-    },
-    clear: () => map.clear(),
-    getItem: (key: string) => map.get(key) ?? null,
-    key: (index: number) => [...map.keys()][index] ?? null,
-    removeItem: (key: string) => {
-      map.delete(key)
-    },
-    setItem: (key: string, value: string) => {
-      map.set(key, value)
-    }
+const sheets: SheetSummaryRow[] = [
+  {
+    id: 'ficha-1',
+    templateId: 't',
+    templateName: 'Ordem',
+    templateVersion: 2,
+    ownerName: 'Bruno',
+    ownerId: 'bruno',
+    name: 'Lia Vaz',
+    bars: { hp: { current: 7, max: 16 } },
+    updatedAt: '2026-10-29T10:00:00Z',
+    sessionId: 'sessao-1',
+    sessionName: 'Mesa de sexta'
   }
-}
+]
 
-let templates: TemplateRepository
-let repository: SheetRepository
-
+const repository = vi.hoisted(() => ({ list: vi.fn() }))
 vi.mock('./repository', () => ({
   get sheetRepository() {
-    return repository
+    return repository as unknown as SheetRepository
   }
 }))
 
-vi.mock('@/features/sheet-templates/repository', () => ({
-  get templateRepository() {
-    return templates
-  }
-}))
+vi.mock('@/lib/db/auth', () => ({ onAuthChange: () => () => {} }))
+vi.mock('@/lib/db/profiles', () => ({ fetchProfile: vi.fn() }))
 
 const { SheetsPage } = await import('./sheets-page')
+const { useAuthStore } = await import('@/stores/auth-store')
 
+let root: Root
 let container: HTMLElement
-let unmount: () => void
 
-beforeEach(() => {
-  const storage = createMemoryStorage()
-  templates = createLocalTemplateRepository(storage)
-  repository = createLocalSheetRepository(templates, storage)
-
+async function render(): Promise<void> {
   container = document.createElement('div')
   document.body.append(container)
-})
-
-afterEach(() => {
-  act(() => unmount())
-  container.remove()
-})
-
-async function renderPage(): Promise<void> {
-  const root = createRoot(container)
-  unmount = () => root.unmount()
-
+  root = createRoot(container)
   await act(async () => {
     root.render(
-      <MemoryRouter>
-        <SheetsPage />
+      <MemoryRouter initialEntries={['/sheets']}>
+        <Routes>
+          <Route path="/sheets" element={<SheetsPage />} />
+          <Route path="/session/:sessionId/sheets/:sheetId" element={<p>ficha dentro da mesa</p>} />
+        </Routes>
       </MemoryRouter>
     )
   })
 }
 
-async function publishedTemplate(): Promise<string> {
-  const template = await templates.create({
-    name: 'Exemplo d20',
-    kind: 'character',
-    schema: createExampleSchema()
-  })
-  await templates.publish(template.id)
-  return template.id
-}
+afterEach(() => {
+  act(() => root.unmount())
+  container.remove()
+  vi.clearAllMocks()
+})
 
 describe('SheetsPage', () => {
-  it('explica o que falta quando nenhum modelo está publicado', async () => {
-    await templates.create({
-      name: 'Só rascunho',
-      kind: 'character',
-      schema: createExampleSchema()
-    })
+  it('lista os personagens com a mesa de cada um', async () => {
+    useAuthStore.setState({ userId: 'ana' })
+    repository.list.mockResolvedValueOnce(sheets)
+    await render()
 
-    await renderPage()
-
-    expect(container.textContent).toContain('Nenhum modelo publicado')
-    const newSheet = [...container.querySelectorAll('button')].find((button) =>
-      (button.textContent ?? '').includes('Nova ficha')
-    )
-    expect(newSheet?.disabled).toBe(true)
-  })
-
-  it('mostra o estado vazio com modelo publicado disponível', async () => {
-    await publishedTemplate()
-    await renderPage()
-
-    expect(container.textContent).toContain('Nenhuma ficha ainda')
-    const newSheet = [...container.querySelectorAll('button')].find((button) =>
-      (button.textContent ?? '').includes('Nova ficha')
-    )
-    expect(newSheet?.disabled).toBe(false)
-  })
-
-  it('lista a ficha com dono, modelo e vida', async () => {
-    const templateId = await publishedTemplate()
-    const sheet = await repository.create({ templateId, ownerName: 'Thalysson' })
-    await repository.patch(sheet.id, { values: { c_nome: 'Vaz' } }, 'player')
-
-    await renderPage()
     const text = container.textContent ?? ''
+    expect(text).toContain('Lia Vaz')
+    expect(text).toContain('Bruno')
+    expect(text).toContain('Mesa de sexta')
+    expect(text).toContain('7 / 16')
+  })
 
-    expect(text).toContain('Vaz')
-    expect(text).toContain('Thalysson')
-    expect(text).toContain('Exemplo d20 v1')
-    expect(text).toContain('10 / 10')
+  it('o próprio personagem aparece como seu', async () => {
+    useAuthStore.setState({ userId: 'bruno' })
+    repository.list.mockResolvedValueOnce(sheets)
+    await render()
+    expect(container.textContent).toContain('Seu personagem')
+  })
+
+  it('abrir leva para a ficha dentro da sessão', async () => {
+    repository.list.mockResolvedValueOnce(sheets)
+    await render()
+
+    const open = [...container.querySelectorAll('button')].find((button) =>
+      (button.textContent ?? '').includes('Lia Vaz')
+    )
+    await act(async () => open?.click())
+    expect(container.textContent).toContain('ficha dentro da mesa')
+  })
+
+  it('sem fichas, explica que o personagem nasce dentro da mesa', async () => {
+    repository.list.mockResolvedValueOnce([])
+    await render()
+    expect(container.textContent).toContain('criado dentro de uma mesa')
   })
 })

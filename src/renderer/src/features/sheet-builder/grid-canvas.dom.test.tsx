@@ -1,6 +1,6 @@
 import { act } from 'react'
 import { createRoot } from 'react-dom/client'
-import { afterEach, describe, expect, it } from 'vitest'
+import { afterEach, describe, expect, it, vi } from 'vitest'
 import {
   createExampleSchema,
   createPreviewValues,
@@ -94,6 +94,39 @@ describe('GridCanvas', () => {
     )
 
     expect(container.querySelectorAll('.ring-2').length).toBe(1)
+  })
+
+  it('apertar o mouse num componente da grade seleciona ele', () => {
+    const { schema, values, tabId } = fixture()
+    const { context } = createSheetContext(schema, values)
+    const onSelect = vi.fn()
+
+    const container = render(
+      <GridCanvas
+        schema={schema}
+        tabId={tabId}
+        values={values}
+        context={context}
+        selectedId={null}
+        draggingType={null}
+        onSelect={onSelect}
+        onLayoutsChange={() => {}}
+        onDropNew={() => {}}
+        onInteractionStart={() => {}}
+        onInteractionEnd={() => {}}
+      />
+    )
+
+    const second = container.querySelectorAll('.react-grid-item')[1] as HTMLElement
+    // A sequência de um clique de verdade: primeiro pointerdown, depois mousedown. A
+    // react-draggable troca o onMouseDown do item pelo dela, então a seleção não pode
+    // depender dele (era o bug: o clique nunca abria as propriedades).
+    act(() => {
+      second.dispatchEvent(new MouseEvent('pointerdown', { bubbles: true }))
+      second.dispatchEvent(new MouseEvent('mousedown', { bubbles: true }))
+    })
+
+    expect(onSelect).toHaveBeenCalledWith(schema.tabs[0]?.components[1]?.id)
   })
 })
 

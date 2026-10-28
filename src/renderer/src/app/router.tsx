@@ -7,9 +7,10 @@ import { GmLobbyPage } from '@/features/lobby-gm/gm-lobby-page'
 import { JoinSessionPage } from '@/features/lobby-player/join-session-page'
 import { PlayerLobbyPage } from '@/features/lobby-player/player-lobby-page'
 import { ProfilePage } from '@/features/profile/profile-page'
-import { SessionPage } from '@/features/session/session-page'
+import { SessionLayout } from '@/features/session/session-layout'
+import { SessionSheetPage } from '@/features/session/session-sheet-page'
+import { SessionTablePage } from '@/features/session/session-table-page'
 import { SheetBuilderPage } from '@/features/sheet-builder/sheet-builder-page'
-import { SheetFillPage } from '@/features/sheets/sheet-fill-page'
 import { SheetsPage } from '@/features/sheets/sheets-page'
 import { SheetTemplatesPage } from '@/features/sheet-templates/sheet-templates-page'
 import { AppLayout } from './app-layout'
@@ -40,8 +41,14 @@ export function AppRouter(): React.JSX.Element {
             <Route path="/templates/:templateId" element={<SheetBuilderPage />} />
             <Route path="/guide" element={<FormulaGuidePage />} />
             <Route path="/sheets" element={<SheetsPage />} />
-            <Route path="/sheets/:sheetId" element={<SheetFillPage />} />
-            <Route path="/session/:sessionId" element={<SessionPage />} />
+            {/*
+              A sessão é uma rota "mãe": o canal de tempo real e a presença ficam no layout e
+              continuam abertos enquanto a pessoa vai da mesa para a ficha e volta.
+            */}
+            <Route path="/session/:sessionId" element={<SessionLayout />}>
+              <Route index element={<SessionTablePage />} />
+              <Route path="sheets/:sheetId" element={<SessionSheetPage />} />
+            </Route>
             <Route path="/profile" element={<ProfilePage />} />
           </Route>
         </Route>

@@ -13,8 +13,9 @@ chat, iniciativa, bestiário e encontros — tudo em tempo real.
 ## Estado
 
 Em construção, por fases. Prontos: motor de fórmulas e dados, construtor de fichas, ficha
-preenchível e, na **Fase 4**, contas (nome + senha), perfil com avatar e modelos de ficha
-salvos no Supabase. O plano completo está em [docs/ESPECIFICACAO.md](docs/ESPECIFICACAO.md).
+preenchível, contas (nome + senha), perfil com avatar, modelos de ficha na conta e, na
+**Fase 5**, sessões com convite e senha, com fichas editadas por mestre e jogador ao mesmo
+tempo, em tempo real. O plano completo está em [docs/ESPECIFICACAO.md](docs/ESPECIFICACAO.md).
 
 ## Rodar em desenvolvimento
 
@@ -44,9 +45,12 @@ npm run db:push    # cria as tabelas, as regras de acesso e o bucket de avatares
 npm run db:types   # atualiza os tipos do TypeScript a partir do banco
 ```
 
-Se o `db:push` reclamar de versões de migração que existem no banco e não aqui (sobras do
-app antigo), rode `npx supabase migration repair --status reverted <versões listadas>` e
-tente de novo. A senha do banco pode ser redefinida em **Project Settings → Database**.
+Se o `db:push` falhar com `cli_login_postgres` / "permission denied to alter role", passe a
+senha do banco direto: `npx supabase db push --password "<senha>"`. A senha do banco pode
+ser redefinida em **Project Settings → Database**.
+
+Migração aplicada pelo SQL Editor do painel (em vez do `db:push`)? Avise a CLI, senão ela
+tenta aplicar de novo: `npx supabase migration repair --status applied <versão>`.
 
 Para testar mestre e jogador no mesmo PC, com o `npm run dev` já rodando, abra outro
 terminal:

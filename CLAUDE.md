@@ -232,11 +232,14 @@ Pendências desta fase, de propósito:
 - As rolagens param num painel local; vão para o chat na Fase 7.
 - O campo de imagem continua só com o enquadramento (upload é da Fase 6).
 
-**Fase 4 (Contas e Supabase) — implementada, aguardando teste.** 432 testes no total.
+**Fase 4 (Contas e Supabase) — aprovada; o Thalysson liberou a Fase 5.** 432 testes.
 
-Falta um passo que só o Thalysson pode dar (credenciais dele): no painel do Supabase,
-desligar "Confirm email" e pôr senha mínima 8; depois `npm run db:login`, `db:link`,
-`db:push` e `db:types`. Sem o `db:push` o login dá erro, porque as tabelas não existem.
+A migração da Fase 4 foi aplicada **pelo SQL Editor do painel**, não pelo `db push` (a CLI
+falhou ao criar o papel temporário `cli_login_postgres`; passar `--password` resolve). Por
+isso o histórico da CLI não sabe dela: antes do próximo push, rodar
+`npx supabase migration repair --status applied 20261028140000 --password <senha>`.
+O login é só nome + senha: o Thalysson pediu explicitamente "nada de e-mail"; o e-mail
+interno do Auth é invisível e nenhuma tela o menciona.
 
 - `supabase/migrations/20261028140000_accounts_and_sheet_templates.sql`: `profiles` (com
   gatilho no `auth.users`), `sheet_templates`, `sheet_template_versions`, RLS, as RPCs
@@ -291,9 +294,67 @@ Decisões e armadilhas registradas:
 Pendências, de propósito:
 
 - Excluir sessões e excluir conta são da Fase 12 (o aviso no Perfil diz isso).
-- As tabelas do app antigo continuam no banco; a Fase 5 trata a `sessions` que colide.
-- `npm audit` acusa 2 vulnerabilidades altas no `mathjs` que a biblioteca de dados puxa.
-  Já existiam; a correção sugerida rebaixa a biblioteca (quebra). Avaliar antes da Fase 5,
-  quando modelos de um mestre passam a rodar fórmulas no PC dos jogadores.
 
-**Próxima fase: 5 — Sessões e convites.** Só começar depois do ok dele.
+**Fase 5 (Sessões e convites) — implementada, aguardando teste.** 476 testes no total.
+
+Falta o `db push` da migração `20261029120000_sessions_and_sheets.sql` (depois do
+`migration repair` acima) e o `npm run db:types`.
+
+- Migração: `sessions`, `session_secrets`, `session_members`, `sheets`, `sheet_gm_data`, RLS
+  com `is_member`/`is_gm` (security definer, senão as políticas entram em recursão), as
+  RPCs `create_session`, `join_session` (bcrypt do pgcrypto), `invite_preview`,
+  `set_session_password`, `regenerate_invite`, `create_character_sheet`, `patch_sheet` e
+  `rewrite_sheet`, as tabelas na publicação do Realtime e as políticas em
+  `realtime.messages` para o canal privado `session:<id>`. Testada no PGlite com o fluxo
+  inteiro (convite, senha, isolamento, permissão campo a campo, migração, canal, cascata).
+- `lib/db/sessions.ts`, `lib/db/sheets.ts` (o `SheetRepository` do Supabase),
+  `lib/db/sheet-rows.ts` (mapeamento puro), `lib/db/realtime.ts` (canal + presença),
+  `lib/session/invite.ts` (senha amigável e texto do convite).
+- `features/session/`: a sessão é rota "mãe" (`session-layout.tsx`) com o store que guarda
+  o snapshot e o canal; dentro, a mesa (`session-table-page.tsx`, tabuleiro na Fase 6) e a
+  ficha (`session-sheet-page.tsx`). Trocar entre as duas não derruba o canal nem a presença.
+- Lobbies do mestre e do jogador, tela de convite, "Gerenciar" (convite novo, senha,
+  sistema, nome, remover jogador). A tela "Fichas" lista os personagens de todas as mesas.
+- Bug do construtor corrigido junto: clicar num componente da grade não abria as
+  propriedades desde a Fase 2.
+
+Decisões e armadilhas registradas:
+
+- **A react-draggable troca o `onMouseDown` do filho pelo dela** (o código dela avisa:
+  "will always be blocked"). Seleção na grade é no `onPointerDown`, que vem antes.
+- **O hash da senha da sessão fica em `session_secrets`**, não em `sessions` como na 10.1:
+  os membros leem a sessão, e com o hash dava para quebrar a senha fora do app. Nem o
+  mestre recebe o hash (privilégio por coluna); ele lê só o texto.
+- **`patch_sheet` decide no servidor quem grava cada campo** e em qual tabela, pelo esquema
+  da versão da ficha — a mesma regra de `lib/sheet/permissions.ts`. Campo proibido levanta
+  42501 com os ids no `detail`, e o app vira `SheetPermissionError` (reversão na tela).
+- **O cache (`computed`, `summary`) vai junto com o patch**, calculado no app (o banco não
+  sabe calcular fórmulas). Se o banco devolveu valores que outra pessoa mudou no meio, o app
+  recalcula e regrava só o cache: é determinístico, converge numa volta. O cache dos campos
+  só-do-mestre mora em `sheet_gm_data.computed`, senão vazaria para o jogador.
+- **Só o mestre migra fichas de versão** (`rewrite_sheet`): só ele vê a ficha inteira,
+  inclusive `orphaned`. Concorrência otimista pelo `updated_at` (40001 → relê e tenta de
+  novo). O mestre migra as desatualizadas ao abrir a mesa.
+- **Tempo real numa ficha aberta**: `applyRemote` aplica o que veio do banco e, por cima, o
+  que esta tela tem pendente **ou em voo** (`inFlight`) — sem isso, o eco de uma gravação
+  alheia "voltava" o que a pessoa acabou de digitar.
+- **Removido ou saiu da mesa: a ficha fica com o mestre** (o RLS exige ser membro para o
+  dono ler). Voltando com o convite, a ficha reaparece. Só o mestre exclui fichas.
+- DELETE do `postgres_changes` chega só com o id e sem filtro: trate pelo id.
+- Fichas locais das Fases 2 e 3 (localStorage) não aparecem mais: toda ficha nasce numa
+  sessão. Os dados continuam no armazenamento, sem uso.
+- Comandos longos com muitas aspas no Bash desta máquina às vezes quebram o parser
+  ("unexpected EOF"): para editar arquivos, prefira a ferramenta de edição.
+
+Pendências, de propósito:
+
+- Capa da sessão: precisa do bucket `assets` (Fase 6). A exclusão da sessão já tenta apagar
+  `assets/sessions/<id>/…`, e hoje não encontra nada.
+- Sem limite de tentativas de senha no `join_session` (bcrypt custo 8 já atrasa; entre
+  amigos, basta por ora).
+- `npm audit`: 2 vulnerabilidades altas no `mathjs` da biblioteca de dados (já existiam; a
+  correção sugerida quebra a biblioteca). Agora modelos de um mestre rodam fórmulas no PC
+  dos jogadores: avaliar antes da Fase 7, quando as rolagens vão para a mesa.
+- O teste definitivo do deep link no Windows é com o app instalado (`npm run build:win`).
+
+**Próxima fase: 6 — Tabuleiro e tokens.** Só começar depois do ok dele.

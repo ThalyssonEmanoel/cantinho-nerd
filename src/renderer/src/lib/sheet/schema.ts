@@ -266,6 +266,8 @@ export const sheetRecordValidator = z.object({
   templateVersion: z.number().int().min(1),
   kind: z.enum(['character', 'creature_instance']),
   ownerName: z.string().max(120),
+  ownerId: identifier.optional(),
+  sessionId: identifier.optional(),
   values: sheetValues,
   gmValues: sheetValues,
   computed: z.record(z.string(), cellValue),

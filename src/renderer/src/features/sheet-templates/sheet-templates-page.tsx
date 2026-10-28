@@ -105,8 +105,8 @@ export function SheetTemplatesPage(): React.JSX.Element {
 
     try {
       if (await templateRepository.isInUse(target.id)) {
-        toast.error('Este modelo está em uso por uma sessão', {
-          description: 'Troque o sistema da sessão antes de excluir.'
+        toast.error('Este modelo está em uso', {
+          description: 'Ele é o sistema de uma sessão ou já tem fichas criadas a partir dele.'
         })
         return
       }

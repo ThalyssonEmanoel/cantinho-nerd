@@ -1,6 +1,6 @@
 import { act } from 'react'
 import { createRoot } from 'react-dom/client'
-import { MemoryRouter, Route, Routes } from 'react-router-dom'
+import { MemoryRouter } from 'react-router-dom'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import {
   createExampleSchema,
@@ -76,16 +76,20 @@ afterEach(() => {
   useSheetStore.getState().close()
 })
 
-async function renderPage(): Promise<void> {
+async function renderPage(audience: 'gm' | 'player' = 'player'): Promise<void> {
   const root = createRoot(container)
   unmount = () => root.unmount()
 
+  // Desde a Fase 5 quem olha vem do login e da sessão, e chega pela propriedade.
   await act(async () => {
     root.render(
-      <MemoryRouter initialEntries={[`/sheets/${sheetId}`]}>
-        <Routes>
-          <Route path="/sheets/:sheetId" element={<SheetFillPage />} />
-        </Routes>
+      <MemoryRouter>
+        <SheetFillPage
+          sheetId={sheetId}
+          audience={audience}
+          backLabel="Voltar para a mesa"
+          onBack={() => {}}
+        />
       </MemoryRouter>
     )
   })
@@ -125,12 +129,16 @@ describe('SheetFillPage', () => {
     expect(text).not.toContain('#ERRO')
   })
 
-  it('o jogador não recebe o campo só do mestre, e o mestre recebe', async () => {
-    await renderPage()
+  it('o jogador não recebe o campo só do mestre', async () => {
+    await renderPage('player')
     expect(container.textContent).not.toContain('Anotações do mestre')
+    expect(container.textContent).not.toContain('Vendo como mestre')
+  })
 
-    await click(buttonWith('Mestre'))
+  it('o mestre recebe, e a tela avisa que ele vê tudo', async () => {
+    await renderPage('gm')
     expect(container.textContent).toContain('Anotações do mestre')
+    expect(container.textContent).toContain('Vendo como mestre')
   })
 
   it('mexer na barra de vida grava só aquele campo', async () => {

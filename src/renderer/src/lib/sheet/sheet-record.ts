@@ -1,5 +1,10 @@
 import type { FormulaValue } from '../formula'
-import { computeSheet, createInitialValues, fillResourceCurrents, type SheetSummary } from './context'
+import {
+  computeSheet,
+  createInitialValues,
+  fillResourceCurrents,
+  type SheetSummary
+} from './context'
 import { newId } from './factory'
 import { canPatchField, holdsValue, isGmOnly, type SheetAudience } from './permissions'
 import {
@@ -30,8 +35,12 @@ export interface SheetRecord {
   /** Versão **publicada** à qual a ficha está presa. */
   templateVersion: number
   kind: SheetKind
-  /** Dono da ficha. Vira `owner_id` quando as contas existirem (Fase 4). */
+  /** Nome de exibição do dono, para as listas. */
   ownerName: string
+  /** Conta dona da ficha (Fase 5). Fichas locais da Fase 3 não têm. */
+  ownerId?: string
+  /** Sessão da ficha (Fase 5). Fichas locais da Fase 3 não têm. */
+  sessionId?: string
   values: SheetValues
   /** Campos "só mestre", separados para o jogador nunca recebê-los (5.7). */
   gmValues: SheetValues
@@ -175,10 +184,7 @@ export function patchFields(
     }
   }
 
-  return recomputeSheet(
-    { ...sheet, values, gmValues, updatedAt: new Date().toISOString() },
-    schema
-  )
+  return recomputeSheet({ ...sheet, values, gmValues, updatedAt: new Date().toISOString() }, schema)
 }
 
 export interface SheetMigrationResult {
@@ -262,6 +268,27 @@ export function projectSheetFor(
   }
 
   return { ...sheet, gmValues: {}, orphaned: {}, computed }
+}
+
+/**
+ * Separa o cache dos calculados entre o que todos veem e o que é só do mestre. No banco
+ * cada metade vai para uma tabela: o cache de um campo só-do-mestre na tabela
+ * compartilhada entregaria o valor ao jogador (é a mesma regra de `projectSheetFor`).
+ */
+export function splitComputed(
+  schema: SheetSchema,
+  computed: Record<string, FormulaValue>
+): { shared: Record<string, FormulaValue>; gmOnly: Record<string, FormulaValue> } {
+  const shared: Record<string, FormulaValue> = {}
+  const gmOnly: Record<string, FormulaValue> = {}
+
+  for (const [path, value] of Object.entries(computed)) {
+    const component = findComponentByKey(schema, path.split('.')[0] ?? '')
+    if (component !== undefined && isGmOnly(component)) gmOnly[path] = value
+    else shared[path] = value
+  }
+
+  return { shared, gmOnly }
 }
 
 /** Nome do personagem pelo papel `name` (5.6), ou vazio se o modelo não tiver um. */

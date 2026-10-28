@@ -1,5 +1,4 @@
 import { useEffect, useMemo, useState } from 'react'
-import { useNavigate, useParams } from 'react-router-dom'
 import { ArrowLeft, Eye, Loader2, Sparkles } from 'lucide-react'
 import { toast } from 'sonner'
 import { Badge } from '@/components/ui/badge'
@@ -7,7 +6,13 @@ import { Button } from '@/components/ui/button'
 import { PageHeader } from '@/components/page-header'
 import { SaveIndicator } from '@/components/save-indicator'
 import { rollFormula, type RollSummary } from '@/lib/dice'
-import { createSheetContext, mergedValues, newId, projectSheetFor } from '@/lib/sheet'
+import {
+  createSheetContext,
+  mergedValues,
+  newId,
+  projectSheetFor,
+  type SheetAudience
+} from '@/lib/sheet'
 import { RollLog, type RollLogEntry } from '@/features/sheet-render/roll-log'
 import { SheetView } from '@/features/sheet-render/sheet-view'
 import type { RollRequest } from '@/features/sheet-render/types'
@@ -15,17 +20,28 @@ import { cn } from '@/lib/utils'
 import { sheetRepository } from './repository'
 import { useSheetStore } from './sheet-store'
 
+interface SheetFillPageProps {
+  sheetId: string
+  /** Quem está olhando, vindo do login e da sessão: o mestre vê e edita tudo (5.7). */
+  audience: SheetAudience
+  backLabel: string
+  onBack: () => void
+}
+
 /**
  * Ficha em modo de preenchimento (seção 5.7).
  *
  * É o mesmo renderizador do construtor: o que muda são as opções. Aqui ele edita de
  * verdade, respeitando quem vê e quem edita cada campo, e cada alteração vai para o
- * repositório como um patch de um campo só.
+ * repositório como um patch de um campo só. O que outras pessoas gravam chega pelo canal
+ * da sessão e entra sem desfazer o que está sendo digitado aqui.
  */
-export function SheetFillPage(): React.JSX.Element {
-  const { sheetId } = useParams<{ sheetId: string }>()
-  const navigate = useNavigate()
-
+export function SheetFillPage({
+  sheetId,
+  audience: viewerAudience,
+  backLabel,
+  onBack
+}: SheetFillPageProps): React.JSX.Element {
   const store = useSheetStore()
   const {
     sheet,
@@ -42,19 +58,23 @@ export function SheetFillPage(): React.JSX.Element {
 
   // Abre a ficha e liga o store ao repositório.
   useEffect(() => {
-    store.attach(sheetRepository)
-    if (sheetId === undefined) return
-
-    void store.open(sheetId)
+    const state = useSheetStore.getState()
+    state.attach(sheetRepository)
+    state.setAudience(viewerAudience)
+    void state.open(sheetId)
 
     return () => {
       // Sair da tela não pode perder o que estava na fila dos últimos milissegundos.
       void useSheetStore.getState().flush()
       useSheetStore.getState().close()
     }
-    // Só recarrega quando muda de ficha.
+    // Só reabre quando muda de ficha; quem olha é acertado no efeito abaixo.
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [sheetId])
+
+  useEffect(() => {
+    useSheetStore.getState().setAudience(viewerAudience)
+  }, [viewerAudience])
 
   // A recusa do repositório é avisada uma vez, quando acontece.
   useEffect(() => {
@@ -103,14 +123,19 @@ export function SheetFillPage(): React.JSX.Element {
     return (
       <LoadProblem
         message={`Não consegui abrir a ficha. ${loadError ?? ''}`}
-        onBack={() => void navigate('/sheets')}
+        backLabel={backLabel}
+        onBack={onBack}
       />
     )
   }
 
   if (loadState === 'missing') {
     return (
-      <LoadProblem message="Esta ficha não existe mais." onBack={() => void navigate('/sheets')} />
+      <LoadProblem
+        message="Esta ficha não existe mais, ou você não tem acesso a ela."
+        backLabel={backLabel}
+        onBack={onBack}
+      />
     )
   }
 
@@ -118,7 +143,8 @@ export function SheetFillPage(): React.JSX.Element {
     return (
       <LoadProblem
         message="O modelo desta ficha não está mais disponível. Os valores continuam guardados, mas sem o modelo não há como desenhar a ficha."
-        onBack={() => void navigate('/sheets')}
+        backLabel={backLabel}
+        onBack={onBack}
       />
     )
   }
@@ -132,8 +158,9 @@ export function SheetFillPage(): React.JSX.Element {
         <Button
           variant="ghost"
           size="icon"
-          onClick={() => void navigate('/sheets')}
-          aria-label="Voltar para as fichas"
+          onClick={onBack}
+          aria-label={backLabel}
+          title={backLabel}
         >
           <ArrowLeft className="size-4" />
         </Button>
@@ -152,27 +179,15 @@ export function SheetFillPage(): React.JSX.Element {
         <Badge variant="secondary">v{sheet.templateVersion}</Badge>
         <SaveIndicator state={saveState} />
 
-        <div className="ml-auto flex items-center gap-2">
-          {/* Na Fase 5 quem olha vem do login; aqui o botão existe para testar as permissões. */}
-          <span className="text-muted-foreground flex items-center gap-1 text-xs">
+        {audience === 'gm' && (
+          <span
+            className="text-muted-foreground ml-auto flex items-center gap-1 text-xs"
+            title="Você vê e edita também os campos que são só do mestre."
+          >
             <Eye className="size-3" />
-            Vendo como
+            Vendo como mestre
           </span>
-          <Button
-            variant={audience === 'player' ? 'default' : 'outline'}
-            size="sm"
-            onClick={() => store.setAudience('player')}
-          >
-            Jogador
-          </Button>
-          <Button
-            variant={audience === 'gm' ? 'default' : 'outline'}
-            size="sm"
-            onClick={() => store.setAudience('gm')}
-          >
-            Mestre
-          </Button>
-        </div>
+        )}
       </div>
 
       {migration !== null && (
@@ -245,7 +260,7 @@ export function SheetFillPage(): React.JSX.Element {
         <RollLog
           entries={log}
           onClear={() => setLog([])}
-          emptyHint="As rolagens aparecem aqui. Na Fase 7 elas passam a ir para o chat da sessão."
+          emptyHint="As rolagens aparecem aqui. Na Fase 7 elas passam a ir para o chat da mesa."
         />
       </div>
     </div>
@@ -254,9 +269,11 @@ export function SheetFillPage(): React.JSX.Element {
 
 function LoadProblem({
   message,
+  backLabel,
   onBack
 }: {
   message: string
+  backLabel: string
   onBack: () => void
 }): React.JSX.Element {
   return (
@@ -265,7 +282,7 @@ function LoadProblem({
       <p className="text-muted-foreground text-sm">{message}</p>
       <Button variant="outline" onClick={onBack}>
         <ArrowLeft className="size-4" />
-        Voltar para as fichas
+        {backLabel}
       </Button>
     </div>
   )

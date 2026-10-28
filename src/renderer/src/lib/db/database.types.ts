@@ -47,6 +47,158 @@ export type Database = {
         }
         Relationships: []
       }
+      session_members: {
+        Row: {
+          joined_at: string
+          role: string
+          session_id: string
+          user_id: string
+        }
+        Insert: {
+          joined_at?: string
+          role: string
+          session_id: string
+          user_id: string
+        }
+        Update: {
+          joined_at?: string
+          role?: string
+          session_id?: string
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "session_members_session_id_fkey"
+            columns: ["session_id"]
+            isOneToOne: false
+            referencedRelation: "sessions"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "session_members_user_id_fkey"
+            columns: ["user_id"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      session_secrets: {
+        Row: {
+          password: string
+          password_hash: string
+          session_id: string
+        }
+        Insert: {
+          password: string
+          password_hash: string
+          session_id: string
+        }
+        Update: {
+          password?: string
+          password_hash?: string
+          session_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "session_secrets_session_id_fkey"
+            columns: ["session_id"]
+            isOneToOne: true
+            referencedRelation: "sessions"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      sessions: {
+        Row: {
+          character_template_id: string | null
+          created_at: string
+          gm_id: string
+          id: string
+          invite_id: string
+          name: string
+          settings: Json
+          updated_at: string
+        }
+        Insert: {
+          character_template_id?: string | null
+          created_at?: string
+          gm_id?: string
+          id?: string
+          invite_id: string
+          name: string
+          settings?: Json
+          updated_at?: string
+        }
+        Update: {
+          character_template_id?: string | null
+          created_at?: string
+          gm_id?: string
+          id?: string
+          invite_id?: string
+          name?: string
+          settings?: Json
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "sessions_character_template_id_fkey"
+            columns: ["character_template_id"]
+            isOneToOne: false
+            referencedRelation: "sheet_templates"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "sessions_gm_id_fkey"
+            columns: ["gm_id"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      sheet_gm_data: {
+        Row: {
+          computed: Json
+          orphaned: Json
+          session_id: string
+          sheet_id: string
+          updated_at: string
+          values: Json
+        }
+        Insert: {
+          computed?: Json
+          orphaned?: Json
+          session_id: string
+          sheet_id: string
+          updated_at?: string
+          values?: Json
+        }
+        Update: {
+          computed?: Json
+          orphaned?: Json
+          session_id?: string
+          sheet_id?: string
+          updated_at?: string
+          values?: Json
+        }
+        Relationships: [
+          {
+            foreignKeyName: "sheet_gm_data_session_id_fkey"
+            columns: ["session_id"]
+            isOneToOne: false
+            referencedRelation: "sessions"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "sheet_gm_data_sheet_id_fkey"
+            columns: ["sheet_id"]
+            isOneToOne: true
+            referencedRelation: "sheets"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       sheet_template_versions: {
         Row: {
           published_at: string
@@ -114,6 +266,73 @@ export type Database = {
           },
         ]
       }
+      sheets: {
+        Row: {
+          computed: Json
+          created_at: string
+          id: string
+          kind: string
+          owner_id: string
+          session_id: string
+          summary: Json
+          template_id: string
+          template_name: string
+          template_version: number
+          updated_at: string
+          values: Json
+        }
+        Insert: {
+          computed?: Json
+          created_at?: string
+          id?: string
+          kind?: string
+          owner_id: string
+          session_id: string
+          summary?: Json
+          template_id: string
+          template_name?: string
+          template_version: number
+          updated_at?: string
+          values?: Json
+        }
+        Update: {
+          computed?: Json
+          created_at?: string
+          id?: string
+          kind?: string
+          owner_id?: string
+          session_id?: string
+          summary?: Json
+          template_id?: string
+          template_name?: string
+          template_version?: number
+          updated_at?: string
+          values?: Json
+        }
+        Relationships: [
+          {
+            foreignKeyName: "sheets_owner_id_fkey"
+            columns: ["owner_id"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "sheets_session_id_fkey"
+            columns: ["session_id"]
+            isOneToOne: false
+            referencedRelation: "sessions"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "sheets_template_id_template_version_fkey"
+            columns: ["template_id", "template_version"]
+            isOneToOne: false
+            referencedRelation: "sheet_template_versions"
+            referencedColumns: ["template_id", "version"]
+          },
+        ]
+      }
     }
     Views: {
       [_ in never]: never
@@ -126,6 +345,70 @@ export type Database = {
       seed_example_template: {
         Args: { p_name: string; p_schema: Json }
         Returns: string
+      }
+      create_session: {
+        Args: { p_name: string; p_password: string; p_template_id?: string }
+        Returns: Json
+      }
+      set_session_password: {
+        Args: { p_password: string; p_session_id: string }
+        Returns: undefined
+      }
+      regenerate_invite: {
+        Args: { p_session_id: string }
+        Returns: string
+      }
+      invite_preview: {
+        Args: { p_invite_id: string }
+        Returns: Json
+      }
+      join_session: {
+        Args: { p_invite_id: string; p_password: string }
+        Returns: string
+      }
+      create_character_sheet: {
+        Args: {
+          p_computed: Json
+          p_gm_computed: Json
+          p_gm_values: Json
+          p_session_id: string
+          p_summary: Json
+          p_template_version: number
+          p_values: Json
+        }
+        Returns: string
+      }
+      patch_sheet: {
+        Args: {
+          p_changes: Json
+          p_computed?: Json
+          p_gm_computed?: Json
+          p_sheet_id: string
+          p_summary?: Json
+        }
+        Returns: Json
+      }
+      rewrite_sheet: {
+        Args: {
+          p_computed: Json
+          p_expected_updated_at: string
+          p_gm_computed: Json
+          p_gm_values: Json
+          p_orphaned: Json
+          p_sheet_id: string
+          p_summary: Json
+          p_template_version: number
+          p_values: Json
+        }
+        Returns: string
+      }
+      is_gm: {
+        Args: { p_session_id: string }
+        Returns: boolean
+      }
+      is_member: {
+        Args: { p_session_id: string }
+        Returns: boolean
       }
     }
     Enums: {

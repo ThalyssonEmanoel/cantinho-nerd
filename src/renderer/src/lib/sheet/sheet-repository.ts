@@ -32,11 +32,17 @@ export interface SheetSummaryRow {
   /** Barras dos papéis, para a lista mostrar a vida sem abrir a ficha. */
   bars: SheetRecord['summary']['bars']
   updatedAt: string
+  /** Sessão e dono (Fase 5). As fichas locais da Fase 3 não têm. */
+  sessionId?: string
+  sessionName?: string
+  ownerId?: string
 }
 
 export interface CreateSheetInput {
   templateId: string
   ownerName: string
+  /** Na Fase 5 toda ficha nasce numa sessão. */
+  sessionId?: string
 }
 
 export class SheetPermissionError extends Error {
@@ -47,7 +53,8 @@ export class SheetPermissionError extends Error {
 }
 
 export interface SheetRepository {
-  list: () => Promise<SheetSummaryRow[]>
+  /** Fichas que quem está logado enxerga; com `sessionId`, só as daquela sessão. */
+  list: (sessionId?: string) => Promise<SheetSummaryRow[]>
   get: (id: string) => Promise<SheetRecord | null>
   /** Esquema da versão publicada à qual a ficha está presa. */
   schemaOf: (sheet: SheetRecord) => Promise<SheetSchema | null>
@@ -71,7 +78,9 @@ export function summarizeSheet(sheet: SheetRecord): SheetSummaryRow {
     ownerName: sheet.ownerName,
     name: sheet.summary.name ?? '',
     bars: sheet.summary.bars,
-    updatedAt: sheet.updatedAt
+    updatedAt: sheet.updatedAt,
+    sessionId: sheet.sessionId,
+    ownerId: sheet.ownerId
   }
 }
 

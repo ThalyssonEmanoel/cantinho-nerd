@@ -330,16 +330,16 @@ Cada fase termina com algo que eu consigo abrir e testar.
 - [x] Renderizador em modo de preenchimento (5.7): permissões, visibilidade condicional, tabelas, barras, marcadores, botões de rolagem (resultado num painel local por enquanto), migração entre versões, cálculo de `computed` e `bars`.
 
 **Fase 4 — Contas e Supabase**
-- [ ] Projeto Supabase + CLI; migração com `profiles`, modelos e versões, RLS, bucket `avatars`.
-- [ ] Cadastro/login por nome + senha (4.1), escolha de papel (4.2), continuar conectado, logout.
-- [ ] Perfil: nome de exibição, avatar e bio. Modelos de ficha passam a ser salvos no Supabase.
+- [X] Projeto Supabase + CLI; migração com `profiles`, modelos e versões, RLS, bucket `avatars`.
+- [X] Cadastro/login por nome + senha (4.1), escolha de papel (4.2), continuar conectado, logout.
+- [X] Perfil: nome de exibição, avatar e bio. Modelos de ficha passam a ser salvos no Supabase.
 
 **Fase 5 — Sessões e convites**
-- [ ] Tabelas de sessão, membros, segredos, fichas e dados do mestre, com RLS e RPCs.
-- [ ] Lobby do mestre e do jogador (4.3, 4.4), copiar convite, trocar senha, novo ID, remover jogador, sair, excluir sessão (com arquivos).
-- [ ] Entrar por link/ID + senha; deep link `rpgmesa://join/<id>` com instância única, inclusive sem login. No Windows, o teste definitivo é com o app instalado.
-- [ ] Canal privado + presença. O jogador cria o personagem; o mestre vê todas as fichas; salvamento campo a campo em tempo real.
-- [ ] Aceite: com duas instâncias, o mestre cria e convida, o jogador entra, e os dois editam a mesma ficha ao mesmo tempo sem perder dados.
+- [X] Tabelas de sessão, membros, segredos, fichas e dados do mestre, com RLS e RPCs.
+- [X] Lobby do mestre e do jogador (4.3, 4.4), copiar convite, trocar senha, novo ID, remover jogador, sair, excluir sessão (com arquivos).
+- [X] Entrar por link/ID + senha; deep link `rpgmesa://join/<id>` com instância única, inclusive sem login. No Windows, o teste definitivo é com o app instalado.
+- [X] Canal privado + presença. O jogador cria o personagem; o mestre vê todas as fichas; salvamento campo a campo em tempo real.
+- [X] Aceite: com duas instâncias, o mestre cria e convida, o jogador entra, e os dois editam a mesma ficha ao mesmo tempo sem perder dados.
 
 **Fase 6 — Tabuleiro e tokens**
 - [ ] Mapas, tokens e galerias, com RLS e bucket `assets`; upload em WebP; cache de imagens.
@@ -415,3 +415,18 @@ Combinado na Fase 4 (28/10/2026), a pedido do Thalysson ou decidido no caminho:
    locais passam a apontar para os modelos enviados. O "Exemplo d20" intocado não sobe,
    porque cada conta ganha o seu.
 10. **Avatar:** recortado em círculo, salvo como WebP de 256 × 256, nome = hash do conteúdo.
+
+Combinado na Fase 5 (29/10/2026):
+
+11. **Login sem e-mail:** o Thalysson pediu explicitamente "nada de e-mail". Nenhuma tela
+    pede, mostra ou menciona e-mail; o endereço interno do Auth continua invisível (4.1).
+12. **Senha da sessão:** o hash fica em `session_secrets` (só o mestre lê, e só o texto), e não
+    em `sessions`, que todos os membros leem. Senha de 4 a 72 caracteres; a sugerida segue o
+    formato `bicho-cor-número`.
+13. **Código do convite:** 10 letras e números, sem os que se confundem (l, 1, o, 0). O
+    "Copiar convite" leva o link `rpgmesa://`, o código para colar e a senha.
+14. **Fichas:** só o mestre exclui fichas e só ele migra fichas para a versão nova do sistema
+    (ele é o único que enxerga a ficha inteira); o mestre faz isso ao abrir a mesa. Jogador
+    removido ou que saiu perde o acesso, mas a ficha fica com o mestre e volta se ele voltar.
+15. **Fichas locais das Fases 2 e 3** não aparecem mais: toda ficha nasce dentro de uma mesa.
+16. **Capa da sessão** fica para a Fase 6, junto com o bucket `assets`.

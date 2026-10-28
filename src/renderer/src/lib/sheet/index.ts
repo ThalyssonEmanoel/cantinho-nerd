@@ -100,6 +100,7 @@ export {
   recomputeSheet,
   rejectedPatchFields,
   sheetNameOf,
+  splitComputed,
   splitValues
 } from './sheet-record'
 
