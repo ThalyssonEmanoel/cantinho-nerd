@@ -1,0 +1,7 @@
+node_modules
+out
+dist
+build
+package-lock.json
+# A especificação é o prompt original, mantido palavra por palavra.
+docs/ESPECIFICACAO.md

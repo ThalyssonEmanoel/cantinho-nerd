@@ -1,0 +1,21 @@
+node_modules/
+out/
+dist/
+.vite/
+
+# Variáveis de ambiente: nunca no Git (só o .env.example entra).
+.env
+.env.*
+!.env.example
+
+# Build local do instalador
+build/icon.ico
+
+# Diversos
+*.log
+npm-debug.log*
+.DS_Store
+Thumbs.db
+coverage/
+*.tsbuildinfo
+.eslintcache

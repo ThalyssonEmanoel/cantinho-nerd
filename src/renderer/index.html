@@ -1,0 +1,17 @@
+<!doctype html>
+<html lang="pt-BR" class="dark">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Cantinho Nerd</title>
+    <!--
+      A Content-Security-Policy é aplicada pelo processo principal em todas as respostas
+      (src/main/security.ts), e não por uma meta tag aqui: assim ela também vale para o
+      servidor de desenvolvimento e não precisa de duas versões do mesmo texto.
+    -->
+  </head>
+  <body>
+    <div id="root"></div>
+    <script type="module" src="/src/main.tsx"></script>
+  </body>
+</html>
