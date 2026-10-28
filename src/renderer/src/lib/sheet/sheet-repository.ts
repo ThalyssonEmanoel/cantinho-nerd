@@ -75,6 +75,52 @@ export function summarizeSheet(sheet: SheetRecord): SheetSummaryRow {
   }
 }
 
+/**
+ * Troca o modelo das fichas locais pelos ids novos (`idMap`: antigo → novo). Usado quando
+ * os modelos locais sobem para a conta: sem isso, as fichas apontariam para modelos que não
+ * existem mais. Devolve quantas fichas mudaram.
+ */
+export function relinkLocalSheets(
+  idMap: ReadonlyMap<string, string>,
+  storage: Storage = globalThis.localStorage
+): number {
+  let raw: string | null
+  try {
+    raw = storage.getItem(STORAGE_KEY)
+  } catch {
+    return 0
+  }
+  if (raw === null) return 0
+
+  let data: unknown
+  try {
+    data = JSON.parse(raw)
+  } catch {
+    return 0
+  }
+  if (!Array.isArray(data)) return 0
+
+  let changed = 0
+  const relinked = data.map((item: unknown) => {
+    if (typeof item !== 'object' || item === null) return item
+    const sheet = item as { templateId?: unknown }
+    const next = typeof sheet.templateId === 'string' ? idMap.get(sheet.templateId) : undefined
+    if (next === undefined) return item
+    changed += 1
+    return { ...sheet, templateId: next }
+  })
+
+  if (changed > 0) {
+    try {
+      storage.setItem(STORAGE_KEY, JSON.stringify(relinked))
+    } catch (error) {
+      console.error('Não consegui religar as fichas locais aos modelos novos:', error)
+      return 0
+    }
+  }
+  return changed
+}
+
 /** Implementação local. O armazenamento pode falhar (janela privada), então é tolerante. */
 export function createLocalSheetRepository(
   templates: TemplateRepository,
@@ -119,17 +165,43 @@ export function createLocalSheetRepository(
     return sheet
   }
 
-  /** Esquema congelado da versão a que a ficha está presa. */
-  async function schemaFor(sheet: SheetRecord): Promise<SheetSchema | null> {
+  /*
+    Versão publicada é imutável (5.1), então o esquema dela pode ficar em memória para
+    sempre. Desde a Fase 4 os modelos vêm do Supabase, e sem isto cada campo editado
+    buscaria o modelo inteiro de novo só para conferir permissões.
+  */
+  const versionCache = new Map<string, SheetSchema>()
+  const cacheKey = (templateId: string, version: number): string => `${templateId}#${version}`
+
+  function rememberVersions(template: SheetTemplate): void {
+    for (const version of template.versions) {
+      versionCache.set(cacheKey(template.id, version.version), version.schema)
+    }
+  }
+
+  /**
+   * Esquema congelado da versão a que a ficha está presa. `fresh` busca de novo: é o que
+   * a abertura da ficha usa, para notar quando o modelo foi excluído. O patch, que roda a
+   * cada campo, se contenta com o que já foi buscado.
+   */
+  async function schemaFor(
+    sheet: SheetRecord,
+    { fresh }: { fresh: boolean }
+  ): Promise<SheetSchema | null> {
+    const key = cacheKey(sheet.templateId, sheet.templateVersion)
+    const cached = versionCache.get(key)
+    if (!fresh && cached !== undefined) return cached
+
     const template = await templates.get(sheet.templateId)
     if (template === null) return null
-    const version = template.versions.find((item) => item.version === sheet.templateVersion)
-    return version?.schema ?? null
+    rememberVersions(template)
+    return versionCache.get(key) ?? null
   }
 
   async function requireTemplate(templateId: string): Promise<SheetTemplate> {
     const template = await templates.get(templateId)
     if (template === null) throw new Error('Modelo não encontrado.')
+    rememberVersions(template)
     return template
   }
 
@@ -138,7 +210,7 @@ export function createLocalSheetRepository(
 
     get: async (id) => readAll().find((sheet) => sheet.id === id) ?? null,
 
-    schemaOf: schemaFor,
+    schemaOf: (sheet) => schemaFor(sheet, { fresh: true }),
 
     create: async (input) => {
       const template = await requireTemplate(input.templateId)
@@ -155,7 +227,7 @@ export function createLocalSheetRepository(
       const sheet = readAll().find((item) => item.id === id)
       if (sheet === undefined) throw new Error('Ficha não encontrada.')
 
-      const schema = await schemaFor(sheet)
+      const schema = await schemaFor(sheet, { fresh: false })
       if (schema === null) throw new Error('O modelo desta ficha não está mais disponível.')
 
       const rejected = rejectedPatchFields(schema, patch, audience)
@@ -176,6 +248,7 @@ export function createLocalSheetRepository(
 
       const template = await templates.get(sheet.templateId)
       if (template === null) return null
+      rememberVersions(template)
 
       const latest = publishedVersionOf(template)
       if (latest === null || latest.version <= sheet.templateVersion) return null

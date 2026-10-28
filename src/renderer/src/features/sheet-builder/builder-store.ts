@@ -49,9 +49,28 @@ interface BuilderState {
   setPreviewing: (previewing: boolean) => void
   markPublished: (template: SheetTemplate) => void
   saveNow: () => Promise<void>
+  /**
+   * Grava agora o que estava esperando o atraso do salvamento automático. A tela chama ao
+   * sair: sem isto, a última alteração feita a menos de 600 ms se perdia no `reset`.
+   */
+  flush: () => Promise<void>
 }
 
 let saveTimer: ReturnType<typeof setTimeout> | undefined
+
+/**
+ * Fila das gravações. Com o banco na rede, duas gravações em voo podem chegar fora de ordem
+ * — e o rascunho mais velho ganharia. Uma de cada vez, na ordem em que foram pedidas.
+ */
+let saveQueue: Promise<void> = Promise.resolve()
+
+interface SaveSnapshot {
+  repository: TemplateRepository
+  templateId: string
+  schema: SheetSchema
+  name: string
+  template: SheetTemplate | null
+}
 
 export const useBuilderStore = create<BuilderState>()((set, get) => {
   /** Agenda a gravação do rascunho. */
@@ -60,6 +79,34 @@ export const useBuilderStore = create<BuilderState>()((set, get) => {
     saveTimer = setTimeout(() => {
       void get().saveNow()
     }, SAVE_DELAY_MS)
+  }
+
+  async function performSave(snapshot: SaveSnapshot): Promise<void> {
+    const { repository, templateId, schema, name, template } = snapshot
+
+    // Nome vazio não vai para o banco (ele recusa); fica valendo o último nome bom.
+    const trimmed = name.trim()
+    const rename = template !== null && trimmed !== '' && trimmed !== template.name
+
+    if (get().templateId === templateId) set({ saveState: 'saving' })
+    try {
+      await repository.saveDraft(templateId, schema)
+      if (rename) await repository.rename(templateId, trimmed)
+
+      // Outro modelo pode ter sido aberto (ou a tela fechada) enquanto a gravação viajava.
+      const current = get()
+      if (current.templateId !== templateId) return
+      set({
+        // Se o mestre mexeu de novo nesse meio-tempo, continua "não salvo".
+        saveState: current.saveState === 'saving' ? 'saved' : current.saveState,
+        ...(rename && current.template !== null
+          ? { template: { ...current.template, name: trimmed } }
+          : {})
+      })
+    } catch (error) {
+      console.error('Falha ao salvar o rascunho do modelo:', error)
+      if (get().templateId === templateId) set({ saveState: 'error' })
+    }
   }
 
   return {
@@ -91,7 +138,9 @@ export const useBuilderStore = create<BuilderState>()((set, get) => {
         previewing: false
       }),
 
-    reset: () =>
+    reset: () => {
+      if (saveTimer !== undefined) clearTimeout(saveTimer)
+      saveTimer = undefined
       set({
         template: null,
         templateId: null,
@@ -103,7 +152,8 @@ export const useBuilderStore = create<BuilderState>()((set, get) => {
         selectedId: null,
         saveState: 'idle',
         previewing: false
-      }),
+      })
+    },
 
     commit: (next) => {
       const { schema, past } = get()
@@ -168,21 +218,25 @@ export const useBuilderStore = create<BuilderState>()((set, get) => {
 
     markPublished: (template) => set({ template }),
 
-    saveNow: async () => {
-      const { repository, templateId, schema, name, template } = get()
-      if (repository === null || templateId === null || schema === null) return
+    saveNow: () => {
+      if (saveTimer !== undefined) clearTimeout(saveTimer)
+      saveTimer = undefined
 
-      set({ saveState: 'saving' })
-      try {
-        await repository.saveDraft(templateId, schema)
-        if (template !== null && template.name !== name) {
-          await repository.rename(templateId, name)
-        }
-        set({ saveState: 'saved' })
-      } catch (error) {
-        console.error('Falha ao salvar o rascunho do modelo:', error)
-        set({ saveState: 'error' })
-      }
+      // O retrato é tirado agora, e não quando a vez dele chegar na fila: assim a tela pode
+      // sair (e o store ser limpo) logo depois, e o que foi pedido ainda chega ao banco.
+      const { repository, templateId, schema, name, template } = get()
+      if (repository === null || templateId === null || schema === null) return saveQueue
+
+      const run = saveQueue.then(() =>
+        performSave({ repository, templateId, schema, name, template })
+      )
+      saveQueue = run.catch(() => undefined)
+      return run
+    },
+
+    flush: async () => {
+      if (saveTimer === undefined) return
+      await get().saveNow()
     }
   }
 })

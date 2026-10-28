@@ -312,22 +312,22 @@ Ao salvar, o cliente calcula os campos e grava junto `computed` (cache dos calcu
 Cada fase termina com algo que eu consigo abrir e testar.
 
 **Fase 0 — Fundação**
-- [ ] Projeto electron-vite (React + TS) com Tailwind, shadcn/ui, lucide, Zustand, HashRouter, ESLint/Prettier e Vitest.
-- [ ] Estrutura de pastas, `CLAUDE.md`, `docs/ESPECIFICACAO.md`, `.gitignore`, `.env.example`, Git iniciado.
-- [ ] Segurança do Electron (10.4). Telas vazias navegáveis (Login, Escolha de papel, Lobbies, Sessão, Construtor) em tema escuro.
-- [ ] `npm run dev:p2` abre uma segunda instância com outro perfil de dados.
-- [ ] `npm run build:win` gera um instalador que instala e abre o app.
+- [x] Projeto electron-vite (React + TS) com Tailwind, shadcn/ui, lucide, Zustand, HashRouter, ESLint/Prettier e Vitest.
+- [x] Estrutura de pastas, `CLAUDE.md`, `docs/ESPECIFICACAO.md`, `.gitignore`, `.env.example`, Git iniciado.
+- [x] Segurança do Electron (10.4). Telas vazias navegáveis (Login, Escolha de papel, Lobbies, Sessão, Construtor) em tema escuro.
+- [x] `npm run dev:p2` abre uma segunda instância com outro perfil de dados.
+- [x] `npm run build:win` gera um instalador que instala e abre o app.
 
 **Fase 1 — Motor de fórmulas e dados** (sem interface)
-- [ ] Linguagem de fórmulas (5.4), grafo de dependências com detecção de ciclo, fórmulas de rolagem com `{…}` e regras de crítico (5.5).
-- [ ] Testes: `piso((forca-10)/2)` com 15 → 2 e com 8 → −1; `soma(inventario.peso)`; ciclo `a=b+1, b=a+1` → erro; `{agilidade}d20kh1`; o exemplo do atributo 0 → `2d20kl1`; crítico natural e por margem; fórmula inválida não lança exceção.
+- [x] Linguagem de fórmulas (5.4), grafo de dependências com detecção de ciclo, fórmulas de rolagem com `{…}` e regras de crítico (5.5).
+- [x] Testes: `piso((forca-10)/2)` com 15 → 2 e com 8 → −1; `soma(inventario.peso)`; ciclo `a=b+1, b=a+1` → erro; `{agilidade}d20kh1`; o exemplo do atributo 0 → `2d20kl1`; crítico natural e por margem; fórmula inválida não lança exceção.
 
 **Fase 2 — Construtor de fichas** (salvando localmente, atrás de uma interface de repositório)
-- [ ] Tudo da seção 5.2 e 5.3, papéis (5.6), rascunho/publicar, exportar/importar.
-- [ ] Aceite: consigo montar uma ficha no estilo Ordem Paranormal e outra no estilo D&D 5e, com atributos, perícias em tabela, vida com máximo calculado e botões de rolagem funcionando na visualização.
+- [x] Tudo da seção 5.2 e 5.3, papéis (5.6), rascunho/publicar, exportar/importar.
+- [x] Aceite: consigo montar uma ficha no estilo Ordem Paranormal e outra no estilo D&D 5e, com atributos, perícias em tabela, vida com máximo calculado e botões de rolagem funcionando na visualização.
 
 **Fase 3 — Ficha preenchível**
-- [ ] Renderizador em modo de preenchimento (5.7): permissões, visibilidade condicional, tabelas, barras, marcadores, botões de rolagem (resultado num painel local por enquanto), migração entre versões, cálculo de `computed` e `bars`.
+- [x] Renderizador em modo de preenchimento (5.7): permissões, visibilidade condicional, tabelas, barras, marcadores, botões de rolagem (resultado num painel local por enquanto), migração entre versões, cálculo de `computed` e `bars`.
 
 **Fase 4 — Contas e Supabase**
 - [ ] Projeto Supabase + CLI; migração com `profiles`, modelos e versões, RLS, bucket `avatars`.
@@ -393,3 +393,25 @@ Combinado na conversa da Fase 0 (27/10/2026):
    D&D 5e e Ordem Paranormal fixos em código). O app é construído do zero conforme este
    documento. O código antigo continua no histórico do Git, se um dia fizer falta.
 4. **Gerenciador de pacotes: npm** (o bun não está instalado nesta máquina).
+
+Combinado na Fase 4 (28/10/2026), a pedido do Thalysson ou decidido no caminho:
+
+5. **Pedidos junto com a Fase 4:** cursor de mãozinha em tudo que é clicável; correção do
+   campo Rótulo do construtor, que perdia o foco a cada tecla; seletor de cor (paleta pronta
+   + cor personalizada) nos campos "Cor de destaque" e "Cor"; e uma tela **Guia de
+   fórmulas**, que ensina a escrever fórmulas e ligar um componente ao outro, com exemplos
+   calculados ao vivo pelo motor e uma caixa para testar. Ela fica na navegação e no botão
+   "Guia" do construtor.
+6. **Nome de usuário:** de 3 a 20 caracteres, letras sem acento, números, ponto, hífen e
+   sublinhado, começando e terminando com letra ou número; não diferencia maiúsculas e não
+   pode ser trocado depois (é o login). O nome de exibição é livre (até 40) e, se ficar
+   vazio no cadastro, repete o nome de usuário. Bio até 300 caracteres.
+7. **E-mail interno:** `nome@usuarios.rpgmesa.app`, como sugerido na seção 4.1. Não pode
+   mudar depois que houver contas.
+8. **"Continuar conectado"** é uma caixa no login, marcada por padrão. Desmarcada, a sessão
+   termina ao fechar o app.
+9. **Modelos de antes das contas:** os que ficaram só no armazenamento local (Fases 2 e 3)
+   aparecem num aviso na biblioteca para subir à conta, com as versões publicadas; as fichas
+   locais passam a apontar para os modelos enviados. O "Exemplo d20" intocado não sobe,
+   porque cada conta ganha o seu.
+10. **Avatar:** recortado em círculo, salvo como WebP de 256 × 256, nome = hash do conteúdo.

@@ -3,6 +3,7 @@ import { useNavigate } from 'react-router-dom'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
 import { useAppStore, type Role } from '@/stores/app-store'
+import { useAuthStore } from '@/stores/auth-store'
 
 const roles = [
   {
@@ -25,6 +26,7 @@ export function RoleChoicePage(): React.JSX.Element {
   const navigate = useNavigate()
   const setRole = useAppStore((state) => state.setRole)
   const lastSession = useAppStore((state) => state.lastSession)
+  const displayName = useAuthStore((state) => state.profile?.displayName)
 
   function choose(role: Role, to: string): void {
     setRole(role)
@@ -34,7 +36,11 @@ export function RoleChoicePage(): React.JSX.Element {
   return (
     <div className="mx-auto max-w-3xl space-y-6 p-8">
       <div className="space-y-1 text-center">
-        <h1 className="text-2xl font-semibold tracking-tight">Como você vai jogar hoje?</h1>
+        <h1 className="text-2xl font-semibold tracking-tight">
+          {displayName === undefined
+            ? 'Como você vai jogar hoje?'
+            : `Como você vai jogar hoje, ${displayName}?`}
+        </h1>
         <p className="text-muted-foreground text-sm">
           O papel não é fixo: você pode mestrar uma sessão e jogar em outra.
         </p>

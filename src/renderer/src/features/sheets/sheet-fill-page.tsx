@@ -27,7 +27,17 @@ export function SheetFillPage(): React.JSX.Element {
   const navigate = useNavigate()
 
   const store = useSheetStore()
-  const { sheet, schema, audience, activeTabId, loadState, saveState, lastError, migration } = store
+  const {
+    sheet,
+    schema,
+    audience,
+    activeTabId,
+    loadState,
+    saveState,
+    lastError,
+    loadError,
+    migration
+  } = store
   const [log, setLog] = useState<RollLogEntry[]>([])
 
   // Abre a ficha e liga o store ao repositório.
@@ -89,8 +99,19 @@ export function SheetFillPage(): React.JSX.Element {
     )
   }
 
+  if (loadState === 'error') {
+    return (
+      <LoadProblem
+        message={`Não consegui abrir a ficha. ${loadError ?? ''}`}
+        onBack={() => void navigate('/sheets')}
+      />
+    )
+  }
+
   if (loadState === 'missing') {
-    return <LoadProblem message="Esta ficha não existe mais." onBack={() => void navigate('/sheets')} />
+    return (
+      <LoadProblem message="Esta ficha não existe mais." onBack={() => void navigate('/sheets')} />
+    )
   }
 
   if (loadState === 'no-template' || schema === null || sheet === null || context === null) {

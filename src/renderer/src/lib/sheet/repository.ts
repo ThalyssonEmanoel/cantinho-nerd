@@ -168,6 +168,38 @@ export function createLocalTemplateRepository(
 }
 
 /**
+ * Tira modelos do armazenamento local — os que já subiram para a conta (Fase 4), para a
+ * oferta de importação não aparecer de novo para eles.
+ */
+export function removeLocalTemplates(
+  ids: Iterable<string>,
+  storage: Storage = globalThis.localStorage
+): void {
+  const remove = new Set(ids)
+  let raw: string | null
+  try {
+    raw = storage.getItem(STORAGE_KEY)
+  } catch {
+    return
+  }
+  if (raw === null) return
+
+  try {
+    const data: unknown = JSON.parse(raw)
+    if (!Array.isArray(data)) return
+    const kept = data.filter(
+      (item: unknown) =>
+        typeof item !== 'object' ||
+        item === null ||
+        !remove.has(String((item as { id?: unknown }).id))
+    )
+    storage.setItem(STORAGE_KEY, JSON.stringify(kept))
+  } catch (error) {
+    console.error('Não consegui limpar os modelos locais:', error)
+  }
+}
+
+/**
  * Coloca o "Exemplo d20" na biblioteca na primeira vez (5.1). A marca de "já semeei" é
  * separada da lista, para o mestre poder excluir o exemplo sem ele voltar sozinho.
  */

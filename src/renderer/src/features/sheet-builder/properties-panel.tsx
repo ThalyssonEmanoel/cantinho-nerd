@@ -1,5 +1,6 @@
 import { useState } from 'react'
 import { Copy, Trash2 } from 'lucide-react'
+import { ColorPicker } from '@/components/color-picker'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
@@ -38,13 +39,6 @@ export function PropertiesPanel({
   onDelete,
   onMoveToTab
 }: PropertiesPanelProps): React.JSX.Element {
-  /*
-    O campo da chave é um rascunho: só vale quando a pessoa sai dele, para a fórmula não ser
-    reescrita a cada tecla. Quem sincroniza com a seleção é a `key` deste componente, posta
-    pela tela do construtor — assim não precisamos de um efeito chamando setState.
-  */
-  const [keyDraft, setKeyDraft] = useState(component?.key ?? '')
-
   if (component === null) {
     return (
       <div className="text-muted-foreground p-4 text-sm">
@@ -54,7 +48,6 @@ export function PropertiesPanel({
     )
   }
 
-  const keyError = validateKeyDraft(keyDraft, component, schema)
   const currentTab = schema.tabs.find((tab) =>
     tab.components.some((item) => item.id === component.id)
   )
@@ -88,29 +81,22 @@ export function PropertiesPanel({
       <PropertyField label="Rótulo">
         <Input
           value={component.label}
+          aria-label="Rótulo"
           onChange={(event) => onChange({ label: event.target.value })}
         />
       </PropertyField>
 
-      <PropertyField
-        label="Chave"
-        hint="Nome usado nas fórmulas. Ao trocar, as fórmulas que a usam são atualizadas."
-        error={keyError}
-      >
-        <Input
-          className="font-mono text-xs"
-          value={keyDraft}
-          onChange={(event) => setKeyDraft(event.target.value)}
-          onBlur={() => {
-            if (keyError === undefined && keyDraft !== component.key) onRenameKey(keyDraft)
-            else if (keyError !== undefined) setKeyDraft(component.key)
-          }}
-          onKeyDown={(event) => {
-            if (event.key === 'Enter') event.currentTarget.blur()
-            if (event.key === 'Escape') setKeyDraft(component.key)
-          }}
-        />
-      </PropertyField>
+      {/*
+        A `key` do React aqui é a chave da fórmula: quando ela muda (o mestre renomeou, ou
+        ela acompanhou o rótulo), só este campo recomeça com o valor novo. Antes a `key` ia
+        no painel inteiro, e cada letra digitada no Rótulo remontava o painel e tirava o foco.
+      */}
+      <KeyField
+        key={component.key}
+        component={component}
+        schema={schema}
+        onRenameKey={onRenameKey}
+      />
 
       <PropertyField label="Dica">
         <Input
@@ -177,11 +163,12 @@ export function PropertiesPanel({
         </Select>
       </PropertyField>
 
-      <PropertyField label="Cor de destaque">
-        <Input
-          value={component.accent ?? ''}
-          placeholder="#a78bfa"
-          onChange={(event) => onChange({ accent: event.target.value })}
+      <PropertyField label="Cor de destaque" hint="Pinta o rótulo do campo.">
+        <ColorPicker
+          aria-label="Cor de destaque"
+          value={component.accent === '' ? undefined : component.accent}
+          emptyLabel="Padrão"
+          onChange={(accent) => onChange({ accent })}
         />
       </PropertyField>
 
@@ -204,6 +191,44 @@ export function PropertiesPanel({
         </PropertyGroup>
       )}
     </div>
+  )
+}
+
+interface KeyFieldProps {
+  component: SheetComponent
+  schema: SheetSchema
+  onRenameKey: (newKey: string) => void
+}
+
+/**
+ * Campo da chave. É um rascunho: só vale quando a pessoa sai dele, para as fórmulas não
+ * serem reescritas a cada tecla.
+ */
+function KeyField({ component, schema, onRenameKey }: KeyFieldProps): React.JSX.Element {
+  const [draft, setDraft] = useState(component.key)
+  const error = validateKeyDraft(draft, component, schema)
+
+  return (
+    <PropertyField
+      label="Chave"
+      hint="Nome usado nas fórmulas. Ao trocar, as fórmulas que a usam são atualizadas."
+      error={error}
+    >
+      <Input
+        className="font-mono text-xs"
+        value={draft}
+        aria-label="Chave"
+        onChange={(event) => setDraft(event.target.value)}
+        onBlur={() => {
+          if (error === undefined && draft !== component.key) onRenameKey(draft)
+          else if (error !== undefined) setDraft(component.key)
+        }}
+        onKeyDown={(event) => {
+          if (event.key === 'Enter') event.currentTarget.blur()
+          if (event.key === 'Escape') setDraft(component.key)
+        }}
+      />
+    </PropertyField>
   )
 }
 

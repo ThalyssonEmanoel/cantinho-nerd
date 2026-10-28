@@ -13,6 +13,7 @@ import {
   type SheetValue,
   type SheetValues
 } from '@/lib/sheet'
+import { errorMessage } from '@/lib/db/errors'
 
 /**
  * Estado da ficha aberta (seção 5.7).
@@ -28,7 +29,8 @@ import {
 
 export type SaveState = 'idle' | 'dirty' | 'saving' | 'saved' | 'error'
 
-export type LoadState = 'idle' | 'loading' | 'ready' | 'missing' | 'no-template'
+/** `error`: não deu para abrir (sem internet, por exemplo — o modelo vem da conta). */
+export type LoadState = 'idle' | 'loading' | 'ready' | 'missing' | 'no-template' | 'error'
 
 /** Espera antes de gravar, para não mandar um patch por tecla digitada. */
 const SAVE_DELAY_MS = 400
@@ -45,6 +47,8 @@ interface SheetFillState {
   loadState: LoadState
   saveState: SaveState
   lastError: string | null
+  /** Por que a ficha não abriu, quando `loadState` é `error`. */
+  loadError: string | null
   /** Campos esperando gravação, por id de componente. */
   pending: SheetValues
   /** Valor gravado de cada campo pendente, para desfazer se a gravação for recusada. */
@@ -79,6 +83,7 @@ const emptySheetState = {
   loadState: 'idle' as LoadState,
   saveState: 'idle' as SaveState,
   lastError: null,
+  loadError: null,
   pending: {},
   rollback: {},
   migration: null
@@ -117,32 +122,39 @@ export const useSheetStore = create<SheetFillState>()((set, get) => {
       clearSaveTimer()
       set({ ...emptySheetState, sheetId, loadState: 'loading' })
 
-      // O jogador usa sempre a última versão publicada (5.1), então a ficha é puxada para
-      // ela ao abrir; quem avisa o que mudou é o `migration`.
-      const migration = await repository.syncToLatestVersion(sheetId)
-      const sheet = migration?.sheet ?? (await repository.get(sheetId))
-      // Trocou de ficha (ou fechou a tela) enquanto isso: a resposta velha é descartada.
-      if (get().sheetId !== sheetId) return
-      if (sheet === null) {
-        set({ loadState: 'missing' })
-        return
-      }
+      try {
+        // O jogador usa sempre a última versão publicada (5.1), então a ficha é puxada para
+        // ela ao abrir; quem avisa o que mudou é o `migration`.
+        const migration = await repository.syncToLatestVersion(sheetId)
+        const sheet = migration?.sheet ?? (await repository.get(sheetId))
+        // Trocou de ficha (ou fechou a tela) enquanto isso: a resposta velha é descartada.
+        if (get().sheetId !== sheetId) return
+        if (sheet === null) {
+          set({ loadState: 'missing' })
+          return
+        }
 
-      const schema = await repository.schemaOf(sheet)
-      if (get().sheetId !== sheetId) return
-      if (schema === null) {
-        // O modelo foi excluído: a ficha continua guardada, mas não há como desenhá-la.
-        set({ sheet, loadState: 'no-template' })
-        return
-      }
+        const schema = await repository.schemaOf(sheet)
+        if (get().sheetId !== sheetId) return
+        if (schema === null) {
+          // O modelo foi excluído: a ficha continua guardada, mas não há como desenhá-la.
+          set({ sheet, loadState: 'no-template' })
+          return
+        }
 
-      set({
-        sheet,
-        schema,
-        migration,
-        activeTabId: schema.tabs[0]?.id ?? null,
-        loadState: 'ready'
-      })
+        set({
+          sheet,
+          schema,
+          migration,
+          activeTabId: schema.tabs[0]?.id ?? null,
+          loadState: 'ready'
+        })
+      } catch (error) {
+        // Desde a Fase 4 o modelo vem da conta: sem rede, a tela explica em vez de girar
+        // para sempre.
+        if (get().sheetId !== sheetId) return
+        set({ loadState: 'error', loadError: errorMessage(error) })
+      }
     },
 
     changeField: (componentId, value) => {
@@ -189,9 +201,7 @@ export const useSheetStore = create<SheetFillState>()((set, get) => {
         const waiting = Object.keys(stillPending).length > 0
 
         set({
-          sheet: waiting
-            ? patchFields(saved, schema, buildPatch(schema, stillPending))
-            : saved,
+          sheet: waiting ? patchFields(saved, schema, buildPatch(schema, stillPending)) : saved,
           rollback: waiting ? get().rollback : {},
           saveState: waiting ? 'dirty' : 'saved',
           lastError: null

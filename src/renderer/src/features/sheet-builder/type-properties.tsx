@@ -1,4 +1,5 @@
 import { ChevronDown, ChevronUp, Plus, Trash2 } from 'lucide-react'
+import { ColorPicker } from '@/components/color-picker'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Select } from '@/components/ui/select'
@@ -318,10 +319,12 @@ export function TypeProperties({
             />
           </PropertyField>
           <PropertyField label="Cor">
-            <Input
-              value={component.color ?? ''}
-              placeholder="#ef4444"
-              onChange={(event) => onChange({ color: event.target.value })}
+            <ColorPicker
+              aria-label="Cor da barra"
+              value={component.color === '' ? undefined : component.color}
+              emptyLabel="Cor do tema"
+              emptyPreview="var(--color-primary)"
+              onChange={(color) => onChange({ color })}
             />
           </PropertyField>
           <PropertyField label="Botões + e −">

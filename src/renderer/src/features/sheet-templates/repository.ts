@@ -1,9 +1,18 @@
-import { createLocalTemplateRepository, type TemplateRepository } from '@/lib/sheet'
+import type { TemplateRepository } from '@/lib/sheet'
+import {
+  createSupabaseTemplateRepository,
+  seedAccountExampleTemplate
+} from '@/lib/db/sheet-templates'
 
 /**
  * A biblioteca de modelos usada pelo app.
  *
- * Na Fase 4 este arquivo passa a devolver a implementação que fala com o Supabase; as telas
- * não mudam, porque conversam só com a interface `TemplateRepository`.
+ * Desde a Fase 4 é a da conta, no Supabase. As telas não mudaram com a troca, porque
+ * conversam só com a interface `TemplateRepository`.
  */
-export const templateRepository: TemplateRepository = createLocalTemplateRepository()
+export const templateRepository: TemplateRepository = createSupabaseTemplateRepository()
+
+/** O "Exemplo d20" entra na conta na primeira vez que a biblioteca abre (5.1). */
+export async function ensureExampleTemplate(): Promise<void> {
+  await seedAccountExampleTemplate()
+}

@@ -8,6 +8,7 @@ import {
   type SheetTemplate,
   type TemplateRepository
 } from '@/lib/sheet'
+import { byLabel, typeInto } from '@/test/dom-helpers'
 
 /**
  * Montagem da tela do construtor.
@@ -40,6 +41,7 @@ vi.mock('@/features/sheet-templates/repository', () => ({
 }))
 
 const { SheetBuilderPage } = await import('./sheet-builder-page')
+const { useBuilderStore } = await import('./builder-store')
 
 let container: HTMLElement
 let unmount: () => void
@@ -105,5 +107,23 @@ describe('SheetBuilderPage', () => {
     vi.mocked(repository.get).mockResolvedValueOnce(null)
     await renderPage()
     expect(container.textContent).toContain('não existe mais')
+  })
+
+  it('digitar no Rótulo não tira o foco, mesmo com a chave acompanhando', async () => {
+    await renderPage()
+    act(() => useBuilderStore.getState().select('c_forca'))
+
+    const label = byLabel<HTMLInputElement>(container, 'Rótulo')
+    act(() => label.focus())
+
+    // Cada letra muda a chave (forca → forcas → forcass). Antes da correção, isso remontava
+    // o painel inteiro e o campo saía da tela a cada tecla.
+    typeInto(label, 'Forças')
+    typeInto(label, 'Forçass')
+
+    expect(label.isConnected).toBe(true)
+    expect(document.activeElement).toBe(label)
+    expect(label.value).toBe('Forçass')
+    expect(byLabel<HTMLInputElement>(container, 'Chave').value).toBe('forcass')
   })
 })

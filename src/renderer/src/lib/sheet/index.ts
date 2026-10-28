@@ -106,9 +106,13 @@ export {
 export type { CreateSheetInput, SheetRepository, SheetSummaryRow } from './sheet-repository'
 export {
   createLocalSheetRepository,
+  relinkLocalSheets,
   SheetPermissionError,
   summarizeSheet
 } from './sheet-repository'
+
+export type { LocalImportPlan } from './local-import'
+export { isPristineExample, planLocalImport } from './local-import'
 
 export type { CreateComponentOptions } from './factory'
 export {
@@ -126,7 +130,11 @@ export {
 export { createExampleSchema, EXAMPLE_TEMPLATE_NAME } from './example-template'
 
 export type { CreateTemplateInput, TemplateRepository } from './repository'
-export { createLocalTemplateRepository, seedExampleTemplate } from './repository'
+export {
+  createLocalTemplateRepository,
+  removeLocalTemplates,
+  seedExampleTemplate
+} from './repository'
 
 export { formatCellValue, formatComputedValue, safeNumber } from './format'
 

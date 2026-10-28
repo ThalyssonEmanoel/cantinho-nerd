@@ -44,26 +44,35 @@ fases do projeto (seção 11). Leia-a antes de qualquer tarefa não trivial.
 | `npm run typecheck` | TypeScript nos dois lados (node + web)                                          |
 | `npm test`          | Vitest                                                                          |
 | `npm run build:win` | instalador NSIS em `dist/`                                                      |
+| `npm run db:login`  | autoriza a CLI do Supabase (abre o navegador; uma vez por máquina)              |
+| `npm run db:link`   | liga a CLI ao projeto (pede a senha do banco; uma vez por máquina)              |
+| `npm run db:push`   | aplica no banco as migrações de `supabase/migrations/` que faltam               |
+| `npm run db:types`  | regenera `lib/db/database.types.ts` a partir do banco real                      |
 
 ## Arquitetura
 
 ```
 scripts/     wrappers do npm (ambiente limpo para subir o Electron)
+supabase/    config.toml da CLI e migrations/ (uma por mudança de banco, nunca editar a aplicada)
 src/
   main/      processo principal: janela, segurança (CSP, navegação), deep link, instância única, IPC
   preload/   ponte mínima via contextBridge (window.api)
   shared/    lógica pura usada pelos dois lados (deep link, CSP, política de navegação)
   renderer/src/
-    app/         router (HashRouter), layout, ponte do deep link
-    features/    uma pasta por área (auth, lobby-gm, lobby-player, session, sheet-builder, …)
-    components/  componentes compartilhados; `ui/` é o shadcn
-    lib/         utilidades e, a partir da Fase 4, `db/` (acesso ao Supabase)
+    app/         router (HashRouter), layout, ponte do deep link, portão de login (require-auth)
+    features/    uma pasta por área (auth, profile, sheet-builder, formula-guide, …)
+    components/  componentes compartilhados (seletor de cor, avatar…); `ui/` é o shadcn
+    lib/         utilidades e lógica pura
+      db/        ÚNICO lugar que fala com o Supabase: cliente, auth, perfis, modelos, erros
+      account/   regras de nome de usuário, senha e e-mail interno
+      image/     recorte do avatar (conta pura) e preparo para o Storage (WebP, hash)
+      color/     conversões e paleta do seletor de cor
       formula/   motor de fórmulas: tokenizer, parser (Pratt), avaliador, grafo de dependências
       dice/      motor de dados: interpolação dos `{…}`, rolagem, regras de crítico, geradores
       sheet/     modelo de ficha: tipos, zod, chaves, validação, contexto de fórmulas, repositório
-    test/        preparação do jsdom para os testes de montagem
+    test/        preparação do jsdom e ajudantes dos testes de montagem
     hooks/       hooks compartilhados
-    stores/      Zustand, um store por área
+    stores/      Zustand, um store por área (app, auth)
 ```
 
 Decisões que não são óbvias:
@@ -84,6 +93,15 @@ Decisões que não são óbvias:
 - **Perfis de dados** (`RPGMESA_PROFILE`): a segunda instância usa outro `userData` e não
   participa da instância única, senão não dava para testar mestre e jogador no mesmo PC.
 - O deep link `rpgmesa://join/<id>` é traduzido para a rota `/join/:inviteId`.
+- **Login por nome + senha em cima do Supabase Auth**: o app monta o e-mail interno
+  `nome@usuarios.rpgmesa.app` (`lib/account/credentials.ts`). Esse domínio **não pode mudar**
+  depois que existirem contas. O perfil nasce por gatilho no banco, e o nome de usuário sai
+  do e-mail — não dos metadados —, então perfil e login nunca divergem.
+- **O cliente do Supabase é criado na primeira chamada**, não ao importar: telas e testes
+  que não falam com o banco sobem sem `.env`. Os testes nunca devem chegar ao cliente de
+  verdade (o Vitest carrega o `.env` real); dublê `lib/db/*` com `vi.mock`.
+- **Tipos do banco** em `lib/db/database.types.ts`: gerados com `npm run db:types`. Na Fase 4
+  foram escritos à mão no mesmo formato (a CLI ainda não estava ligada ao projeto).
 
 ## Ambiente desta máquina
 
@@ -93,11 +111,18 @@ Decisões que não são óbvias:
 - Shell lançado pelo host de extensões do VS Code vem com `ELECTRON_RUN_AS_NODE=1`; os
   scripts em `scripts/` já removem isso, mas se um dia o Electron subir "como Node"
   (erro `Cannot read properties of undefined (reading 'isPackaged')`), é essa variável.
-- O npm 11 bloqueia scripts de instalação por padrão. O Electron 45 não depende de
-  `postinstall` (baixa o binário sob demanda), mas se algum pacote precisar,
-  use `npm install-scripts ls` e aprove explicitamente.
-- Projeto Supabase: `https://bpxtvjlkkuxkxhxyjlbl.supabase.co` (livre para remodelar).
-  A chave anon ainda precisa ser preenchida no `.env` antes da Fase 4.
+- O npm desta máquina é o 10.9 (conferido na Fase 4), que roda scripts de instalação
+  normalmente — o `postinstall` da CLI do Supabase baixou o binário sem pedir nada. Se um
+  dia o npm virar 11 e passar a bloquear esses scripts, use `npm install-scripts ls` e
+  aprove explicitamente.
+- Ao adicionar pacote, prefira uma versão publicada há pelo menos duas semanas (proteção
+  contra pacote comprometido recém-publicado).
+- Projeto Supabase: `https://bpxtvjlkkuxkxhxyjlbl.supabase.co` (livre para remodelar). O
+  `.env` já tem a URL e a chave anon. Ainda existem lá as tabelas do app antigo
+  (`sessions`, `players`, `character_sheets`, `board_tokens`… e o bucket `vtt-assets`): a
+  migração da Fase 5 precisa apagar a `sessions` antiga antes de criar a nova.
+- A CLI do Supabase é dependência de desenvolvimento (`npx supabase …`). `db:login` e
+  `db:link` pedem as credenciais do Thalysson: rodar só com ele.
 
 ## Onde paramos
 
@@ -163,7 +188,7 @@ Decisões e armadilhas registradas:
 - Testes de montagem (`*.dom.test.tsx`, ambiente jsdom) existem para pegar quebra de
   biblioteca com o React 19, como o `findDOMNode` que a react-draggable usava.
 
-**Fase 3 (Ficha preenchível) — implementada, aguardando teste.** 287 testes no total.
+**Fase 3 (Ficha preenchível) — aprovada; o Thalysson liberou a Fase 4.** 287 testes.
 
 - `lib/sheet/permissions.ts`: quem vê e quem edita cada campo, fora dos componentes. Na
   Fase 5 a mesma regra vira RLS e checagem no RPC; `canPatchField` é a pergunta que o
@@ -207,4 +232,68 @@ Pendências desta fase, de propósito:
 - As rolagens param num painel local; vão para o chat na Fase 7.
 - O campo de imagem continua só com o enquadramento (upload é da Fase 6).
 
-**Próxima fase: 4 — Contas e Supabase** (seções 4.1, 4.2 e 9). Só começar depois do ok dele.
+**Fase 4 (Contas e Supabase) — implementada, aguardando teste.** 432 testes no total.
+
+Falta um passo que só o Thalysson pode dar (credenciais dele): no painel do Supabase,
+desligar "Confirm email" e pôr senha mínima 8; depois `npm run db:login`, `db:link`,
+`db:push` e `db:types`. Sem o `db:push` o login dá erro, porque as tabelas não existem.
+
+- `supabase/migrations/20261028140000_accounts_and_sheet_templates.sql`: `profiles` (com
+  gatilho no `auth.users`), `sheet_templates`, `sheet_template_versions`, RLS, as RPCs
+  `publish_sheet_template` e `seed_example_template` e o bucket público `avatars`. Testada
+  num Postgres em WebAssembly (PGlite) com um esqueleto do `auth`/`storage`: cadastro,
+  isolamento entre contas, versão imutável, anônimo bloqueado e cascata ao apagar a conta.
+- `lib/db/`: cliente (preguiçoso), `auth.ts` (cadastro/login/logout, nunca lança),
+  `auth-storage.ts` ("continuar conectado": localStorage ou sessionStorage), `profiles.ts`
+  (perfil e avatar), `sheet-templates.ts` (o `TemplateRepository` do Supabase) e
+  `errors.ts` (todo erro do Supabase vira português antes de chegar na tela).
+- `stores/auth-store.ts` + `app/require-auth.tsx`: estado do login e o portão das rotas.
+  `loading` cobre a leitura da sessão e a busca do perfil; o portão espera em vez de
+  expulsar. Sem login, vai para `/login` levando `from` para voltar depois (já serve ao
+  convite que abre o app sem ninguém logado, Fase 5).
+- `features/auth/login-page.tsx` (Entrar / Criar conta), `features/profile/` (nome de
+  exibição, bio, avatar com recorte circular em WebP de 256 px, nome = hash).
+- Modelos de ficha agora na conta. O "Exemplo d20" entra uma vez por conta (marca
+  `example_seeded` no perfil). Modelos que estavam só no localStorage (Fases 2 e 3)
+  aparecem num aviso na biblioteca para subir à conta, com as versões; as fichas locais
+  são religadas aos ids novos.
+
+Pedidos do Thalysson feitos junto com a Fase 4:
+
+- Cursor de mãozinha em tudo que é clicável (regra global em `globals.css`).
+- Bug do Rótulo perdendo o foco a cada tecla: a `key` do painel de propriedades incluía a
+  chave da fórmula, que acompanha o rótulo — cada letra remontava o painel. Agora só o
+  campo Chave remonta (`KeyField`). Há teste que falha com o código antigo.
+- Seletor de cor (`components/color-picker.tsx`) nos campos "Cor de destaque" e "Cor":
+  paleta pronta + área de cor personalizada + hex. Feito à mão: o `react-colorful` voltou a
+  publicar versões em 2026 depois de anos parado, padrão de pacote comprometido.
+- Guia de fórmulas (`features/formula-guide/`), na navegação e no botão "Guia" do
+  construtor. Cada exemplo é calculado ao vivo sobre uma ficha de exemplo de verdade, e
+  `guide-sample.test.ts` confere todos — o guia não pode mentir sobre o motor.
+
+Decisões e armadilhas registradas:
+
+- **CHECK com resultado NULL passa no Postgres.** `jsonb_typeof(x -> 'tabs') = 'array'`
+  deixava entrar esquema sem `tabs`; por isso o `coalesce(…, false)` na migração.
+- **O construtor grava em fila.** Com rede no meio, duas gravações em voo podiam chegar
+  fora de ordem e o rascunho velho venceria. E sair da tela grava o pendente (`flush`)
+  antes do `reset` — antes, a última alteração feita a menos de 600 ms se perdia.
+- **Nome vazio não é gravado** (o banco recusa); fica valendo o último nome bom.
+- O repositório local de fichas guarda em memória os esquemas das versões publicadas
+  (imutáveis): o patch não busca o modelo na rede a cada campo. Abrir a ficha busca de
+  novo, para notar modelo excluído.
+- O seletor de cor usa o `popover` nativo + âncora do CSS (Chromium 156 no Electron 45):
+  conferido no Electron de verdade que abre colado ao botão e vira para cima sem espaço.
+- Arrastar na área de cor personalizada só grava ao soltar, para não encher o Desfazer.
+- Logout: limpa o estado e navega para `/login` no mesmo instante (sem `from`), porque quem
+  entrar depois pode ser outra conta.
+
+Pendências, de propósito:
+
+- Excluir sessões e excluir conta são da Fase 12 (o aviso no Perfil diz isso).
+- As tabelas do app antigo continuam no banco; a Fase 5 trata a `sessions` que colide.
+- `npm audit` acusa 2 vulnerabilidades altas no `mathjs` que a biblioteca de dados puxa.
+  Já existiam; a correção sugerida rebaixa a biblioteca (quebra). Avaliar antes da Fase 5,
+  quando modelos de um mestre passam a rodar fórmulas no PC dos jogadores.
+
+**Próxima fase: 5 — Sessões e convites.** Só começar depois do ok dele.

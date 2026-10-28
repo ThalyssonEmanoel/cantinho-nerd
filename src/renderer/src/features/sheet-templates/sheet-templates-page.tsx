@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
-import { Copy, FileUp, Pencil, Plus, Trash2 } from 'lucide-react'
+import { BookOpen, Copy, FileUp, Loader2, Pencil, Plus, RefreshCw, Trash2 } from 'lucide-react'
 import { toast } from 'sonner'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
@@ -9,79 +9,140 @@ import { Dialog } from '@/components/ui/dialog'
 import { Input } from '@/components/ui/input'
 import { Select } from '@/components/ui/select'
 import { PageHeader } from '@/components/page-header'
+import { errorMessage } from '@/lib/db/errors'
 import {
   parseTemplateFile,
-  seedExampleTemplate,
   templateKindLabel,
   validateSchema,
   type SheetTemplateSummary,
   type TemplateKind
 } from '@/lib/sheet'
-import { templateRepository } from './repository'
+import { LocalImportBanner } from './local-import-banner'
+import { ensureExampleTemplate, templateRepository } from './repository'
 
-/** Biblioteca de modelos de ficha do mestre (seção 5.1). */
+type LoadState = 'loading' | 'ready' | 'error'
+
+/** Primeira carga: semeia o exemplo da conta (5.1) e lista. O exemplo falhar não impede a lista. */
+async function loadLibrary(): Promise<SheetTemplateSummary[]> {
+  try {
+    await ensureExampleTemplate()
+  } catch (error) {
+    console.warn('Não consegui criar o modelo de exemplo:', error)
+  }
+  return templateRepository.list()
+}
+
+/** Biblioteca de modelos de ficha do mestre (seção 5.1), salva na conta. */
 export function SheetTemplatesPage(): React.JSX.Element {
   const navigate = useNavigate()
   const [templates, setTemplates] = useState<SheetTemplateSummary[]>([])
-  const [loading, setLoading] = useState(true)
+  const [loadState, setLoadState] = useState<LoadState>('loading')
   const [creating, setCreating] = useState(false)
   const [newName, setNewName] = useState('')
   const [newKind, setNewKind] = useState<TemplateKind>('character')
+  const [busy, setBusy] = useState(false)
   const [renaming, setRenaming] = useState<SheetTemplateSummary | null>(null)
   const [renameDraft, setRenameDraft] = useState('')
   const [deleting, setDeleting] = useState<SheetTemplateSummary | null>(null)
 
-  const refresh = useCallback(async () => {
-    const list = await templateRepository.list()
+  const applyList = useCallback((list: SheetTemplateSummary[]) => {
     setTemplates(list)
-    setLoading(false)
+    setLoadState('ready')
   }, [])
 
+  const failLoad = useCallback((error: unknown) => {
+    setLoadState('error')
+    toast.error('Não consegui carregar seus modelos', { description: errorMessage(error) })
+  }, [])
+
+  const refresh = useCallback(
+    () => templateRepository.list().then(applyList, failLoad),
+    [applyList, failLoad]
+  )
+
+  // O `then` não é enfeite: setState direto no corpo do efeito dispara renderização em
+  // cascata, e o lint cobra isso com razão.
   useEffect(() => {
-    // O exemplo d20 entra na primeira vez que a biblioteca abre (5.1).
-    void seedExampleTemplate(templateRepository).then(() => refresh())
-  }, [refresh])
+    void loadLibrary().then(applyList, failLoad)
+  }, [applyList, failLoad])
+
+  function retry(): void {
+    setLoadState('loading')
+    void loadLibrary().then(applyList, failLoad)
+  }
 
   async function handleCreate(): Promise<void> {
     const name = newName.trim()
-    if (name === '') return
+    if (name === '' || busy) return
 
-    const template = await templateRepository.create({ name, kind: newKind })
-    setCreating(false)
-    setNewName('')
-    await refresh()
-    void navigate(`/templates/${template.id}`)
+    setBusy(true)
+    try {
+      const template = await templateRepository.create({ name, kind: newKind })
+      setCreating(false)
+      setNewName('')
+      void navigate(`/templates/${template.id}`)
+    } catch (error) {
+      toast.error('Não consegui criar o modelo', { description: errorMessage(error) })
+    } finally {
+      setBusy(false)
+    }
   }
 
   async function handleDuplicate(summary: SheetTemplateSummary): Promise<void> {
-    await templateRepository.duplicate(summary.id)
-    await refresh()
-    toast.success('Modelo duplicado')
+    try {
+      await templateRepository.duplicate(summary.id)
+      await refresh()
+      toast.success('Modelo duplicado')
+    } catch (error) {
+      toast.error('Não consegui duplicar o modelo', { description: errorMessage(error) })
+    }
   }
 
   async function handleDelete(): Promise<void> {
-    if (deleting === null) return
+    const target = deleting
+    if (target === null) return
+    setDeleting(null)
 
-    if (await templateRepository.isInUse(deleting.id)) {
-      toast.error('Este modelo está em uso por uma sessão', {
-        description: 'Troque o sistema da sessão antes de excluir.'
-      })
-      setDeleting(null)
+    try {
+      if (await templateRepository.isInUse(target.id)) {
+        toast.error('Este modelo está em uso por uma sessão', {
+          description: 'Troque o sistema da sessão antes de excluir.'
+        })
+        return
+      }
+    } catch (error) {
+      toast.error('Não consegui excluir o modelo', { description: errorMessage(error) })
       return
     }
 
-    await templateRepository.remove(deleting.id)
-    setDeleting(null)
-    await refresh()
-    toast.success('Modelo excluído')
+    // Otimista: some da lista na hora e volta se o banco recusar.
+    const before = templates
+    setTemplates((list) => list.filter((item) => item.id !== target.id))
+    try {
+      await templateRepository.remove(target.id)
+      toast.success('Modelo excluído')
+    } catch (error) {
+      setTemplates(before)
+      toast.error('Não consegui excluir o modelo', { description: errorMessage(error) })
+    }
   }
 
   async function handleRename(): Promise<void> {
-    if (renaming === null) return
-    const name = renameDraft.trim()
-    if (name !== '') await templateRepository.rename(renaming.id, name)
+    const target = renaming
+    if (target === null) return
     setRenaming(null)
-    await refresh()
+
+    const name = renameDraft.trim()
+    if (name === '' || name === target.name) return
+
+    const before = templates
+    setTemplates((list) => list.map((item) => (item.id === target.id ? { ...item, name } : item)))
+    try {
+      await templateRepository.rename(target.id, name)
+    } catch (error) {
+      setTemplates(before)
+      toast.error('Não consegui renomear o modelo', { description: errorMessage(error) })
+    }
   }
 
   async function handleImport(): Promise<void> {
@@ -104,20 +165,22 @@ export function SheetTemplatesPage(): React.JSX.Element {
     }
 
     const report = validateSchema(parsed.value.schema)
-    const template = await templateRepository.create({
-      name: parsed.value.name,
-      kind: parsed.value.kind,
-      schema: parsed.value.schema
-    })
-
-    await refresh()
-    toast.success(`"${parsed.value.name}" importado`, {
-      description:
-        report.errors.length > 0
-          ? `Atenção: o modelo tem ${report.errors.length} erro(s) de validação.`
-          : 'Entrou como rascunho.'
-    })
-    void navigate(`/templates/${template.id}`)
+    try {
+      const template = await templateRepository.create({
+        name: parsed.value.name,
+        kind: parsed.value.kind,
+        schema: parsed.value.schema
+      })
+      toast.success(`"${parsed.value.name}" importado`, {
+        description:
+          report.errors.length > 0
+            ? `Atenção: o modelo tem ${report.errors.length} erro(s) de validação.`
+            : 'Entrou como rascunho.'
+      })
+      void navigate(`/templates/${template.id}`)
+    } catch (error) {
+      toast.error('Não consegui importar o modelo', { description: errorMessage(error) })
+    }
   }
 
   return (
@@ -127,6 +190,10 @@ export function SheetTemplatesPage(): React.JSX.Element {
         description="Os sistemas que você monta: Ordem Paranormal, D&D, o que você inventar."
         actions={
           <>
+            <Button variant="ghost" onClick={() => void navigate('/guide')}>
+              <BookOpen className="size-4" />
+              Guia de fórmulas
+            </Button>
             <Button variant="outline" onClick={() => void handleImport()}>
               <FileUp className="size-4" />
               Importar
@@ -144,9 +211,28 @@ export function SheetTemplatesPage(): React.JSX.Element {
         }
       />
 
-      {loading && <p className="text-muted-foreground text-sm">Carregando…</p>}
+      <LocalImportBanner onImported={() => void refresh()} />
 
-      {!loading && templates.length === 0 && (
+      {loadState === 'loading' && (
+        <p className="text-muted-foreground flex items-center gap-2 text-sm">
+          <Loader2 className="size-4 animate-spin" />
+          Carregando…
+        </p>
+      )}
+
+      {loadState === 'error' && (
+        <Card className="border-dashed">
+          <CardContent className="flex flex-col items-center gap-3 py-8 text-center">
+            <p className="text-muted-foreground text-sm">Seus modelos não carregaram.</p>
+            <Button variant="outline" size="sm" onClick={retry}>
+              <RefreshCw className="size-4" />
+              Tentar de novo
+            </Button>
+          </CardContent>
+        </Card>
+      )}
+
+      {loadState === 'ready' && templates.length === 0 && (
         <Card className="border-dashed">
           <CardContent className="text-muted-foreground py-8 text-center text-sm">
             Nenhum modelo ainda. Crie um ou importe um `.json`.
@@ -185,6 +271,7 @@ export function SheetTemplatesPage(): React.JSX.Element {
                     setRenameDraft(template.name)
                   }}
                   aria-label="Renomear"
+                  title="Renomear"
                 >
                   <Pencil className="size-4" />
                 </Button>
@@ -193,6 +280,7 @@ export function SheetTemplatesPage(): React.JSX.Element {
                   size="icon"
                   onClick={() => void handleDuplicate(template)}
                   aria-label="Duplicar"
+                  title="Duplicar"
                 >
                   <Copy className="size-4" />
                 </Button>
@@ -201,6 +289,7 @@ export function SheetTemplatesPage(): React.JSX.Element {
                   size="icon"
                   onClick={() => setDeleting(template)}
                   aria-label="Excluir"
+                  title="Excluir"
                 >
                   <Trash2 className="size-4" />
                 </Button>
@@ -220,7 +309,8 @@ export function SheetTemplatesPage(): React.JSX.Element {
             <Button variant="ghost" onClick={() => setCreating(false)}>
               Cancelar
             </Button>
-            <Button disabled={newName.trim() === ''} onClick={() => void handleCreate()}>
+            <Button disabled={newName.trim() === '' || busy} onClick={() => void handleCreate()}>
+              {busy && <Loader2 className="size-4 animate-spin" />}
               Criar e abrir
             </Button>
           </>
@@ -230,6 +320,7 @@ export function SheetTemplatesPage(): React.JSX.Element {
           <Input
             autoFocus
             placeholder="Ex.: Ordem Paranormal"
+            maxLength={120}
             value={newName}
             onChange={(event) => setNewName(event.target.value)}
             onKeyDown={(event) => {
@@ -261,6 +352,7 @@ export function SheetTemplatesPage(): React.JSX.Element {
       >
         <Input
           autoFocus
+          maxLength={120}
           value={renameDraft}
           onChange={(event) => setRenameDraft(event.target.value)}
           onKeyDown={(event) => {

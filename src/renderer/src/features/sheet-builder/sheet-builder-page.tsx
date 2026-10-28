@@ -2,6 +2,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { useNavigate, useParams } from 'react-router-dom'
 import {
   ArrowLeft,
+  BookOpen,
   Download,
   Eye,
   Loader2,
@@ -46,6 +47,8 @@ import {
   type SheetSchema
 } from '@/lib/sheet'
 import { templateRepository } from '@/features/sheet-templates/repository'
+import { FormulaGuide } from '@/features/formula-guide/formula-guide'
+import { errorMessage } from '@/lib/db/errors'
 import { useBuilderStore } from './builder-store'
 import { GridCanvas } from './grid-canvas'
 import { Palette } from './palette'
@@ -76,6 +79,7 @@ export function SheetBuilderPage(): React.JSX.Element {
   const [showValidation, setShowValidation] = useState(false)
   const [deleteTarget, setDeleteTarget] = useState<SheetComponent | null>(null)
   const [publishing, setPublishing] = useState(false)
+  const [showGuide, setShowGuide] = useState(false)
   const [loadError, setLoadError] = useState<string | null>(null)
   // Esquema de antes do arrasto, para o Desfazer receber um passo só por interação.
   const interactionStart = useRef<SheetSchema | null>(null)
@@ -87,17 +91,25 @@ export function SheetBuilderPage(): React.JSX.Element {
     let active = true
     if (templateId === undefined) return
 
-    void templateRepository.get(templateId).then((found) => {
-      if (!active) return
-      if (found === null) {
-        setLoadError('Este modelo não existe mais.')
-        return
+    void templateRepository.get(templateId).then(
+      (found) => {
+        if (!active) return
+        if (found === null) {
+          setLoadError('Este modelo não existe mais.')
+          return
+        }
+        store.load(found)
+      },
+      (error: unknown) => {
+        if (active) setLoadError(`Não consegui abrir o modelo. ${errorMessage(error)}`)
       }
-      store.load(found)
-    })
+    )
 
     return () => {
       active = false
+      // Grava o que estava esperando o salvamento automático antes de limpar a tela; o
+      // retrato do rascunho é tirado agora, então o `reset` logo abaixo não o atrapalha.
+      void useBuilderStore.getState().flush()
       store.reset()
     }
     // Só recarrega quando muda de modelo.
@@ -269,7 +281,7 @@ export function SheetBuilderPage(): React.JSX.Element {
       })
     } catch (error) {
       console.error(error)
-      toast.error('Não consegui publicar o modelo')
+      toast.error('Não consegui publicar o modelo', { description: errorMessage(error) })
     } finally {
       setPublishing(false)
     }
@@ -323,6 +335,16 @@ export function SheetBuilderPage(): React.JSX.Element {
             title="Refazer (Ctrl+Y)"
           >
             <Redo2 className="size-4" />
+          </Button>
+
+          <Button
+            variant="ghost"
+            size="sm"
+            onClick={() => setShowGuide(true)}
+            title="Como escrever fórmulas e ligar um campo ao outro"
+          >
+            <BookOpen className="size-4" />
+            Guia
           </Button>
 
           <Button
@@ -426,7 +448,10 @@ export function SheetBuilderPage(): React.JSX.Element {
 
           <aside className="min-h-0 overflow-auto">
             <PropertiesPanel
-              key={`${selected?.id ?? 'none'}:${selected?.key ?? ''}`}
+              // Só a troca de seleção recomeça o painel. Mudança de chave remonta apenas o
+              // campo Chave lá dentro; se remontasse tudo, o Rótulo perderia o foco a cada
+              // letra, porque a chave acompanha o rótulo enquanto digita.
+              key={selected?.id ?? 'none'}
               schema={schema}
               component={selected}
               onChange={changeSelected}
@@ -464,6 +489,22 @@ export function SheetBuilderPage(): React.JSX.Element {
               setShowValidation(false)
             }}
           />
+        </div>
+      </Dialog>
+
+      {/*
+        O guia abre por cima do construtor (e não noutra tela) para o mestre não perder a
+        seleção nem o histórico do Desfazer enquanto consulta.
+      */}
+      <Dialog
+        open={showGuide}
+        title="Guia de fórmulas"
+        description="Como escrever fórmulas e ligar um campo ao outro."
+        onClose={() => setShowGuide(false)}
+        className="max-w-4xl"
+      >
+        <div className="-mx-5 max-h-[70vh] overflow-y-auto border-t px-5 pt-4">
+          <FormulaGuide compact />
         </div>
       </Dialog>
 

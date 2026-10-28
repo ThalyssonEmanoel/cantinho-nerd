@@ -124,7 +124,8 @@ export function GridCanvas({
             <div
               key={component.id}
               className={cn(
-                'group bg-card/60 relative overflow-hidden rounded-md border p-2 transition-colors',
+                // Mãozinha aberta: o clique seleciona e o arrasto move o componente.
+                'group bg-card/60 relative cursor-grab overflow-hidden rounded-md border p-2 transition-colors',
                 selectedId === component.id
                   ? 'border-primary ring-primary/40 ring-2'
                   : 'hover:border-muted-foreground/40'

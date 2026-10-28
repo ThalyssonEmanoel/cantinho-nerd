@@ -122,6 +122,23 @@
     overscroll-behavior: none;
   }
 
+  /*
+    Mãozinha em tudo que é clicável. O Tailwind v4 tirou o `cursor: pointer` dos botões
+    (segue o padrão do navegador, que é a seta), e aí não dá para saber o que reage ao
+    clique. Fica na camada base para que utilitários como `cursor-grab` continuem valendo.
+  */
+  button:not(:disabled),
+  [role='button']:not([aria-disabled='true']),
+  select:not(:disabled),
+  summary,
+  input[type='checkbox']:not(:disabled),
+  input[type='radio']:not(:disabled),
+  input[type='file']:not(:disabled),
+  input[type='range']:not(:disabled),
+  label:has(> input[type='checkbox']:not(:disabled)) {
+    cursor: pointer;
+  }
+
   /* O app é uma janela, não uma página: a barra de rolagem padrão do Windows destoa. */
   ::-webkit-scrollbar {
     width: 10px;

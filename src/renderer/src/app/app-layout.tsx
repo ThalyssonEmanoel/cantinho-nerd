@@ -1,15 +1,30 @@
-import { Dices, LogOut, ScrollText, Swords, User, UserRound, Wrench } from 'lucide-react'
+import { useState } from 'react'
+import {
+  BookOpen,
+  Dices,
+  Loader2,
+  LogOut,
+  ScrollText,
+  Swords,
+  User,
+  UserRound,
+  Wrench
+} from 'lucide-react'
 import { NavLink, Outlet, useNavigate } from 'react-router-dom'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
+import { UserAvatar } from '@/components/user-avatar'
 import { useAppInfo } from '@/hooks/use-app-info'
+import { signOut } from '@/lib/db/auth'
 import { useAppStore } from '@/stores/app-store'
+import { useAuthStore } from '@/stores/auth-store'
 import { cn } from '@/lib/utils'
 
 const navItems = [
   { to: '/gm', label: 'Mestre', icon: Swords },
   { to: '/player', label: 'Aventureiro', icon: UserRound },
   { to: '/templates', label: 'Modelos de ficha', icon: Wrench },
+  { to: '/guide', label: 'Guia de fórmulas', icon: BookOpen },
   { to: '/sheets', label: 'Fichas', icon: ScrollText },
   { to: '/profile', label: 'Perfil', icon: User }
 ]
@@ -18,10 +33,17 @@ export function AppLayout(): React.JSX.Element {
   const info = useAppInfo()
   const navigate = useNavigate()
   const clear = useAppStore((state) => state.clear)
+  const profile = useAuthStore((state) => state.profile)
+  const [leaving, setLeaving] = useState(false)
 
-  function handleExit(): void {
+  async function handleExit(): Promise<void> {
+    setLeaving(true)
+    await signOut()
+    // Sai para a entrada sem "voltar para onde estava": quem entrar depois pode ser outra
+    // conta, e a tela anterior (um modelo, uma ficha) não seria dela.
     clear()
-    void navigate('/login')
+    useAuthStore.getState().acceptSession(null)
+    void navigate('/login', { replace: true })
   }
 
   return (
@@ -32,14 +54,14 @@ export function AppLayout(): React.JSX.Element {
           <span>Cantinho Nerd</span>
         </NavLink>
 
-        <nav className="flex items-center gap-1">
+        <nav className="flex min-w-0 items-center gap-1 overflow-x-auto">
           {navItems.map(({ to, label, icon: Icon }) => (
             <NavLink
               key={to}
               to={to}
               className={({ isActive }) =>
                 cn(
-                  'text-muted-foreground flex items-center gap-1.5 rounded-md px-2.5 py-1.5 text-sm transition-colors hover:bg-accent hover:text-accent-foreground',
+                  'text-muted-foreground flex shrink-0 items-center gap-1.5 rounded-md px-2.5 py-1.5 text-sm transition-colors hover:bg-accent hover:text-accent-foreground',
                   isActive && 'bg-accent text-accent-foreground'
                 )
               }
@@ -50,7 +72,7 @@ export function AppLayout(): React.JSX.Element {
           ))}
         </nav>
 
-        <div className="ml-auto flex items-center gap-2">
+        <div className="ml-auto flex shrink-0 items-center gap-2">
           {/*
             O aviso do perfil é essencial ao testar com duas instâncias (`npm run dev:p2`):
             sem ele é fácil confundir qual janela é o mestre e qual é o jogador.
@@ -59,8 +81,24 @@ export function AppLayout(): React.JSX.Element {
             <Badge variant="destructive">perfil {info.profile}</Badge>
           )}
           <span className="text-muted-foreground text-xs">v{info?.version ?? '…'}</span>
-          <Button variant="ghost" size="sm" onClick={handleExit}>
-            <LogOut className="size-4" />
+
+          {profile !== null && (
+            <NavLink
+              to="/profile"
+              className="hover:bg-accent flex items-center gap-2 rounded-md px-1.5 py-1 transition-colors"
+              title={`@${profile.username}`}
+            >
+              <UserAvatar
+                displayName={profile.displayName}
+                avatarPath={profile.avatarPath}
+                className="size-7 text-xs"
+              />
+              <span className="max-w-32 truncate text-sm">{profile.displayName}</span>
+            </NavLink>
+          )}
+
+          <Button variant="ghost" size="sm" disabled={leaving} onClick={() => void handleExit()}>
+            {leaving ? <Loader2 className="size-4 animate-spin" /> : <LogOut className="size-4" />}
             Sair
           </Button>
         </div>

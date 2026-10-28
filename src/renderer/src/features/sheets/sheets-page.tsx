@@ -9,8 +9,10 @@ import { Dialog } from '@/components/ui/dialog'
 import { Input } from '@/components/ui/input'
 import { Select } from '@/components/ui/select'
 import { PageHeader } from '@/components/page-header'
+import { errorMessage } from '@/lib/db/errors'
 import type { SheetSummaryRow, SheetTemplateSummary } from '@/lib/sheet'
 import { templateRepository } from '@/features/sheet-templates/repository'
+import { useAuthStore } from '@/stores/auth-store'
 import { sheetRepository } from './repository'
 
 interface Lists {
@@ -20,10 +22,7 @@ interface Lists {
 
 /** Só modelo publicado serve: a ficha fica presa a uma versão imutável (5.1). */
 async function loadLists(): Promise<Lists> {
-  const [sheets, templates] = await Promise.all([
-    sheetRepository.list(),
-    templateRepository.list()
-  ])
+  const [sheets, templates] = await Promise.all([sheetRepository.list(), templateRepository.list()])
   return {
     sheets,
     templates: templates.filter((template) => template.publishedVersion !== null)
@@ -34,8 +33,8 @@ async function loadLists(): Promise<Lists> {
  * Fichas preenchidas desta máquina (seção 5.7).
  *
  * Na Fase 5 esta lista vira a aba "Fichas" da sessão: o jogador cria o personagem a partir
- * do modelo da sessão e o mestre abre a ficha de qualquer um. Enquanto não há sessão nem
- * conta, as fichas vivem aqui, e é por aqui que o preenchimento é testado.
+ * do modelo da sessão e o mestre abre a ficha de qualquer um. Até lá as fichas vivem aqui
+ * (os modelos já vêm da conta, desde a Fase 4), e é por aqui que o preenchimento é testado.
  */
 export function SheetsPage(): React.JSX.Element {
   const navigate = useNavigate()
@@ -46,6 +45,7 @@ export function SheetsPage(): React.JSX.Element {
   const [ownerName, setOwnerName] = useState('')
   const [templateId, setTemplateId] = useState('')
   const [deleting, setDeleting] = useState<SheetSummaryRow | null>(null)
+  const displayName = useAuthStore((state) => state.profile?.displayName)
 
   const apply = useCallback((lists: Lists) => {
     setSheets(lists.sheets)
@@ -53,13 +53,20 @@ export function SheetsPage(): React.JSX.Element {
     setLoading(false)
   }, [])
 
-  const refresh = useCallback(() => loadLists().then(apply), [apply])
+  const failLoad = useCallback((error: unknown) => {
+    setLoading(false)
+    toast.error('Não consegui carregar as fichas e os modelos', {
+      description: errorMessage(error)
+    })
+  }, [])
+
+  const refresh = useCallback(() => loadLists().then(apply, failLoad), [apply, failLoad])
 
   // O `then` não é enfeite: setState direto no corpo do efeito dispara renderização em
   // cascata, e o lint cobra isso com razão.
   useEffect(() => {
-    void loadLists().then(apply)
-  }, [apply])
+    void loadLists().then(apply, failLoad)
+  }, [apply, failLoad])
 
   async function handleCreate(): Promise<void> {
     const owner = ownerName.trim()
@@ -86,7 +93,8 @@ export function SheetsPage(): React.JSX.Element {
 
   function openCreate(): void {
     setTemplateId(templates[0]?.id ?? '')
-    setOwnerName('')
+    // Começa com o nome de quem está logado; na Fase 5 o dono vira a conta de verdade.
+    setOwnerName(displayName ?? '')
     setCreating(true)
   }
 
@@ -109,8 +117,8 @@ export function SheetsPage(): React.JSX.Element {
         <Card className="border-dashed">
           <CardContent className="space-y-3 py-8 text-center">
             <p className="text-muted-foreground text-sm">
-              Nenhum modelo publicado ainda. Uma ficha fica presa a uma versão publicada do
-              modelo, então publique uma antes de criar personagens.
+              Nenhum modelo publicado ainda. Uma ficha fica presa a uma versão publicada do modelo,
+              então publique uma antes de criar personagens.
             </p>
             <Button variant="outline" onClick={() => void navigate('/templates')}>
               <Wrench className="size-4" />
@@ -192,7 +200,10 @@ export function SheetsPage(): React.JSX.Element {
               </option>
             ))}
           </Select>
-          {/* Vira o dono da conta na Fase 4; por enquanto é só um rótulo para se achar. */}
+          {/*
+            Rótulo para se achar na lista, já preenchido com o nome da conta. Continua
+            editável enquanto as fichas são locais: dá para testar a ficha "de outra pessoa".
+          */}
           <Input
             autoFocus
             placeholder="De quem é a ficha? Ex.: Thalysson"
