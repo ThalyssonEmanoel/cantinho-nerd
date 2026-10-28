@@ -1,4 +1,4 @@
-import { Dices, LogOut, Swords, User, UserRound, Wrench } from 'lucide-react'
+import { Dices, LogOut, ScrollText, Swords, User, UserRound, Wrench } from 'lucide-react'
 import { NavLink, Outlet, useNavigate } from 'react-router-dom'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
@@ -10,6 +10,7 @@ const navItems = [
   { to: '/gm', label: 'Mestre', icon: Swords },
   { to: '/player', label: 'Aventureiro', icon: UserRound },
   { to: '/templates', label: 'Modelos de ficha', icon: Wrench },
+  { to: '/sheets', label: 'Fichas', icon: ScrollText },
   { to: '/profile', label: 'Perfil', icon: User }
 ]
 

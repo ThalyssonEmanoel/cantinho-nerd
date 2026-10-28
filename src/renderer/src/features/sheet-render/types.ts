@@ -1,9 +1,9 @@
 import type { CriticalRule } from '@/lib/dice'
 import type { FormulaContext } from '@/lib/formula'
-import type { SheetComponent, SheetValue } from '@/lib/sheet'
+import { canEditComponent, canSeeComponent, type SheetComponent, type SheetValue } from '@/lib/sheet'
 
-/** Quem está olhando a ficha. Define o que aparece e o que dá para editar (5.3, 5.7). */
-export type SheetAudience = 'gm' | 'player'
+/** Quem está olhando a ficha. A regra em si vive em `lib/sheet/permissions`. */
+export type { SheetAudience } from '@/lib/sheet'
 
 /** Pedido de rolagem saindo de um botão da ficha. Quem rola é a tela, não o componente. */
 export interface RollRequest {
@@ -21,7 +21,7 @@ export interface SheetRenderCallbacks {
 }
 
 export interface SheetRenderOptions extends SheetRenderCallbacks {
-  audience: SheetAudience
+  audience: 'gm' | 'player'
   /** Desliga a edição inteira (modo construtor, ou ficha de outro jogador). */
   readOnly?: boolean
   /**
@@ -33,10 +33,9 @@ export interface SheetRenderOptions extends SheetRenderCallbacks {
 
 export function canEdit(component: SheetComponent, options: SheetRenderOptions): boolean {
   if (options.readOnly === true) return false
-  if (options.audience === 'gm') return true
-  return component.editableBy === 'player'
+  return canEditComponent(component, options.audience)
 }
 
 export function canSee(component: SheetComponent, options: SheetRenderOptions): boolean {
-  return options.audience === 'gm' || component.visibleTo === 'all'
+  return canSeeComponent(component, options.audience)
 }

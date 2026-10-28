@@ -1,4 +1,5 @@
 import { z } from 'zod'
+import type { SheetRecord } from './sheet-record'
 import type { SheetSchema, SheetTemplate, TemplateKind } from './types'
 
 /**
@@ -226,6 +227,62 @@ export function parseTemplateFile(text: string): ImportResult {
 /** Valida um esquema solto (usado ao carregar do armazenamento local). */
 export function parseSheetSchema(data: unknown): SheetSchema | null {
   const parsed = sheetSchemaValidator.safeParse(data)
+  return parsed.success ? parsed.data : null
+}
+
+// ---------------------------------------------------------------------------
+// Fichas preenchidas (5.7)
+// ---------------------------------------------------------------------------
+
+const cellValue = z.union([z.string(), z.number(), z.boolean()])
+
+const sheetValue = z.union([
+  cellValue,
+  z.object({ current: z.number(), max: z.number().optional() }),
+  z.array(
+    z.object({
+      id: identifier,
+      key: z.string().max(64).optional(),
+      cells: z.record(z.string(), cellValue)
+    })
+  )
+])
+
+const sheetValues = z.record(z.string(), sheetValue)
+const bar = z.object({ current: z.number(), max: z.number() })
+
+const sheetSummary = z.object({
+  name: z.string().optional(),
+  portrait: z.string().optional(),
+  defense: z.number().optional(),
+  vision: z.number().optional(),
+  bars: z.object({ hp: bar.optional(), bar2: bar.optional(), bar3: bar.optional() })
+})
+
+export const sheetRecordValidator = z.object({
+  id: identifier,
+  templateId: identifier,
+  templateName: z.string().max(120),
+  templateVersion: z.number().int().min(1),
+  kind: z.enum(['character', 'creature_instance']),
+  ownerName: z.string().max(120),
+  values: sheetValues,
+  gmValues: sheetValues,
+  computed: z.record(z.string(), cellValue),
+  summary: sheetSummary,
+  orphaned: sheetValues,
+  createdAt: z.string(),
+  updatedAt: z.string()
+})
+
+export type RecordMatchesTypes = AssertAssignable<z.infer<typeof sheetRecordValidator>, SheetRecord>
+
+/**
+ * Valida uma ficha vinda do armazenamento local. O conteúdo de `values` é jsonb livre —
+ * o que se checa aqui é a forma, para uma linha corrompida não derrubar a tela.
+ */
+export function parseSheetRecord(data: unknown): SheetRecord | null {
+  const parsed = sheetRecordValidator.safeParse(data)
   return parsed.success ? parsed.data : null
 }
 

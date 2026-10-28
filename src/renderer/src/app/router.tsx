@@ -8,6 +8,8 @@ import { PlayerLobbyPage } from '@/features/lobby-player/player-lobby-page'
 import { ProfilePage } from '@/features/profile/profile-page'
 import { SessionPage } from '@/features/session/session-page'
 import { SheetBuilderPage } from '@/features/sheet-builder/sheet-builder-page'
+import { SheetFillPage } from '@/features/sheets/sheet-fill-page'
+import { SheetsPage } from '@/features/sheets/sheets-page'
 import { SheetTemplatesPage } from '@/features/sheet-templates/sheet-templates-page'
 import { AppLayout } from './app-layout'
 import { DeepLinkBridge } from './deep-link-bridge'
@@ -31,6 +33,8 @@ export function AppRouter(): React.JSX.Element {
           <Route path="/join/:inviteId" element={<JoinSessionPage />} />
           <Route path="/templates" element={<SheetTemplatesPage />} />
           <Route path="/templates/:templateId" element={<SheetBuilderPage />} />
+          <Route path="/sheets" element={<SheetsPage />} />
+          <Route path="/sheets/:sheetId" element={<SheetFillPage />} />
           <Route path="/session/:sessionId" element={<SessionPage />} />
           <Route path="/profile" element={<ProfilePage />} />
         </Route>

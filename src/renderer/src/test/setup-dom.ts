@@ -6,6 +6,9 @@
  * de ambiente, e não por bug nosso.
  */
 
+// Sem isto o React avisa, a cada montagem, que o ambiente não suporta `act(...)`.
+;(globalThis as unknown as { IS_REACT_ACT_ENVIRONMENT: boolean }).IS_REACT_ACT_ENVIRONMENT = true
+
 class ResizeObserverStub implements ResizeObserver {
   observe(): void {}
   unobserve(): void {}

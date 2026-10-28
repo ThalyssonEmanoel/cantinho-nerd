@@ -2,8 +2,6 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { useNavigate, useParams } from 'react-router-dom'
 import {
   ArrowLeft,
-  CloudCheck,
-  CloudOff,
   Download,
   Eye,
   Loader2,
@@ -17,6 +15,7 @@ import { toast } from 'sonner'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
 import { Dialog } from '@/components/ui/dialog'
+import { SaveIndicator } from '@/components/save-indicator'
 import { Input } from '@/components/ui/input'
 import {
   addComponent,
@@ -500,32 +499,4 @@ export function SheetBuilderPage(): React.JSX.Element {
       </Dialog>
     </div>
   )
-}
-
-function SaveIndicator({ state }: { state: string }): React.JSX.Element | null {
-  if (state === 'saving') {
-    return (
-      <span className="text-muted-foreground flex items-center gap-1 text-xs">
-        <Loader2 className="size-3 animate-spin" />
-        Salvando…
-      </span>
-    )
-  }
-  if (state === 'saved') {
-    return (
-      <span className="text-muted-foreground flex items-center gap-1 text-xs">
-        <CloudCheck className="size-3" />
-        Salvo
-      </span>
-    )
-  }
-  if (state === 'error') {
-    return (
-      <span className="text-destructive flex items-center gap-1 text-xs">
-        <CloudOff className="size-3" />
-        Falhou ao salvar
-      </span>
-    )
-  }
-  return null
 }

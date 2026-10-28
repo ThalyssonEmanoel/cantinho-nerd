@@ -305,13 +305,22 @@ export function createSheetContext(schema: SheetSchema, values: SheetValues): Sh
  * `createDefaultValues` não tem como fazer isso: quando o máximo vem de fórmula
  * (`10 + constituicao.mod * nivel`), só dá para saber o número depois de montar o
  * contexto. Sem este passo, uma ficha nova nasceria com 0 de vida de 16.
+ *
+ * `onlyIds` limita o preenchimento a algumas barras. A migração usa isso: uma barra que
+ * acabou de aparecer no modelo nasce cheia, mas as que já existiam não podem ser curadas
+ * só porque o mestre publicou uma versão nova (5.7).
  */
-export function fillResourceCurrents(schema: SheetSchema, values: SheetValues): SheetValues {
+export function fillResourceCurrents(
+  schema: SheetSchema,
+  values: SheetValues,
+  onlyIds?: readonly string[]
+): SheetValues {
   const { context } = createSheetContext(schema, values)
   const filled: SheetValues = { ...values }
 
   for (const component of allComponents(schema)) {
     if (component.type !== 'resource') continue
+    if (onlyIds !== undefined && !onlyIds.includes(component.id)) continue
 
     let max: number
     try {

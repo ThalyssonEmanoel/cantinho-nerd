@@ -63,13 +63,52 @@ export type { ImportResult, TemplateFile } from './schema'
 export {
   exportTemplateJson,
   MAX_IMPORT_BYTES,
+  parseSheetRecord,
   parseSheetSchema,
   parseTemplateFile,
+  sheetRecordValidator,
   sheetSchemaValidator,
   TEMPLATE_FILE_FORMAT,
   templateFileValidator,
   templateKindLabel
 } from './schema'
+
+export type { SheetAudience } from './permissions'
+export {
+  canEditComponent,
+  canPatchField,
+  canSeeComponent,
+  holdsValue,
+  isGmOnly
+} from './permissions'
+
+export type {
+  CreateSheetRecordInput,
+  SheetKind,
+  SheetMigrationResult,
+  SheetPatch,
+  SheetRecord
+} from './sheet-record'
+export {
+  buildPatch,
+  createSheetRecord,
+  mergedValues,
+  migrateSheetRecord,
+  patchFields,
+  patchedIds,
+  projectSheetFor,
+  recomputeSheet,
+  rejectedPatchFields,
+  sheetNameOf,
+  splitValues
+} from './sheet-record'
+
+export type { CreateSheetInput, SheetRepository, SheetSummaryRow } from './sheet-repository'
+export {
+  createLocalSheetRepository,
+  SheetPermissionError,
+  summarizeSheet
+} from './sheet-repository'
 
 export type { CreateComponentOptions } from './factory'
 export {

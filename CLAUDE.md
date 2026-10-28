@@ -132,7 +132,7 @@ Pendências conhecidas, de propósito:
 - A biblioteca de dados carrega o mathjs: o peso disso só aparece no bundle quando a
   interface começar a rolar dados (Fases 3 e 7). Medir lá.
 
-**Fase 2 (Construtor de fichas) — implementada, aguardando teste.** 222 testes no total.
+**Fase 2 (Construtor de fichas) — aprovada; o Thalysson liberou a fase seguinte.**
 
 - `lib/sheet/`: modelo (13 componentes, abas, papéis), zod para importar, chaves
   (`Força` → `forca`) com renomeação que reescreve as fórmulas, validação da 5.2,
@@ -163,4 +163,48 @@ Decisões e armadilhas registradas:
 - Testes de montagem (`*.dom.test.tsx`, ambiente jsdom) existem para pegar quebra de
   biblioteca com o React 19, como o `findDOMNode` que a react-draggable usava.
 
-**Próxima fase: 3 — Ficha preenchível** (seção 5.7). Só começar depois do ok dele.
+**Fase 3 (Ficha preenchível) — implementada, aguardando teste.** 287 testes no total.
+
+- `lib/sheet/permissions.ts`: quem vê e quem edita cada campo, fora dos componentes. Na
+  Fase 5 a mesma regra vira RLS e checagem no RPC; `canPatchField` é a pergunta que o
+  servidor vai fazer.
+- `lib/sheet/sheet-record.ts`: a ficha preenchida no formato da tabela `sheets` (10.1).
+  `values` é o jsonb compartilhado, `gmValues` é a `sheet_gm_data` (o jogador **nem
+  recebe**), `computed` e `summary` são o cache dos papéis que o banco copia para os
+  tokens, e `orphaned` guarda o que saiu do modelo. `patchFields` aplica só os campos do
+  patch; `projectSheetFor` é o que o jogador pode receber; `migrateSheetRecord` sobe a
+  ficha de versão.
+- `lib/sheet/sheet-repository.ts`: `SheetRepository` com `patch(id, patch, audience)` já
+  na forma do RPC `patch_sheet` — recebe campos, recusa o que a plateia não pode gravar e
+  devolve a ficha recalculada. Implementação local no `localStorage`; a Fase 5 troca só
+  `features/sheets/repository.ts`.
+- `features/sheets/`: lista de fichas, ficha preenchível e o store com o salvamento
+  automático campo a campo (otimista, com reversão se o repositório recusar).
+
+Decisões e armadilhas registradas:
+
+- **O patch relê a ficha gravada antes de aplicar.** É isso que faz "o mestre aplica dano
+  enquanto o jogador edita o inventário" não perder nada — nunca se grava a ficha inteira
+  a partir de uma cópia que a tela tinha em mãos.
+- **Campo editado durante a gravação continua pendente** e é reaplicado em cima do que
+  voltou do repositório, senão a tela dá um pulo para trás no meio da digitação.
+- **O destino de cada campo vem do modelo, não do patch:** um campo `visibleTo: 'gm'`
+  sempre cai em `gmValues`, mesmo que quem chamou tenha roteado errado.
+- **Barra nova nasce cheia, barra antiga não é curada** na migração: `fillResourceCurrents`
+  aceita uma lista de ids justamente para isso.
+- **Valor de campo removido volta sozinho** se o campo reaparecer numa versão seguinte,
+  porque a chave de `orphaned` é o id imutável do componente.
+- A ficha fica presa a uma **versão publicada**: modelo só com rascunho não gera ficha, e
+  a tela de Fichas explica isso em vez de oferecer um botão que não funciona.
+- Na tabela, **só as linhas que o jogador criou** podem ser removidas e reordenadas
+  (dnd-kit); as linhas fixas vêm do modelo e as fórmulas as acham pela chave.
+- O interruptor "Vendo como Jogador/Mestre" na ficha é andaime da Fase 3: na Fase 5 quem
+  olha vem do login.
+
+Pendências desta fase, de propósito:
+
+- Tempo real, "um personagem por jogador por sessão" e a aba Fichas da sessão são da Fase 5.
+- As rolagens param num painel local; vão para o chat na Fase 7.
+- O campo de imagem continua só com o enquadramento (upload é da Fase 6).
+
+**Próxima fase: 4 — Contas e Supabase** (seções 4.1, 4.2 e 9). Só começar depois do ok dele.
