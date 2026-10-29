@@ -571,4 +571,20 @@ Pendências, de propósito:
 - Ligar/desligar o som do "Sua vez!" fica para a tela de Configurações (Fase 12).
 - O tracker mostra a inicial do nome com a cor do tipo, não a imagem do token.
 
+**Ficha padrão de fantasia (pedido fora das fases) — feita, aguardando teste.** 797 testes.
+
+`docs/FichaPadrao.md` virou um modelo montado só com as peças do construtor, sem mudar o
+app. O gerador é `lib/sheet/fantasy-template.ts` (não é importado pelo app) e o teste ao
+lado grava `docs/fichas/fantasia-padrao.json`, que se importa na biblioteca. Mudou uma
+regra: edite o gerador e rode `npx vitest run fantasy-template -u`.
+
+- Texto que muda com raça/classe é campo calculado que devolve texto; blocos de uma classe
+  só (tabelas de habilidades, mecânicas da aba Magias) ficam **empilhados** no mesmo lugar,
+  porque a grade da ficha não encolhe a linha de um componente oculto. No construtor eles
+  aparecem uns sobre os outros.
+- Contagem condicional usa coluna calculada de **largura 0** (`soma(tabela.c1)`); ela some
+  na tabela. A coluna "Situação" não pode olhar os limites da raça: a validação veria ciclo.
+- Linhas fixas de tabela são copiadas para a ficha quando ela nasce: corrigir uma habilidade
+  no modelo não muda fichas já criadas (o construtor nem edita célula de linha fixa).
+
 **Próxima fase: 10 — Ferramentas do mestre.** Só começar depois do ok dele.
