@@ -3,6 +3,7 @@ import {
   isDrawingTool,
   isHexColor,
   normalizeGrid,
+  parseFog,
   parsePointList,
   parseTokenConditions,
   parseTokenCrop,
@@ -33,6 +34,8 @@ export interface MapRow {
   width: number
   height: number
   grid: Json
+  /** Opcional: linhas lidas antes da Fase 11 não traziam a coluna. */
+  fog?: Json
   sort_order: number
 }
 
@@ -98,6 +101,7 @@ export function mapFromRow(row: MapRow): BoardMap {
     width: row.width,
     height: row.height,
     grid: gridFromJson(row.grid),
+    fog: parseFog(row.fog),
     sortOrder: row.sort_order
   }
 }

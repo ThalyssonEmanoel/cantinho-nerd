@@ -1,5 +1,6 @@
 import { create } from 'zustand'
 import type {
+  FogShape,
   LiveStroke,
   PingShare,
   Point,
@@ -55,12 +56,15 @@ interface LiveState {
   draft: LiveStroke | null
   /** A régua que eu estou segurando agora. */
   myRuler: { from: Point; to: Point } | null
-  /** Onde está a borracha (o círculo que mostra o alcance dela). */
+  /** Onde está a borracha (o círculo que mostra o alcance dela) — ou o pincel da névoa. */
   eraser: Point | null
+  /** A área de névoa que o mestre está fazendo agora (só na tela dele). */
+  fogDraft: FogShape | null
 
   setDraft: (draft: LiveStroke | null) => void
   setMyRuler: (ruler: { from: Point; to: Point } | null) => void
   setEraser: (point: Point | null) => void
+  setFogDraft: (draft: FogShape | null) => void
 
   applyStroke: (stroke: LiveStroke) => void
   dropStroke: (id: string) => void
@@ -116,7 +120,8 @@ const emptyState = {
   reactions: [],
   draft: null,
   myRuler: null,
-  eraser: null
+  eraser: null,
+  fogDraft: null
 }
 
 export const useLiveStore = create<LiveState>()((set, get) => ({
@@ -125,6 +130,7 @@ export const useLiveStore = create<LiveState>()((set, get) => ({
   setDraft: (draft) => set({ draft }),
   setMyRuler: (myRuler) => set({ myRuler }),
   setEraser: (eraser) => set({ eraser }),
+  setFogDraft: (fogDraft) => set({ fogDraft }),
 
   applyStroke: (stroke) => {
     set({ strokes: { ...get().strokes, [stroke.id]: stroke } })

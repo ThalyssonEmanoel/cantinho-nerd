@@ -17,11 +17,12 @@ const db = vi.hoisted(() => ({
   listTokens: vi.fn(),
   moveToken: vi.fn(),
   createDrawing: vi.fn(),
-  deleteDrawings: vi.fn(async () => {})
+  deleteDrawings: vi.fn(async () => {}),
+  updateMapFog: vi.fn(async () => {})
 }))
 const broadcast = vi.hoisted(() => vi.fn())
 
-vi.mock('@/lib/db/maps', () => ({ listMaps: db.listMaps }))
+vi.mock('@/lib/db/maps', () => ({ listMaps: db.listMaps, updateMapFog: db.updateMapFog }))
 vi.mock('@/lib/db/tokens', () => ({ listTokens: db.listTokens, moveToken: db.moveToken }))
 vi.mock('@/lib/db/drawings', () => ({
   listDrawings: () => Promise.resolve([]),
@@ -49,6 +50,7 @@ const map: BoardMap = {
   width: 1000,
   height: 800,
   grid,
+  fog: { enabled: false, shapes: [] },
   sortOrder: 0
 }
 
@@ -469,5 +471,78 @@ describe('combate no mapa (6.3, 7.3)', () => {
       .filter((node) => (node as Konva.Circle).stroke() === '#fbbf24')
     expect(glow).toHaveLength(1)
     expect(glow[0]?.getParent()?.x()).toBe(300)
+  })
+})
+
+describe('névoa de guerra (6.4)', () => {
+  const foggy: BoardMap = { ...map, fog: { enabled: true, shapes: [] } }
+
+  function prepareFoggy(tokens: BoardToken[]): void {
+    useBoardStore.setState({
+      sessionId: 'mesa',
+      maps: [foggy],
+      openMapId: 'mapa-1',
+      activeMapId: 'mapa-1',
+      tokens,
+      scale: { metersPerSquare: 1.5, diagonal: 'simple' }
+    })
+  }
+
+  const hero = token({ id: 'lia', kind: 'player', ownerId: 'ana', name: 'Lia', x: 100, y: 100 })
+  const near = token({ id: 'perto', name: 'Goblin perto', x: 150, y: 100 })
+  const far = token({ id: 'longe', name: 'Goblin longe', x: 800, y: 600 })
+
+  it('o jogador não vê o monstro no escuro, mas vê o que a visão dele alcança', async () => {
+    prepareFoggy([hero, near, far])
+    await render('player', 'ana', foggy)
+
+    expect(stage().getLayers().some((layer) => layer.name() === 'nevoa')).toBe(true)
+    expect(texts()).toContain('Lia')
+    expect(texts()).toContain('Goblin perto')
+    expect(texts()).not.toContain('Goblin longe')
+  })
+
+  it('a névoa acompanha o arrasto: o monstro aparece quando a visão chega nele', async () => {
+    prepareFoggy([hero, far])
+    await render('player', 'ana', foggy)
+    expect(texts()).not.toContain('Goblin longe')
+
+    act(() => useBoardStore.getState().dragTo('lia', { x: 750, y: 600 }))
+    expect(texts()).toContain('Goblin longe')
+  })
+
+  it('o mestre vê todo mundo, com a névoa por cima semitransparente', async () => {
+    prepareFoggy([hero, near, far])
+    await render('gm', 'mestre', foggy)
+    expect(texts()).toEqual(expect.arrayContaining(['Lia', 'Goblin perto', 'Goblin longe']))
+    const fogLayer = stage()
+      .getLayers()
+      .find((layer) => layer.name() === 'nevoa')
+    expect((fogLayer?.findOne('Rect') as Konva.Rect | undefined)?.fill()).toMatch(/^rgba/)
+  })
+
+  it('névoa desligada: nada some, e o jogador não tem camada de névoa', async () => {
+    prepareFoggy([hero, far])
+    useBoardStore.setState({ maps: [map] })
+    await render('player', 'ana', map)
+    expect(texts()).toContain('Goblin longe')
+    expect(stage().getLayers().some((layer) => layer.name() === 'nevoa')).toBe(false)
+  })
+
+  it('o mestre revela um retângulo arrastando com a ferramenta da névoa', async () => {
+    prepareFoggy([])
+    useBoardStore.setState({ tool: 'fog', fogMode: 'reveal', fogKind: 'rect' })
+    await render('gm', 'mestre', foggy)
+    neutralCamera()
+
+    await mouse('mousedown', 100, 100)
+    await mouse('mousemove', 300, 250)
+    expect(useLiveStore.getState().fogDraft?.points).toEqual([100, 100, 300, 250])
+    await mouse('mouseup', 300, 250)
+
+    expect(db.updateMapFog).toHaveBeenCalledWith('mapa-1', {
+      enabled: true,
+      shapes: [{ mode: 'reveal', kind: 'rect', points: [100, 100, 300, 250], radius: 0 }]
+    })
   })
 })

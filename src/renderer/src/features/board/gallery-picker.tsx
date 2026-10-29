@@ -23,8 +23,10 @@ import { useAssetImage } from './use-asset-image'
 interface GalleryPickerProps {
   open: boolean
   onClose: () => void
-  /** Escolheu uma imagem: a tela coloca o token no mapa. */
+  /** Escolheu uma imagem: a tela coloca o token no mapa (ou usa a imagem, no bestiário). */
   onPick: (image: GalleryImage, hidden: boolean) => Promise<void>
+  /** `choose`: só escolher a imagem (a da criatura), sem colocar nada no mapa. */
+  purpose?: 'place' | 'choose'
 }
 
 /**
@@ -33,7 +35,12 @@ interface GalleryPickerProps {
  * Os jogadores não têm acesso a ela — por isso a imagem é copiada para a pasta da sessão
  * quando vira token, e não referenciada direto daqui.
  */
-export function GalleryPicker({ open, onClose, onPick }: GalleryPickerProps): React.JSX.Element {
+export function GalleryPicker({
+  open,
+  onClose,
+  onPick,
+  purpose = 'place'
+}: GalleryPickerProps): React.JSX.Element {
   const userId = useAuthStore((state) => state.userId)
   const [kind, setKind] = useState<GalleryKind>('monster')
   const [images, setImages] = useState<GalleryImage[]>([])
@@ -92,7 +99,9 @@ export function GalleryPicker({ open, onClose, onPick }: GalleryPickerProps): Re
       await onPick(image, hidden)
       onClose()
     } catch (error) {
-      toast.error('Não consegui colocar o token', { description: errorMessage(error) })
+      toast.error(purpose === 'place' ? 'Não consegui colocar o token' : 'Não consegui usar a imagem', {
+        description: errorMessage(error)
+      })
     } finally {
       setBusy(false)
     }
@@ -113,7 +122,11 @@ export function GalleryPicker({ open, onClose, onPick }: GalleryPickerProps): Re
     <Dialog
       open={open}
       title="Galeria"
-      description="Imagens suas, reutilizáveis em qualquer mesa. Clique numa para colocar no mapa."
+      description={
+        purpose === 'place'
+          ? 'Imagens suas, reutilizáveis em qualquer mesa. Clique numa para colocar no mapa.'
+          : 'Clique numa imagem para usá-la. O tamanho do token vem junto.'
+      }
       onClose={onClose}
       className="max-w-2xl"
     >
@@ -130,15 +143,19 @@ export function GalleryPicker({ open, onClose, onPick }: GalleryPickerProps): Re
             </Button>
           ))}
 
-          <label className="ml-auto flex items-center gap-2 text-xs">
-            <input
-              type="checkbox"
-              className="accent-primary size-4"
-              checked={hidden}
-              onChange={(event) => setHidden(event.target.checked)}
-            />
-            Começa oculto
-          </label>
+          {purpose === 'place' ? (
+            <label className="ml-auto flex items-center gap-2 text-xs">
+              <input
+                type="checkbox"
+                className="accent-primary size-4"
+                checked={hidden}
+                onChange={(event) => setHidden(event.target.checked)}
+              />
+              Começa oculto
+            </label>
+          ) : (
+            <span className="ml-auto" />
+          )}
 
           <Button variant="outline" size="sm" onClick={() => fileInput.current?.click()}>
             <Upload className="size-4" />

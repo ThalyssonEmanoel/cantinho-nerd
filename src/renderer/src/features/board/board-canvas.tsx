@@ -6,15 +6,19 @@ import { toast } from 'sonner'
 import {
   appendPoint,
   byDrawOrder,
+  DEFAULT_VISION_M,
   erasableAt,
+  finishFogShape,
   finishStroke,
   gridLines,
   rulerPoint,
   samplesAlong,
   shapePoints,
   strokeWidthFor,
+  tokenVisibleThroughFog,
   toWorld,
   visibleRect,
+  visionCircles,
   type BoardMap,
   type BoardToken,
   type LiveStroke,
@@ -27,7 +31,7 @@ import type { SessionRole } from '@/lib/db/sessions'
 import { useCombatStore } from '@/features/combat/combat-store'
 import { broadcastDrag } from './board-actions'
 import { BoardEffects } from './board-effects'
-import { DrawingLayer, ERASER_RADIUS_PX, OverlayLayer } from './board-layers'
+import { DrawingLayer, ERASER_RADIUS_PX, FogLayer, OverlayLayer } from './board-layers'
 import { drawPosition, useBoardStore } from './board-store'
 import {
   broadcastStroke,
@@ -38,6 +42,7 @@ import {
   sendPing,
   shareRuler
 } from './drawing-actions'
+import { addFogArea } from './fog-actions'
 import { useLiveStore } from './live-store'
 import { TokenShape } from './token-shape'
 import { useAssetImage } from './use-asset-image'
@@ -51,6 +56,8 @@ interface BoardCanvasProps {
   onBoardMenu: (world: Point, screen: Point) => void
   /** Nome de quem mede ou pinga, para os outros saberem quem foi. */
   nameOf?: (userId: string) => string
+  /** Visão padrão da mesa na névoa, em metros (6.4). */
+  defaultVisionM?: number
 }
 
 /** Quem segura a régua reenvia a cada segundo: parado, ela não some da tela dos outros. */
@@ -76,7 +83,8 @@ export function BoardCanvas({
   onOpenToken,
   onTokenMenu,
   onBoardMenu,
-  nameOf = noName
+  nameOf = noName,
+  defaultVisionM = DEFAULT_VISION_M
 }: BoardCanvasProps): React.JSX.Element {
   const container = useRef<HTMLDivElement | null>(null)
   const stage = useRef<Konva.Stage | null>(null)
@@ -87,6 +95,7 @@ export function BoardCanvas({
   const dragging = useBoardStore((state) => state.dragging)
   const selection = useBoardStore((state) => state.selection)
   const tool = useBoardStore((state) => state.tool)
+  const sessionScale = useBoardStore((state) => state.scale)
   const measuring = useLiveStore((state) => state.myRuler !== null)
   // De quem é a vez no combate (7.3): o token ganha brilho.
   const activeTokenId = useCombatStore(
@@ -140,6 +149,7 @@ export function BoardCanvas({
           shareRuler(map.id, userId, live.myRuler.from, null)
           live.setMyRuler(null)
         }
+        live.setFogDraft(null)
       }
     }
     const up = (event: KeyboardEvent): void => {
@@ -164,6 +174,25 @@ export function BoardCanvas({
   }, [measuring, map.id, userId])
 
   const panning = tool === 'pan' || spaceHeld
+
+  /**
+   * Para o jogador, monstro (ou NPC, ou objeto) no escuro nem é desenhado (6.4). Conta com a
+   * posição do arrasto, então o goblin aparece no instante em que a visão do jogador chega
+   * nele, e não só quando o token é solto.
+   */
+  const shownTokens = (() => {
+    if (role === 'gm' || !map.fog.enabled) return tokens
+    const placed = tokens.map((token) => ({ token, at: { ...token, ...drawPosition(token, dragging) } }))
+    const circles = visionCircles(
+      placed.map((item) => item.at),
+      map.grid,
+      sessionScale,
+      defaultVisionM
+    )
+    return placed
+      .filter((item) => tokenVisibleThroughFog(item.at, map.grid, map.fog, circles))
+      .map((item) => item.token)
+  })()
   const view = visibleRect(camera, viewport)
   const lines = gridLines(map.grid, { width: map.width, height: map.height }, view)
 
@@ -242,6 +271,41 @@ export function BoardCanvas({
     })
   }
 
+  // --- névoa (6.4, só o mestre) ------------------------------------------------------
+
+  function startFog(world: Point): void {
+    const { fogMode, fogKind, fogBrush } = useBoardStore.getState()
+    useLiveStore.getState().setFogDraft({
+      mode: fogMode,
+      kind: fogKind,
+      points: fogKind === 'brush' ? [world.x, world.y] : [world.x, world.y, world.x, world.y],
+      radius: fogKind === 'brush' ? fogBrush * map.grid.size : 0
+    })
+  }
+
+  function moveFog(world: Point): void {
+    const live = useLiveStore.getState()
+    const draft = live.fogDraft
+    if (draft === null) return
+    const points =
+      draft.kind === 'brush'
+        ? appendPoint(draft.points, world, 2 / camera.scale)
+        : shapePoints({ x: draft.points[0] ?? world.x, y: draft.points[1] ?? world.y }, world)
+    if (points !== draft.points) live.setFogDraft({ ...draft, points })
+  }
+
+  function endFog(): void {
+    const live = useLiveStore.getState()
+    const draft = live.fogDraft
+    live.setFogDraft(null)
+    if (draft === null) return
+    const shape = finishFogShape(draft.mode, draft.kind, draft.points, draft.radius, 4 / camera.scale)
+    if (shape === null) return
+    void addFogArea(map, shape).catch((error: unknown) => {
+      toast.error('Não consegui salvar a névoa', { description: errorMessage(error) })
+    })
+  }
+
   // --- régua (6.5) --------------------------------------------------------------------
 
   function moveRuler(world: Point, free: boolean): void {
@@ -289,6 +353,11 @@ export function BoardCanvas({
       return
     }
 
+    if (tool === 'fog') {
+      if (role === 'gm') startFog(world)
+      return
+    }
+
     if (tool === 'ruler') {
       if (userId === null) return
       const from = rulerPoint(world, map.grid, event.evt.shiftKey)
@@ -318,6 +387,12 @@ export function BoardCanvas({
     const world = pointerWorld()
     if (world === null) return
     const live = useLiveStore.getState()
+
+    if (tool === 'fog') {
+      live.setEraser(world)
+      moveFog(world)
+      return
+    }
 
     if (tool === 'erase') {
       live.setEraser(world)
@@ -356,6 +431,7 @@ export function BoardCanvas({
 
     const live = useLiveStore.getState()
     if (live.draft !== null) endStroke(live.draft)
+    if (live.fogDraft !== null) endFog()
     if (live.myRuler !== null) {
       // A régua existe enquanto o botão está apertado: soltou, some para todos.
       if (userId !== null) shareRuler(map.id, userId, live.myRuler.from, null)
@@ -394,7 +470,7 @@ export function BoardCanvas({
 
   const cursor = panning
     ? 'grab'
-    : tool === 'draw' || tool === 'ruler'
+    : tool === 'draw' || tool === 'ruler' || tool === 'fog'
       ? 'crosshair'
       : tool === 'erase'
         ? 'none'
@@ -475,8 +551,10 @@ export function BoardCanvas({
 
           <DrawingLayer mapId={map.id} />
 
+          <FogLayer map={map} role={role} defaultVisionM={defaultVisionM} />
+
           <Layer>
-            {[...tokens].sort(byDrawOrder).map((token) => (
+            {[...shownTokens].sort(byDrawOrder).map((token) => (
               <TokenShape
                 key={token.id}
                 token={token}
@@ -523,7 +601,7 @@ export function BoardCanvas({
         </Stage>
       )}
 
-      <BoardEffects map={map} camera={camera} nameOf={nameOf} />
+      <BoardEffects map={map} camera={camera} nameOf={nameOf} tokens={shownTokens} />
     </div>
   )
 }

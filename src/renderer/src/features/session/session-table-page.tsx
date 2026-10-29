@@ -13,6 +13,7 @@ import { useNavigate } from 'react-router-dom'
 import { toast } from 'sonner'
 import { BoardView } from '@/features/board/board-view'
 import { MapLibrary } from '@/features/board/map-library'
+import { GmToolsPanel } from '@/features/bestiary/gm-tools-panel'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
 import { UserAvatar } from '@/components/user-avatar'
@@ -93,6 +94,7 @@ export function SessionTablePage(): React.JSX.Element {
           ) : (
             <div className="flex min-h-0 flex-1 flex-col divide-y overflow-y-auto">
               {role === 'gm' && <MapLibrary />}
+              {role === 'gm' && <GmToolsPanel />}
               <SheetsPanel />
               <MembersPanel />
             </div>

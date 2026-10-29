@@ -1,6 +1,7 @@
 import {
   conditionsFromSettings,
   conditionsToSettings,
+  defaultVisionFromSettings,
   normalizeScale,
   type ConditionDef,
   type SessionScale
@@ -33,6 +34,8 @@ export interface SessionSummary {
   diceRules: DiceRules
   /** Condições que dá para pôr nos tokens (6.3), também em `settings`. */
   conditions: ConditionDef[]
+  /** Visão padrão dos tokens de jogador na névoa, em metros (6.4), em `settings.fog`. */
+  defaultVisionM: number
   updatedAt: string
 }
 
@@ -107,6 +110,7 @@ function summaryFrom(row: SessionRowLike, role: SessionRole): SessionSummary {
     scale: scaleFromSettings(row.settings),
     diceRules: diceRulesFromSettings(row.settings),
     conditions: conditionsFromSettings(row.settings),
+    defaultVisionM: defaultVisionFromSettings(row.settings),
     updatedAt: row.updated_at
   }
 }
@@ -216,6 +220,13 @@ export async function setSessionDiceRules(sessionId: string, rules: DiceRules): 
   await mergeSettings(sessionId, 'dice', {
     critical: { ...rules.critical },
     criticalFailureOnOne: rules.criticalFailureOnOne
+  })
+}
+
+/** Visão padrão da névoa (6.4), para token sem visão na ficha nem no próprio token. */
+export async function setSessionDefaultVision(sessionId: string, meters: number): Promise<void> {
+  await mergeSettings(sessionId, 'fog', {
+    defaultVisionM: Math.min(1000, Math.max(0, Number.isFinite(meters) ? meters : 0))
   })
 }
 

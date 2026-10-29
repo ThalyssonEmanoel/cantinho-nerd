@@ -62,6 +62,7 @@ const mesa: SessionSummary = {
   scale: { metersPerSquare: 1.5, diagonal: 'simple' as const },
   diceRules: { critical: { kind: 'natural' as const }, criticalFailureOnOne: true },
   conditions: [],
+  defaultVisionM: 9,
   updatedAt: '2026-10-29T10:00:00Z'
 }
 

@@ -42,6 +42,7 @@ const taverna: BoardMap = {
   width: 2000,
   height: 1500,
   grid: DEFAULT_GRID,
+  fog: { enabled: false, shapes: [] },
   sortOrder: 0
 }
 

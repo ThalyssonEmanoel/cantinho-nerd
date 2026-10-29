@@ -90,3 +90,47 @@ async function pruneIfNeeded(directory: string): Promise<void> {
     }
   }
 }
+
+/** Quanto o cache ocupa em disco, em bytes (tela de Configurações). */
+export async function assetCacheSize(): Promise<number> {
+  try {
+    const directory = await ensureDirectory()
+    let total = 0
+    for (const name of await readdir(directory)) {
+      try {
+        const info = await stat(join(directory, name))
+        if (info.isFile()) total += info.size
+      } catch {
+        // Saiu no meio do caminho.
+      }
+    }
+    return total
+  } catch {
+    return 0
+  }
+}
+
+/**
+ * Apaga todas as imagens guardadas. Nada se perde: elas são baixadas de novo do Storage na
+ * próxima vez que aparecerem. Devolve quantos bytes foram liberados.
+ */
+export async function clearAssetCache(): Promise<number> {
+  let freed = 0
+  try {
+    const directory = await ensureDirectory()
+    for (const name of await readdir(directory)) {
+      try {
+        const path = join(directory, name)
+        const info = await stat(path)
+        if (!info.isFile()) continue
+        await unlink(path)
+        freed += info.size
+      } catch {
+        // Em uso por outra janela; fica para a próxima limpeza.
+      }
+    }
+  } catch (error) {
+    console.warn('Não consegui limpar o cache de imagens:', error)
+  }
+  return freed
+}

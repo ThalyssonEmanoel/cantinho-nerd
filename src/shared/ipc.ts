@@ -12,7 +12,9 @@ export const IpcChannel = {
   saveTextFile: 'file:save-text',
   openTextFile: 'file:open-text',
   readCachedAsset: 'asset:read',
-  writeCachedAsset: 'asset:write'
+  writeCachedAsset: 'asset:write',
+  assetCacheSize: 'asset:cache-size',
+  clearAssetCache: 'asset:cache-clear'
 } as const
 
 /** Limite dos arquivos de texto que o app lê e escreve (modelos de ficha em .json). */

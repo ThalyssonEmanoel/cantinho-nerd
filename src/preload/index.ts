@@ -41,6 +41,12 @@ const api = {
   writeCachedAsset: (key: string, data: Uint8Array): Promise<boolean> =>
     ipcRenderer.invoke(IpcChannel.writeCachedAsset, key, data),
 
+  /** Tamanho do cache de imagens em disco, em bytes (Configurações). */
+  assetCacheSize: (): Promise<number> => ipcRenderer.invoke(IpcChannel.assetCacheSize),
+
+  /** Apaga o cache de imagens; devolve quantos bytes liberou. */
+  clearAssetCache: (): Promise<number> => ipcRenderer.invoke(IpcChannel.clearAssetCache),
+
   /** Deep link com o app já aberto. Devolve a função para remover o listener. */
   onDeepLink: (callback: (link: DeepLink) => void): (() => void) => {
     const listener = (_event: IpcRendererEvent, link: DeepLink): void => callback(link)

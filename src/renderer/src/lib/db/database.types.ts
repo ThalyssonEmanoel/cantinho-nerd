@@ -200,6 +200,66 @@ export type Database = {
           },
         ]
       }
+      creatures: {
+        Row: {
+          created_at: string
+          id: string
+          image_path: string | null
+          kind: string
+          name: string
+          owner_id: string
+          tags: string[]
+          template_id: string
+          template_version: number
+          token_size: number
+          updated_at: string
+          values: Json
+        }
+        Insert: {
+          created_at?: string
+          id?: string
+          image_path?: string | null
+          kind?: string
+          name?: string
+          owner_id?: string
+          tags?: string[]
+          template_id: string
+          template_version: number
+          token_size?: number
+          updated_at?: string
+          values?: Json
+        }
+        Update: {
+          created_at?: string
+          id?: string
+          image_path?: string | null
+          kind?: string
+          name?: string
+          owner_id?: string
+          tags?: string[]
+          template_id?: string
+          template_version?: number
+          token_size?: number
+          updated_at?: string
+          values?: Json
+        }
+        Relationships: [
+          {
+            foreignKeyName: "creatures_owner_id_fkey"
+            columns: ["owner_id"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "creatures_template_id_template_version_fkey"
+            columns: ["template_id", "template_version"]
+            isOneToOne: false
+            referencedRelation: "sheet_template_versions"
+            referencedColumns: ["template_id", "version"]
+          },
+        ]
+      }
       dice_macros: {
         Row: {
           created_at: string
@@ -296,6 +356,41 @@ export type Database = {
             columns: ["session_id"]
             isOneToOne: false
             referencedRelation: "sessions"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      encounters: {
+        Row: {
+          created_at: string
+          groups: Json
+          id: string
+          name: string
+          owner_id: string
+          updated_at: string
+        }
+        Insert: {
+          created_at?: string
+          groups?: Json
+          id?: string
+          name: string
+          owner_id?: string
+          updated_at?: string
+        }
+        Update: {
+          created_at?: string
+          groups?: Json
+          id?: string
+          name?: string
+          owner_id?: string
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "encounters_owner_id_fkey"
+            columns: ["owner_id"]
+            isOneToOne: false
+            referencedRelation: "profiles"
             referencedColumns: ["id"]
           },
         ]
@@ -926,6 +1021,18 @@ export type Database = {
       [_ in never]: never
     }
     Functions: {
+      owns_creature_template: {
+        Args: { p_template_id: string }
+        Returns: boolean
+      }
+      pull_players: {
+        Args: { p_map_id: string; p_session_id: string; p_spots: Json }
+        Returns: number
+      }
+      spawn_creatures: {
+        Args: { p_items: Json; p_map_id: string; p_session_id: string }
+        Returns: Json
+      }
       apply_hp_change: {
         Args: { p_amount: number; p_kind: string; p_session_id: string; p_token_ids: string[] }
         Returns: Json

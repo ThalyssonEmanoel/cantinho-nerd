@@ -521,7 +521,7 @@ Pendências, de propósito:
 - Atalhos de uma letra (R régua, D desenho, E borracha…) são da Fase 13.
 - Arrastar um token mostrando a distância percorrida não está na 6.5; não foi feito.
 
-**Fase 9 (Combate) — implementada, aguardando teste.** 780 testes.
+**Fase 9 (Combate) — aprovada; o Thalysson liberou a Fase 10.** 780 testes.
 
 Falta aplicar a migração `20261029220000_combat.sql` (junto com as das Fases 6 a 8, se
 ainda não foram) e rodar `npm run db:types`. As decisões de produto estão no fim da
@@ -587,4 +587,132 @@ regra: edite o gerador e rode `npx vitest run fantasy-template -u`.
 - Linhas fixas de tabela são copiadas para a ficha quando ela nasce: corrigir uma habilidade
   no modelo não muda fichas já criadas (o construtor nem edita célula de linha fixa).
 
-**Próxima fase: 10 — Ferramentas do mestre.** Só começar depois do ok dele.
+**Fase 10 (Ferramentas do mestre) — aprovada; o Thalysson liberou a Fase 11.** 824 testes.
+
+Falta aplicar a migração `20261030090000_bestiary_and_encounters.sql` (junto com as das
+Fases 6 a 9, se ainda não foram) e rodar `npm run db:types`. As decisões de produto estão no
+fim da especificação (itens 39 a 46), para o Thalysson confirmar.
+
+- Migração: `creatures` e `encounters` (só o dono; criatura só com modelo `creature` do
+  próprio mestre, presa a uma versão publicada com `restrict`), as RPCs `spawn_creatures`
+  (ficha-instância + `sheet_gm_data` + token por item, numa transação; imagem tem de estar
+  em `sessions/<id>/tokens/`) e `pull_players` (cria o token do jogador ligado ao personagem,
+  ou move o que já está — o reagrupar), e o gatilho `drop_orphan_instance` (excluir o token
+  exclui a ficha-instância). Testada no PGlite em cima das migrações 4 a 9.
+- `lib/bestiary/`: tags, busca, grupos do encontro, `planSpawn` (posição livre perto do
+  centro + numeração que continua a do mapa) e `planPlayerSpots`. `lib/db/bestiary.ts` +
+  `bestiary-rows.ts`. `cachesOf` de `lib/db/sheets.ts` agora é exportado.
+- `features/bestiary/`: página do bestiário (criaturas e encontros), editor da criatura
+  (stat block no `SheetView` como mestre, rolagens de teste, atualizar versão), ações
+  (`spawnRequests`, `spawnEncounter`, `pullPlayersToMap`) e o painel "Ferramentas do mestre"
+  na aba Mesa. A galeria ganhou o modo "escolher imagem" (`purpose="choose"`).
+
+Decisões e armadilhas registradas:
+
+- **Só modelo de criatura do próprio mestre** no `spawn_creatures` e na política de
+  `creatures`: com o id de um modelo alheio, a ficha-instância daria ao mestre leitura
+  daquele modelo (a política de `sheet_template_versions` libera quem tem ficha nele).
+- **O app calcula, o banco cria de uma vez:** cache das fórmulas, posições e nomes saem do
+  app (o banco não calcula fórmulas nem sabe onde o mestre está olhando); a RPC cria fichas
+  e tokens numa transação, então um encontro nunca fica pela metade.
+- **A parte do mestre do stat block vai para `sheet_gm_data`** (`splitValues`), como nas
+  fichas: o jogador nunca recebe, mesmo que um dia veja a ficha.
+- **A imagem é copiada uma vez por criatura** (o nome é o hash, então dez goblins usam o
+  mesmo arquivo na mesa).
+- **A lista de fichas (`sheetRepository.list`) filtra `kind = 'character'`**: as
+  fichas-instância encheriam a aba Fichas e a tela Fichas de goblins.
+- O teste da mesa (`session-table-page.dom.test`) agora dubla `@/lib/db/bestiary`: o painel
+  do mestre lê o bestiário ao abrir a aba Mesa.
+
+Pendências, de propósito:
+
+- Criatura sem imagem entra no mapa com a moldura vazia, como o token vazio.
+- Não há importar/exportar bestiário em arquivo (não está na especificação).
+
+**Fase 11 (Névoa de guerra) — aprovada; o Thalysson liberou a Fase 12.** 850 testes.
+
+Falta aplicar a migração `20261030120000_fog_vision.sql` (junto com as das Fases 6 a 10, se
+ainda não foram) e rodar `npm run db:types`. As decisões de produto estão no fim da
+especificação (itens 47 a 53), para o Thalysson confirmar.
+
+- Migração: `sync_token_bars` agora também copia o papel `vision` da ficha para
+  `tokens.vision_m` (antes só no nascimento do token), e `guard_token_update` aceita essa
+  mudança quando vem do gatilho. A névoa em si já tinha a coluna `maps.fog` (Fase 6), que o
+  mestre grava e o jogador lê (RLS de `maps`). Testada no PGlite em cima das migrações 4 a 10.
+- `lib/board/fog.ts`: formato das áreas (retângulo e pincel, revelar e cobrir), o que está
+  sob a névoa, círculos de visão (metros pela escala, a partir da borda do token), quais
+  tokens o jogador vê, revelar/cobrir tudo e a simplificação do pincel.
+- `BoardMap.fog` (lido em `mapFromRow`, gravado por `updateMapFog`) e
+  `SessionSummary.defaultVisionM` (`settings.fog.defaultVisionM`, editável em Gerenciar).
+- `features/board/`: `FogLayer` em `board-layers.tsx` (entre os desenhos e os tokens),
+  `fog-actions.ts` (gravação em fila), `fog-bar.tsx` (a ferramenta "Névoa" do mestre) e, no
+  canvas, os tokens filtrados para o jogador e o desenho das áreas com o mouse.
+
+Decisões e armadilhas registradas:
+
+- **A névoa é uma camada só, por composição:** retângulo escuro do mapa, as áreas na ordem
+  (`destination-out` recorta, cobrir recorta e pinta de novo) e os círculos de visão
+  recortando por cima, com gradiente na borda.
+- **Transparência do mestre na cor, não em `opacity`:** a opacidade da camada também
+  enfraquece o `destination-out`, e a área revelada ficaria meio escura para ele. Pelo mesmo
+  motivo "cobrir" recorta antes de pintar (só pintar escureceria a sobreposição).
+- **A visão e o filtro dos tokens usam a posição do arrasto** (`drawPosition`, o meu e o dos
+  outros pelo canal): a névoa anda junto com o token, e o goblin aparece no instante em que a
+  visão chega nele.
+- **A névoa grava em fila e fica na tela enquanto grava** (`beginFogWrite`/`endFogWrite` no
+  `board-store`): ela vai inteira a cada área, e o eco atrasado do tempo real apagaria a
+  área nova. Se o banco recusar, volta ao que estava. Acima de ~250 KB (o banco aceita 256 KB)
+  o app recusa antes e sugere "Revelar/Cobrir tudo".
+- **Área que cobre o mapa todo descarta as anteriores** (`addFogShape`): "Revelar tudo"
+  vira uma área só, e a coluna não cresce à toa.
+- A névoa é desenhada no app (6.4): quem abrir as ferramentas do navegador vê os tokens; para
+  esconder de verdade, continua valendo "ocultar".
+
+Pendências, de propósito:
+
+- Paredes e linha de visão não estão na especificação: a visão é um círculo.
+- A camada da névoa não é guardada em cache (`cache()` do Konva): com dezenas de áreas é
+  barato redesenhar; o teste de 60 fps com mapa de 4096 px é da Fase 13.
+
+**Fase 12 (só a parte da conta) — implementada, aguardando teste.** 865 testes.
+
+O Thalysson decidiu distribuir o `.exe` pelo WhatsApp: **sem site, sem convite https, sem
+GitHub Actions nem atualização automática** (itens da Fase 12 que ficam de fora; decisão 54
+da especificação). Foi feito só "excluir sessões e conta + Configurações".
+
+Não há migração nova (as cascatas atuais já dão conta: conferido no PGlite, inclusive o
+`restrict` da ficha de um jogador no modelo do mestre). Falta **instalar a Edge Function**:
+`npx supabase functions deploy delete-account` (com a CLI logada e ligada ao projeto). Sem
+ela, excluir a conta mostra um aviso claro e não apaga nada do login.
+
+- `supabase/functions/delete-account/index.ts` (Deno): confere o token, apaga os arquivos da
+  pessoa no Storage (galeria, avatar e as pastas das mesas que ela mestra) e apaga o usuário
+  com a chave de serviço; o resto vai pela cascata a partir de `profiles`. Não recebe id:
+  só apaga a conta do dono do token. CORS liberado (o app vem de `file://`).
+- `lib/db/account.ts`: `deleteMySessions` (mestre exclui, jogador sai; falha numa mesa não
+  trava as outras) e `deleteMyAccount` (mesas, galeria e avatar pelo app; depois a função).
+  `lib/account/deletion.ts`: confirmação pelo nome de usuário e o tamanho em MB.
+- `features/settings/settings-page.tsx` (rota `/settings`, "Configurações" na navegação):
+  sons (sussurro e "Sua vez!", com "Ouvir"), cache de imagens (tamanho e limpar), versão,
+  sair e as duas exclusões. `hooks/use-sign-out.ts` é o "Sair" do topo e desta tela.
+- Processo principal: `assetCacheSize` e `clearAssetCache` em `main/asset-cache.ts`, dois
+  canais de IPC novos (sem parâmetro vindo do renderer) e as funções no preload.
+
+Decisões e armadilhas registradas:
+
+- **Apagar o usuário do Auth precisa da chave de serviço**: por isso a Edge Function, como
+  pede a 9. O app nunca vê a chave; a função usa as variáveis que o Supabase já põe nela.
+- **O Storage não tem cascata**: o app apaga o que o RLS deixa (mesas que mestra, galeria,
+  avatar) e a função confere de novo com a chave de serviço, inclusive subpastas.
+- As Edge Functions ficam fora do ESLint e do TypeScript do app (`supabase/functions/**`):
+  rodam no Deno, com imports `npm:` e o global `Deno`.
+- A tela de Configurações chama `window.api` com `?.` na leitura do tamanho: nos testes e
+  num preload quebrado a tela abre mesmo assim.
+
+Pendências, de propósito:
+
+- `build/icon.ico` continua faltando (o instalador usa o ícone do Electron).
+- O `electron-updater` segue instalado e sem uso; dá para tirar do `package.json` se a
+  decisão 54 ficar.
+
+**Próxima fase: 13 — Polimento.** Só começar depois do ok dele.

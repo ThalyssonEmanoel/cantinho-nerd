@@ -1,12 +1,14 @@
-import { Circle, Layer, Rect } from 'react-konva'
+import { Circle, Layer, Line, Rect } from 'react-konva'
 import {
   measure,
   rulerLabel,
+  visionCircles,
   type BoardMap,
+  type FogShape,
   type Point,
   type Rect as WorldRect
 } from '@/lib/board'
-import { useBoardStore } from './board-store'
+import { drawPosition, useBoardStore } from './board-store'
 import { DrawingShape, RulerShape } from './drawing-shape'
 import { useLiveStore } from './live-store'
 
@@ -84,6 +86,8 @@ export function OverlayLayer({
   const rulers = useLiveStore((state) => state.rulers)
   const myRuler = useLiveStore((state) => state.myRuler)
   const eraser = useLiveStore((state) => state.eraser)
+  const fogKind = useBoardStore((state) => state.fogKind)
+  const fogBrush = useBoardStore((state) => state.fogBrush)
 
   const label = (from: Point, to: Point): string =>
     rulerLabel(measure(from, to, map.grid, sessionScale))
@@ -117,6 +121,17 @@ export function OverlayLayer({
         />
       )}
 
+      {tool === 'fog' && fogKind === 'brush' && eraser !== null && (
+        <Circle
+          x={eraser.x}
+          y={eraser.y}
+          radius={fogBrush * map.grid.size}
+          stroke="#f8fafc"
+          strokeWidth={1.5 / scale}
+          dash={[4 / scale, 3 / scale]}
+        />
+      )}
+
       {tool === 'erase' && eraser !== null && (
         <Circle
           x={eraser.x}
@@ -141,5 +156,128 @@ export function OverlayLayer({
         />
       )}
     </Layer>
+  )
+}
+
+/** A cor da névoa: o mesmo fundo do tabuleiro, para o escuro parecer "fora do mapa". */
+const FOG_COLOR = '#020617'
+/** O mestre vê através da névoa (6.4); editando com ela desligada, mais clara ainda. */
+const GM_FOG_COLOR = 'rgba(2, 6, 23, 0.55)'
+const GM_PREVIEW_COLOR = 'rgba(2, 6, 23, 0.35)'
+
+interface FogLayerProps {
+  map: BoardMap
+  role: 'gm' | 'player'
+  /** Visão padrão da mesa, em metros (6.4). */
+  defaultVisionM: number
+}
+
+/**
+ * A névoa de guerra (6.4), entre os desenhos e os tokens.
+ *
+ * Tudo numa camada só: um retângulo escuro do tamanho do mapa, as áreas do mestre na ordem
+ * (revelar recorta, cobrir pinta de novo) e, por cima, os círculos de visão dos jogadores
+ * recortando — com a borda esfumada. O jogador vê a névoa opaca; o mestre, semitransparente.
+ *
+ * Os círculos seguem a posição do arrasto (o meu e o dos outros pelo canal), então a névoa
+ * acompanha o token enquanto ele anda.
+ */
+export function FogLayer({ map, role, defaultVisionM }: FogLayerProps): React.JSX.Element | null {
+  const tokens = useBoardStore((state) => state.tokens)
+  const dragging = useBoardStore((state) => state.dragging)
+  const sessionScale = useBoardStore((state) => state.scale)
+  const tool = useBoardStore((state) => state.tool)
+  const draft = useLiveStore((state) => state.fogDraft)
+
+  const isGm = role === 'gm'
+  // O mestre vê a névoa enquanto edita, mesmo desligada, para saber o que vai aparecer.
+  const editing = isGm && tool === 'fog'
+  if (!map.fog.enabled && !editing) return null
+
+  const circles = visionCircles(
+    tokens.map((token) => ({ ...token, ...drawPosition(token, dragging) })),
+    map.grid,
+    sessionScale,
+    defaultVisionM
+  )
+  const shapes = draft === null ? map.fog.shapes : [...map.fog.shapes, draft]
+  // Transparência na cor, não em `opacity`: a opacidade da camada também enfraqueceria o
+  // recorte, e a área revelada ficaria meio escura para o mestre.
+  const color = !isGm ? FOG_COLOR : map.fog.enabled ? GM_FOG_COLOR : GM_PREVIEW_COLOR
+
+  return (
+    <Layer listening={false} name="nevoa">
+      <Rect width={map.width} height={map.height} fill={color} />
+      {shapes.map((shape, index) => (
+        <FogShapeNode key={index} shape={shape} color={color} />
+      ))}
+      {circles.map((circle, index) => (
+        <Circle
+          key={index}
+          x={circle.x}
+          y={circle.y}
+          radius={circle.radius}
+          globalCompositeOperation="destination-out"
+          fillRadialGradientStartPoint={{ x: 0, y: 0 }}
+          fillRadialGradientEndPoint={{ x: 0, y: 0 }}
+          fillRadialGradientStartRadius={0}
+          fillRadialGradientEndRadius={circle.radius}
+          fillRadialGradientColorStops={[0, '#000', 0.8, '#000', 1, 'rgba(0,0,0,0)']}
+          perfectDrawEnabled={false}
+        />
+      ))}
+    </Layer>
+  )
+}
+
+/**
+ * Uma área do mestre. Revelar recorta a névoa. Cobrir recorta e pinta de novo: só pintar
+ * por cima escureceria a sobreposição na névoa semitransparente do mestre.
+ */
+function FogShapeNode({ shape, color }: { shape: FogShape; color: string }): React.JSX.Element {
+  const cut = <FogPiece shape={shape} color="#000" operation="destination-out" />
+  if (shape.mode === 'reveal') return cut
+  return (
+    <>
+      {cut}
+      <FogPiece shape={shape} color={color} operation="source-over" />
+    </>
+  )
+}
+
+function FogPiece({
+  shape,
+  color,
+  operation
+}: {
+  shape: FogShape
+  color: string
+  operation: 'destination-out' | 'source-over'
+}): React.JSX.Element {
+  if (shape.kind === 'rect') {
+    const [x1 = 0, y1 = 0, x2 = x1, y2 = y1] = shape.points
+    return (
+      <Rect
+        x={Math.min(x1, x2)}
+        y={Math.min(y1, y2)}
+        width={Math.abs(x2 - x1)}
+        height={Math.abs(y2 - y1)}
+        fill={color}
+        globalCompositeOperation={operation}
+        perfectDrawEnabled={false}
+      />
+    )
+  }
+  const [x = 0, y = 0] = shape.points
+  return (
+    <Line
+      points={shape.points.length === 2 ? [x, y, x + 0.1, y] : shape.points}
+      stroke={color}
+      strokeWidth={shape.radius * 2}
+      lineCap="round"
+      lineJoin="round"
+      globalCompositeOperation={operation}
+      perfectDrawEnabled={false}
+    />
   )
 }

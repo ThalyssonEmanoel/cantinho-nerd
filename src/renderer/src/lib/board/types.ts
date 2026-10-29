@@ -1,4 +1,5 @@
 import type { TokenCondition } from './conditions'
+import type { FogState } from './fog'
 
 /**
  * Tabuleiro: mapas, tokens, grade e escala (seções 6.1 a 6.3).
@@ -104,6 +105,8 @@ export interface BoardMap {
   width: number
   height: number
   grid: GridSettings
+  /** Névoa de guerra do mapa (6.4). */
+  fog: FogState
   sortOrder: number
 }
 

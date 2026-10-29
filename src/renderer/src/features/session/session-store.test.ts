@@ -72,6 +72,7 @@ function session(role: 'gm' | 'player'): SessionDetail {
     scale: { metersPerSquare: 1.5, diagonal: 'simple' as const },
     diceRules: { critical: { kind: 'natural' as const }, criticalFailureOnOne: true },
     conditions: [],
+    defaultVisionM: 9,
     updatedAt: 'x',
     members: []
   }

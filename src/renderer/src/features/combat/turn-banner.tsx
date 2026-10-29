@@ -6,6 +6,7 @@ import { currentEntry, entryLabel, isMyTurn } from '@/lib/combat'
 import { playTurnChime } from '@/lib/chat/sound'
 import { errorMessage } from '@/lib/db/errors'
 import { cn } from '@/lib/utils'
+import { useAppStore } from '@/stores/app-store'
 import { useAuthStore } from '@/stores/auth-store'
 import { useSessionStore } from '@/features/session/session-store'
 import { endMyTurn, nextTurn } from './combat-actions'
@@ -98,7 +99,8 @@ export function TurnNotifier(): null {
   useEffect(() => {
     if (role === 'player' && myTurnId !== null && myTurnId !== last.current) {
       toast.success('Sua vez!', { description: 'Quando terminar, clique em "Encerrar meu turno".' })
-      playTurnChime()
+      // O som se desliga em Configurações; o aviso na tela fica sempre.
+      if (useAppStore.getState().turnSound) playTurnChime()
     }
     last.current = myTurnId
   }, [myTurnId, role])

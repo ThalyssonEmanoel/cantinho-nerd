@@ -50,6 +50,7 @@ const map: BoardMap = {
   width: 1000,
   height: 800,
   grid,
+  fog: { enabled: false, shapes: [] },
   sortOrder: 0
 }
 

@@ -1,5 +1,6 @@
 import type { ReactNode } from 'react'
 import {
+  CloudFog,
   Crosshair,
   Eraser,
   Grid3x3,
@@ -21,7 +22,13 @@ import type { SessionRole } from '@/lib/db/sessions'
 import { cn } from '@/lib/utils'
 import { useBoardStore, type BoardTool } from './board-store'
 
-const TOOLS: ReadonlyArray<{ tool: BoardTool; label: string; title: string; icon: ReactNode }> = [
+const TOOLS: ReadonlyArray<{
+  tool: BoardTool
+  label: string
+  title: string
+  icon: ReactNode
+  gmOnly?: true
+}> = [
   {
     tool: 'select',
     label: 'Selecionar',
@@ -51,6 +58,13 @@ const TOOLS: ReadonlyArray<{ tool: BoardTool; label: string; title: string; icon
     label: 'Borracha',
     title: 'Borracha: apaga o traço inteiro que tocar',
     icon: <Eraser className="size-4" />
+  },
+  {
+    tool: 'fog',
+    label: 'Névoa',
+    title: 'Névoa de guerra: ligar, revelar e cobrir áreas do mapa',
+    icon: <CloudFog className="size-4" />,
+    gmOnly: true
   }
 ]
 
@@ -88,7 +102,7 @@ export function BoardToolbar({
   return (
     <div className="bg-card/60 flex flex-wrap items-center gap-1.5 border-b px-2 py-1.5 backdrop-blur">
       <div className="flex items-center gap-0.5">
-        {TOOLS.map((item) => (
+        {TOOLS.filter((item) => item.gmOnly !== true || role === 'gm').map((item) => (
           <Button
             key={item.tool}
             variant={tool === item.tool ? 'default' : 'ghost'}

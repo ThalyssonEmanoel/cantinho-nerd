@@ -16,6 +16,10 @@ import {
   type Drawing,
   type DrawingsCleared,
   type DrawingTool,
+  type FogBrushLevel,
+  type FogMode,
+  type FogShapeKind,
+  type FogState,
   type GridSettings,
   type Point,
   type SessionScale,
@@ -50,7 +54,7 @@ import { useLiveStore } from './live-store'
  * Os desenhos (6.5) são do mapa, como os tokens: trocar de mapa troca os dois.
  */
 
-export type BoardTool = 'select' | 'pan' | 'ruler' | 'draw' | 'erase'
+export type BoardTool = 'select' | 'pan' | 'ruler' | 'draw' | 'erase' | 'fog'
 
 /** Cor inicial do traço: vermelho, que aparece bem em quase todo mapa. */
 export const DEFAULT_DRAW_COLOR = '#ef4444'
@@ -81,6 +85,11 @@ interface BoardState {
   drawTool: DrawingTool
   drawColor: string
   strokeLevel: StrokeLevel
+  /** Ferramenta da névoa do mestre (6.4): revelar ou cobrir, retângulo ou pincel. */
+  fogMode: FogMode
+  fogKind: FogShapeKind
+  /** Raio do pincel da névoa, em quadrados. */
+  fogBrush: FogBrushLevel
 
   open: (input: {
     sessionId: string
@@ -102,6 +111,11 @@ interface BoardState {
   setDrawTool: (tool: DrawingTool) => void
   setDrawColor: (color: string) => void
   setStrokeLevel: (level: StrokeLevel) => void
+  setFogMode: (mode: FogMode) => void
+  setFogKind: (kind: FogShapeKind) => void
+  setFogBrush: (level: FogBrushLevel) => void
+  /** Névoa nova na tela, antes de o banco confirmar (só o mestre edita). */
+  setMapFogLocally: (mapId: string, fog: FogState) => void
   setCamera: (camera: Camera) => void
   zoomAtPoint: (screen: Point, factor: number) => void
   zoomStep: (factor: number) => void
@@ -150,6 +164,23 @@ function clearGhostTimers(): void {
  * nunca volta, então lembrar dele até fechar a mesa não tem efeito colateral.
  */
 const erasedDrawings = new Set<string>()
+
+/**
+ * Gravações de névoa em voo, por mapa. Enquanto houver alguma, o eco do tempo real (que traz
+ * a névoa de uma gravação anterior) não pode apagar da tela a área que o mestre acabou de
+ * fazer — a última gravação da fila é a que vale.
+ */
+const fogWrites = new Map<string, number>()
+
+export function beginFogWrite(mapId: string): void {
+  fogWrites.set(mapId, (fogWrites.get(mapId) ?? 0) + 1)
+}
+
+export function endFogWrite(mapId: string): void {
+  const left = (fogWrites.get(mapId) ?? 1) - 1
+  if (left <= 0) fogWrites.delete(mapId)
+  else fogWrites.set(mapId, left)
+}
 
 const emptyState = {
   sessionId: null,
@@ -234,6 +265,9 @@ export const useBoardStore = create<BoardState>()((set, get) => {
     drawTool: 'pencil',
     drawColor: DEFAULT_DRAW_COLOR,
     strokeLevel: 1,
+    fogMode: 'reveal',
+    fogKind: 'rect',
+    fogBrush: 1,
 
     open: async ({ sessionId, role, activeMapId, scale }) => {
       clearGhostTimers()
@@ -317,6 +351,13 @@ export const useBoardStore = create<BoardState>()((set, get) => {
     setDrawTool: (drawTool) => set({ drawTool, tool: 'draw' }),
     setDrawColor: (drawColor) => set({ drawColor }),
     setStrokeLevel: (strokeLevel) => set({ strokeLevel }),
+    setFogMode: (fogMode) => set({ fogMode, tool: 'fog' }),
+    setFogKind: (fogKind) => set({ fogKind, tool: 'fog' }),
+    setFogBrush: (fogBrush) => set({ fogBrush }),
+
+    setMapFogLocally: (mapId, fog) => {
+      set({ maps: get().maps.map((map) => (map.id === mapId ? { ...map, fog } : map)) })
+    },
 
     setCamera: (camera) => writeCamera(camera),
 
@@ -410,9 +451,13 @@ export const useBoardStore = create<BoardState>()((set, get) => {
 
       const row = change.row as unknown as MapRow
       if (typeof row.id !== 'string') return
-      const map = mapFromRow(row)
+      const fromDb = mapFromRow(row)
       const maps = get().maps
-      const index = maps.findIndex((item) => item.id === map.id)
+      const index = maps.findIndex((item) => item.id === fromDb.id)
+      // Com gravação de névoa em voo, a da tela é mais nova que a do eco.
+      const local = maps[index]
+      const map =
+        local !== undefined && fogWrites.has(fromDb.id) ? { ...fromDb, fog: local.fog } : fromDb
 
       set({
         maps:

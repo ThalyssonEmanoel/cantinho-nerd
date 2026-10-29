@@ -361,14 +361,20 @@ Cada fase termina com algo que eu consigo abrir e testar.
 - [X] Dano/cura nos selecionados e a partir de uma rolagem do chat, entre 0 e o máximo; log de combate com limpeza pelo mestre.
 
 **Fase 10 — Ferramentas do mestre** (seção 8: bestiário, fichas-instância, encontros, puxar jogadores)
+- [X] Bestiário com modelos do tipo `creature`: criar, editar o stat block, duplicar, excluir, buscar e filtrar por tags; imagem e tamanho padrão do token.
+- [X] Ficha-instância por token (vida separada), imagem copiada para a mesa; excluir o token exclui a ficha-instância.
+- [X] Encontros salvos (criatura + quantidade + começa oculta), colocados com um clique em grade, sem sobreposição, com numeração automática e opção de pôr no combate.
+- [X] Puxar jogadores para o mapa aberto (opção de reagrupar), com a vida vinda da ficha.
 
 **Fase 11 — Névoa de guerra** (6.4), fluida ao arrastar tokens com a névoa ligada
+- [X] Liga/desliga por mapa; visão dos tokens dos jogadores (papel `vision`, valor do token ou padrão da mesa, em metros pela escala); áreas do mestre com retângulo e pincel, salvas no mapa.
+- [X] O mestre vê através (semitransparente); monstros no escuro não são desenhados para os jogadores; a névoa acompanha o token durante o arrasto.
 
 **Fase 12 — Distribuição e conta**
 - [ ] Site no GitHub Pages: página de download do último release, com instruções para o aviso "O Windows protegeu o computador" (Mais informações → Executar assim mesmo), e a página `/join?id=` que abre o app ou mostra o download e o ID.
 - [ ] O convite passa a usar o link https.
 - [ ] GitHub Actions: uma tag `v*` gera o instalador e publica no GitHub Releases; atualização automática com o aviso "Nova versão: reiniciar".
-- [ ] Excluir todas as minhas sessões e excluir conta (seção 9); tela de Configurações (sons, limpar cache, versão, verificar atualização, sair).
+- [X] Excluir todas as minhas sessões e excluir conta (seção 9); tela de Configurações (sons, limpar cache, versão, verificar atualização, sair).
 
 **Fase 13 — Polimento**
 - [ ] Atalhos de teclado (V selecionar, H mãozinha, R régua, D desenho, E borracha, Del, Esc, +/−, F caber, Enter chat, N próximo turno) e tela de ajuda.
@@ -489,3 +495,49 @@ Decidido na Fase 9 (29/10/2026), para confirmar no teste:
 37. **Condições**: o jogador põe e tira nos próprios tokens; o mestre em todos. A lista
     padrão tem 16 condições genéricas com emoji, editável em "Gerenciar".
 38. **Dois tokens da mesma ficha** selecionados: o dano/cura vale uma vez.
+
+Decidido na Fase 10 (30/10/2026), para confirmar no teste:
+
+39. **O bestiário é uma página da conta** ("Bestiário" na navegação), com as abas Criaturas
+    e Encontros. Pôr no mapa é pelo painel **Ferramentas do mestre**, na aba Mesa da sessão.
+40. **O stat block grava com "Salvar"** (ou Ctrl+S), não sozinho: é preparação, e assim dá
+    para mexer à vontade e desistir. Os botões de rolagem funcionam ali, para testar.
+41. **A criatura fica presa à versão do modelo**, como as fichas. Saiu versão nova: um aviso
+    oferece "Atualizar o stat block". Os tokens já colocados continuam na versão em que
+    nasceram.
+42. **A imagem da criatura vem da galeria**, e o tamanho do token vem junto (dá para mudar).
+43. **Excluir uma criatura não apaga os encontros**: o grupo dela é pulado ao colocar, com
+    aviso. Os tokens que já estão nas mesas continuam, com a ficha deles.
+44. **A lista de Fichas mostra só personagens**; a ficha-instância de um monstro abre pelo
+    token ("Abrir a ficha").
+45. **Puxar jogadores**: quem não tem personagem entra com o nome de exibição e sem ficha;
+    "reagrupar quem já está no mapa" é uma caixa ao lado do botão.
+46. No painel, **"criatura avulsa começa oculta"** e **"já pôr no combate"** são caixas;
+    no encontro, quem começa oculto é cada grupo que diz.
+
+Decidido na Fase 11 (30/10/2026), para confirmar no teste:
+
+47. **A névoa é uma ferramenta do mestre** na barra do tabuleiro ("Névoa"), ligada e
+    desligada por mapa. Nasce desligada; ligada, o mapa começa todo coberto.
+48. **As áreas valem na ordem** (cobrir depois de revelar cobre de novo), e a **visão dos
+    jogadores revela por cima de tudo**, até de área coberta.
+49. **Visão**: o papel Visão da ficha; sem ele, o valor do token; sem os dois, o padrão da
+    mesa (9 m, em "Gerenciar"). Conta a partir da borda do token, com a borda esfumada.
+50. **A visão é do grupo**: cada token de jogador revela o mapa para todos os jogadores.
+51. **Para o jogador, não aparecem** monstros, NPCs e objetos com o centro no escuro (nem
+    as reações em cima deles). Token de jogador sempre aparece. Desenhos ficam por baixo da
+    névoa.
+52. **O mestre vê a névoa semitransparente**; editando com ela desligada, mais clara ainda.
+53. "Revelar tudo" e "Cobrir tudo" pedem confirmação; "Desfazer área" tira a última.
+
+Decidido na Fase 12 (30/10/2026):
+
+54. **Sem site e sem atualização automática** (pedido do Thalysson): o instalador vai pelo
+    WhatsApp. Ficam de fora o GitHub Pages, o convite por link https e o GitHub Actions com
+    o `electron-updater`. Por isso **"verificar atualização" virou um texto** na tela de
+    Configurações: instalar o `.exe` novo por cima, e contas e mesas continuam no servidor.
+55. **As exclusões ficam em Configurações** (não no Perfil), numa área separada no fim. A
+    confirmação é **digitando o nome de usuário** (o de entrar), sem diferença de maiúscula.
+56. **Excluir as sessões**: a ficha de quem sai de uma mesa fica com o mestre dela, como
+    quando alguém sai; uma mesa que falha não impede as outras, e a tela diz qual ficou.
+57. **Sons**: sussurro e "Sua vez!" ligam e desligam em separado, com botão para ouvir.

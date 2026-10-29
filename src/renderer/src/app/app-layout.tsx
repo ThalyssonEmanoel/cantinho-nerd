@@ -1,22 +1,22 @@
-import { useState } from 'react'
 import {
   BookOpen,
   Dices,
   Loader2,
   LogOut,
+  PawPrint,
   ScrollText,
+  Settings,
   Swords,
   User,
   UserRound,
   Wrench
 } from 'lucide-react'
-import { NavLink, Outlet, useNavigate } from 'react-router-dom'
+import { NavLink, Outlet } from 'react-router-dom'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
 import { UserAvatar } from '@/components/user-avatar'
 import { useAppInfo } from '@/hooks/use-app-info'
-import { signOut } from '@/lib/db/auth'
-import { useAppStore } from '@/stores/app-store'
+import { useSignOut } from '@/hooks/use-sign-out'
 import { useAuthStore } from '@/stores/auth-store'
 import { cn } from '@/lib/utils'
 
@@ -24,27 +24,17 @@ const navItems = [
   { to: '/gm', label: 'Mestre', icon: Swords },
   { to: '/player', label: 'Aventureiro', icon: UserRound },
   { to: '/templates', label: 'Modelos de ficha', icon: Wrench },
+  { to: '/bestiary', label: 'Bestiário', icon: PawPrint },
   { to: '/guide', label: 'Guia de fórmulas', icon: BookOpen },
   { to: '/sheets', label: 'Fichas', icon: ScrollText },
-  { to: '/profile', label: 'Perfil', icon: User }
+  { to: '/profile', label: 'Perfil', icon: User },
+  { to: '/settings', label: 'Configurações', icon: Settings }
 ]
 
 export function AppLayout(): React.JSX.Element {
   const info = useAppInfo()
-  const navigate = useNavigate()
-  const clear = useAppStore((state) => state.clear)
   const profile = useAuthStore((state) => state.profile)
-  const [leaving, setLeaving] = useState(false)
-
-  async function handleExit(): Promise<void> {
-    setLeaving(true)
-    await signOut()
-    // Sai para a entrada sem "voltar para onde estava": quem entrar depois pode ser outra
-    // conta, e a tela anterior (um modelo, uma ficha) não seria dela.
-    clear()
-    useAuthStore.getState().acceptSession(null)
-    void navigate('/login', { replace: true })
-  }
+  const { leaving, leave } = useSignOut()
 
   return (
     <div className="flex h-full flex-col">
@@ -97,7 +87,7 @@ export function AppLayout(): React.JSX.Element {
             </NavLink>
           )}
 
-          <Button variant="ghost" size="sm" disabled={leaving} onClick={() => void handleExit()}>
+          <Button variant="ghost" size="sm" disabled={leaving} onClick={() => void leave()}>
             {leaving ? <Loader2 className="size-4 animate-spin" /> : <LogOut className="size-4" />}
             Sair
           </Button>

@@ -42,14 +42,15 @@ function fail(error: DbErrorLike): FriendlyError {
 
 const asJson = (value: unknown): Json => value as Json
 
-interface Caches {
+export interface Caches {
   computed: Json
   gmComputed: Json
   summary: Json
 }
 
 /** O cache que vai junto com cada gravação: calculados (divididos) e resumo dos papéis. */
-function cachesOf(schema: SheetSchema, values: SheetValues): Caches {
+/** O cache das fórmulas (por plateia) e o resumo dos papéis, como o banco os guarda. */
+export function cachesOf(schema: SheetSchema, values: SheetValues): Caches {
   const { computed, summary } = computeSheet(schema, values)
   const { shared, gmOnly } = splitComputed(schema, computed)
   return { computed: asJson(shared), gmComputed: asJson(gmOnly), summary: asJson(summary) }
@@ -149,9 +150,12 @@ export function createSupabaseSheetRepository(): SheetRepository {
 
   return {
     list: async (sessionId) => {
+      // Só personagens: as fichas-instância dos monstros (Fase 10) são abertas pelo token,
+      // e encheriam a lista de goblins.
       let query = getSupabase()
         .from('sheets')
         .select(LIST_COLUMNS)
+        .eq('kind', 'character')
         .order('updated_at', { ascending: false })
       if (sessionId !== undefined) query = query.eq('session_id', sessionId)
 

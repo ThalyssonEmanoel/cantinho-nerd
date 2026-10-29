@@ -8,7 +8,12 @@ import {
   type FileFilter,
   type TextFileResult
 } from '../shared/ipc'
-import { readCachedAsset, writeCachedAsset } from './asset-cache'
+import {
+  assetCacheSize,
+  clearAssetCache,
+  readCachedAsset,
+  writeCachedAsset
+} from './asset-cache'
 import { consumePendingDeepLink } from './deep-link'
 import { profileName } from './profile'
 import { openExternalSafely } from './security'
@@ -133,4 +138,7 @@ export function registerIpcHandlers(): void {
   ipcMain.handle(IpcChannel.writeCachedAsset, (_event, key: unknown, data: unknown) =>
     writeCachedAsset(key, data)
   )
+  // Tela de Configurações: tamanho e limpeza do cache. Não recebem nada do renderer.
+  ipcMain.handle(IpcChannel.assetCacheSize, () => assetCacheSize())
+  ipcMain.handle(IpcChannel.clearAssetCache, () => clearAssetCache())
 }

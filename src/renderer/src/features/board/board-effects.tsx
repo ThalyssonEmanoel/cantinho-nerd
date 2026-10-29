@@ -1,5 +1,5 @@
 import type { CSSProperties } from 'react'
-import { toScreen, type BoardMap, type Camera } from '@/lib/board'
+import { toScreen, type BoardMap, type BoardToken, type Camera } from '@/lib/board'
 import { drawPosition, useBoardStore } from './board-store'
 import { useLiveStore } from './live-store'
 
@@ -7,6 +7,8 @@ interface BoardEffectsProps {
   map: BoardMap
   camera: Camera
   nameOf: (userId: string) => string
+  /** Os tokens que esta pessoa vê agora: reação sobre um monstro no escuro não aparece. */
+  tokens: readonly BoardToken[]
 }
 
 /**
@@ -16,10 +18,14 @@ interface BoardEffectsProps {
  * redesenhar o canvas a cada quadro. A posição sai das coordenadas do mapa pela câmera,
  * então o pulso fica no mesmo ponto do mapa em qualquer janela.
  */
-export function BoardEffects({ map, camera, nameOf }: BoardEffectsProps): React.JSX.Element {
+export function BoardEffects({
+  map,
+  camera,
+  nameOf,
+  tokens
+}: BoardEffectsProps): React.JSX.Element {
   const pings = useLiveStore((state) => state.pings)
   const reactions = useLiveStore((state) => state.reactions)
-  const tokens = useBoardStore((state) => state.tokens)
   const dragging = useBoardStore((state) => state.dragging)
 
   return (

@@ -14,6 +14,8 @@ export interface CantinhoApi {
   openTextFile: (request?: OpenTextFileRequest) => Promise<TextFileResult>
   readCachedAsset: (key: string) => Promise<Uint8Array | null>
   writeCachedAsset: (key: string, data: Uint8Array) => Promise<boolean>
+  assetCacheSize: () => Promise<number>
+  clearAssetCache: () => Promise<number>
   onDeepLink: (callback: (link: DeepLink) => void) => () => void
 }
 

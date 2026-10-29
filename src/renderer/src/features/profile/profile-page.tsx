@@ -1,8 +1,8 @@
 import { useCallback, useRef, useState } from 'react'
 import { Camera, Loader2, RefreshCw, Trash2 } from 'lucide-react'
 import { toast } from 'sonner'
+import { Link } from 'react-router-dom'
 import { PageHeader } from '@/components/page-header'
-import { PhaseNotice } from '@/components/phase-notice'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent } from '@/components/ui/card'
 import { Input } from '@/components/ui/input'
@@ -78,14 +78,13 @@ export function ProfilePage(): React.JSX.Element {
         </CardContent>
       </Card>
 
-      <PhaseNotice
-        phase="Fase 12"
-        title="Excluir dados"
-        items={[
-          'Excluir todas as minhas sessões (as que mestro somem; das que jogo, eu saio)',
-          'Excluir a conta inteira, com confirmação digitando o nome'
-        ]}
-      />
+      <p className="text-muted-foreground text-sm">
+        Para excluir as suas sessões ou a conta inteira, vá em{' '}
+        <Link to="/settings" className="text-foreground underline underline-offset-2">
+          Configurações
+        </Link>
+        .
+      </p>
     </div>
   )
 }

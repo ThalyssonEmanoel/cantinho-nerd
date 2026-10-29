@@ -13,6 +13,7 @@ import {
   removeMember,
   renameSession,
   setSessionConditions,
+  setSessionDefaultVision,
   setSessionDiceRules,
   setSessionPassword,
   setSessionTemplate,
@@ -58,6 +59,7 @@ export function ManageSessionDialog({
   const [showPassword, setShowPassword] = useState(false)
   const [newPassword, setNewPassword] = useState('')
   const [name, setName] = useState(session.name)
+  const [vision, setVision] = useState(String(session.defaultVisionM))
   const [templates, setTemplates] = useState<SheetTemplateSummary[]>([])
   const [confirmInvite, setConfirmInvite] = useState(false)
   const [removing, setRemoving] = useState<SessionMember | null>(null)
@@ -305,6 +307,41 @@ export function ManageSessionDialog({
                 void run(() => setSessionConditions(session.id, list), 'Condições salvas')
               }
             />
+          </Section>
+
+          <Section title="Névoa de guerra">
+            <div className="flex items-center gap-2">
+              <Input
+                value={vision}
+                inputMode="decimal"
+                onChange={(event) => setVision(event.target.value)}
+                className="w-24"
+                aria-label="Visão padrão em metros"
+              />
+              <span className="text-muted-foreground text-sm">metros de visão padrão</span>
+              <Button
+                variant="outline"
+                className="ml-auto"
+                disabled={
+                  busy ||
+                  !Number.isFinite(Number(vision.replace(',', '.'))) ||
+                  Number(vision.replace(',', '.')) === session.defaultVisionM
+                }
+                onClick={() =>
+                  void run(
+                    () => setSessionDefaultVision(session.id, Number(vision.replace(',', '.'))),
+                    'Visão padrão salva'
+                  )
+                }
+              >
+                Salvar
+              </Button>
+            </div>
+            <p className="text-muted-foreground text-xs">
+              Quanto cada token de jogador revela da névoa em volta dele quando nem a ficha
+              (papel Visão) nem o token dizem. A névoa se liga por mapa, na ferramenta Névoa do
+              tabuleiro.
+            </p>
           </Section>
 
           <Section title="Nome">

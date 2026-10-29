@@ -1,4 +1,4 @@
-import { normalizeGrid, type BoardMap, type GridSettings } from '@/lib/board'
+import { fogToJson, normalizeGrid, type BoardMap, type FogState, type GridSettings } from '@/lib/board'
 import { removeAssets } from './assets'
 import { getSupabase } from './client'
 import type { Json } from './database.types'
@@ -12,7 +12,7 @@ import { describeDbError, FriendlyError, type DbErrorLike } from './errors'
  * ativo. Aqui só se pede e se traduz o erro.
  */
 
-const MAP_COLUMNS = 'id, session_id, name, image_path, width, height, grid, sort_order'
+const MAP_COLUMNS = 'id, session_id, name, image_path, width, height, grid, fog, sort_order'
 
 function fail(error: DbErrorLike): FriendlyError {
   return new FriendlyError(describeDbError(error), { cause: error })
@@ -73,9 +73,14 @@ export async function updateMapGrid(mapId: string, grid: GridSettings): Promise<
   await updateMap(mapId, { grid: gridToJson(grid) })
 }
 
+/** Névoa de guerra do mapa (6.4). Só o mestre; os jogadores recebem pelo tempo real. */
+export async function updateMapFog(mapId: string, fog: FogState): Promise<void> {
+  await updateMap(mapId, { fog: fogToJson(fog) as Json })
+}
+
 async function updateMap(
   mapId: string,
-  change: { name?: string; grid?: Json }
+  change: { name?: string; grid?: Json; fog?: Json }
 ): Promise<void> {
   const { data, error } = await getSupabase()
     .from('maps')

@@ -38,6 +38,7 @@ import { BoardToolbar } from './board-toolbar'
 import { useBoardStore } from './board-store'
 import { ConditionsDialog } from './conditions-dialog'
 import { DrawingBar } from './drawing-bar'
+import { FogBar } from './fog-bar'
 import { sendReaction, undoLastDrawing } from './drawing-actions'
 import { GalleryPicker } from './gallery-picker'
 import { GridSettingsDialog } from './grid-settings-dialog'
@@ -343,6 +344,7 @@ export function BoardView(): React.JSX.Element {
         }}
       />
       <DrawingBar role={role} userId={userId} />
+      {role === 'gm' && <FogBar map={map} />}
 
       <div className="relative min-h-0 flex-1">
         <TurnBanner />
@@ -364,6 +366,7 @@ export function BoardView(): React.JSX.Element {
           }
           onBoardMenu={(world, at) => setMenu({ at, items: boardMenuItems(world) })}
           nameOf={nameOf}
+          defaultVisionM={session?.defaultVisionM}
         />
       </div>
 

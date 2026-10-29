@@ -15,9 +15,12 @@ interface AppState {
   lastSession: LastSession | null
   /** Som ao receber sussurro (7.2). Opcional, ligado de saída. */
   whisperSound: boolean
+  /** Som do "Sua vez!" no combate (7.3). Ligado de saída. */
+  turnSound: boolean
   setRole: (role: Role) => void
   rememberSession: (session: LastSession) => void
   setWhisperSound: (enabled: boolean) => void
+  setTurnSound: (enabled: boolean) => void
   clear: () => void
 }
 
@@ -32,9 +35,11 @@ export const useAppStore = create<AppState>()(
       role: null,
       lastSession: null,
       whisperSound: true,
+      turnSound: true,
       setRole: (role) => set({ role }),
       rememberSession: (lastSession) => set({ lastSession }),
       setWhisperSound: (whisperSound) => set({ whisperSound }),
+      setTurnSound: (turnSound) => set({ turnSound }),
       // O som é preferência da máquina, não da conta: sair não o desliga.
       clear: () => set({ role: null, lastSession: null })
     }),

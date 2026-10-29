@@ -41,6 +41,8 @@ if (!('api' in globalThis)) {
       takePendingDeepLink: async () => null,
       saveTextFile: async () => ({ status: 'canceled' as const }),
       openTextFile: async () => ({ status: 'canceled' as const }),
+      assetCacheSize: async () => 0,
+      clearAssetCache: async () => 0,
       onDeepLink: () => () => {}
     },
     writable: true

@@ -67,6 +67,7 @@ function session(role: 'gm' | 'player'): SessionDetail {
       { key: 'caido', name: 'Caído', icon: '🔻' },
       { key: 'atordoado', name: 'Atordoado', icon: '💫' }
     ],
+    defaultVisionM: 9,
     updatedAt: '',
     members: [
       {

@@ -1,5 +1,5 @@
 /**
- * Tabuleiro (seções 6.1 a 6.3 e 6.5). Ponto único de entrada: o resto do app importa daqui.
+ * Tabuleiro (seções 6.1 a 6.5). Ponto único de entrada: o resto do app importa daqui.
  */
 export * from './types'
 
@@ -123,3 +123,32 @@ export {
   parseRuler,
   REACTIONS
 } from './live'
+
+export type {
+  FogBrushLevel,
+  FogMode,
+  FogShape,
+  FogShapeKind,
+  FogState,
+  VisionCircle,
+  VisionSource
+} from './fog'
+export {
+  addFogShape,
+  coverAll,
+  DEFAULT_VISION_M,
+  defaultVisionFromSettings,
+  EMPTY_FOG,
+  finishFogShape,
+  FOG_BRUSH_LEVELS,
+  fogBytes,
+  fogToJson,
+  isFogged,
+  MAX_FOG_BYTES,
+  parseFog,
+  pointInFogShape,
+  revealAll,
+  tokenVisibleThroughFog,
+  undoFogShape,
+  visionCircles
+} from './fog'

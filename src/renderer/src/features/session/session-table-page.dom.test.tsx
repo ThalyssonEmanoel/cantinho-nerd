@@ -17,6 +17,11 @@ vi.mock('@/lib/db/chat', () => ({
   fetchFeed: vi.fn(async () => []),
   listMacros: vi.fn(async () => [])
 }))
+// O painel do mestre (Fase 10) lê o bestiário ao abrir a aba "Mesa".
+vi.mock('@/lib/db/bestiary', () => ({
+  listCreatures: vi.fn(async () => []),
+  listEncounters: vi.fn(async () => [])
+}))
 vi.mock('@/lib/db/auth', () => ({ onAuthChange: () => () => {} }))
 vi.mock('@/lib/db/profiles', () => ({ fetchProfile: vi.fn(), avatarUrl: (path: string) => path }))
 
@@ -56,6 +61,7 @@ function session(role: 'gm' | 'player', templateId: string | null = 't1'): Sessi
     scale: { metersPerSquare: 1.5, diagonal: 'simple' as const },
     diceRules: { critical: { kind: 'natural' as const }, criticalFailureOnOne: true },
     conditions: [],
+    defaultVisionM: 9,
     updatedAt: 'x',
     members
   }

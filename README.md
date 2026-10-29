@@ -15,9 +15,15 @@ chat, iniciativa, bestiário e encontros — tudo em tempo real.
 Em construção, por fases. Prontos: motor de fórmulas e dados, construtor de fichas, ficha
 preenchível, contas (nome + senha), perfil com avatar, modelos de ficha na conta, sessões
 com convite e senha e fichas em tempo real, tabuleiro com mapas e tokens, bandeja de dados
-e chat com sussurros, desenho, régua, ping e reações no mapa e, na **Fase 9**, o combate:
-tracker de iniciativa pelo papel da ficha, turnos com "Sua vez!", condições com duração,
-dano/cura nos tokens selecionados (ou direto de uma rolagem do chat) e log de combate. O plano completo está em [docs/ESPECIFICACAO.md](docs/ESPECIFICACAO.md).
+e chat com sussurros, desenho, régua, ping e reações no mapa, combate com iniciativa,
+condições e dano/cura, bestiário e encontros e, na **Fase 11**, a névoa de guerra: o mestre
+revela e cobre áreas, a visão dos jogadores abre o escuro em volta deles enquanto andam, e
+monstros no escuro não aparecem para eles. Há também a tela de **Configurações** (sons, cache
+de imagens, versão, sair) e a exclusão das sessões e da conta.
+
+O app é distribuído só pelo instalador (`npm run build:win`), mandado direto para os
+amigos: não há site nem atualização automática. Versão nova = instalar o `.exe` novo por
+cima; contas e mesas ficam no Supabase. O plano completo está em [docs/ESPECIFICACAO.md](docs/ESPECIFICACAO.md).
 
 ## Rodar em desenvolvimento
 
@@ -45,6 +51,13 @@ npm run db:login   # autoriza a CLI (abre o navegador)
 npm run db:link    # liga ao projeto; pede a senha do banco
 npm run db:push    # cria as tabelas, as regras de acesso e o bucket de avatares
 npm run db:types   # atualiza os tipos do TypeScript a partir do banco
+```
+
+Para a exclusão de conta funcionar (Configurações → Excluir a conta), instale a Edge
+Function uma vez:
+
+```bash
+npx supabase functions deploy delete-account
 ```
 
 Se o `db:push` falhar com `cli_login_postgres` / "permission denied to alter role", passe a

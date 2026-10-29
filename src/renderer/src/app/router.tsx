@@ -1,6 +1,8 @@
 import { HashRouter, Navigate, Route, Routes } from 'react-router-dom'
 import { Toaster } from 'sonner'
 import { LoginPage } from '@/features/auth/login-page'
+import { BestiaryPage } from '@/features/bestiary/bestiary-page'
+import { CreatureEditorPage } from '@/features/bestiary/creature-editor-page'
 import { RoleChoicePage } from '@/features/auth/role-choice-page'
 import { FormulaGuidePage } from '@/features/formula-guide/formula-guide-page'
 import { GmLobbyPage } from '@/features/lobby-gm/gm-lobby-page'
@@ -10,6 +12,7 @@ import { ProfilePage } from '@/features/profile/profile-page'
 import { SessionLayout } from '@/features/session/session-layout'
 import { SessionSheetPage } from '@/features/session/session-sheet-page'
 import { SessionTablePage } from '@/features/session/session-table-page'
+import { SettingsPage } from '@/features/settings/settings-page'
 import { SheetBuilderPage } from '@/features/sheet-builder/sheet-builder-page'
 import { SheetsPage } from '@/features/sheets/sheets-page'
 import { SheetTemplatesPage } from '@/features/sheet-templates/sheet-templates-page'
@@ -39,6 +42,8 @@ export function AppRouter(): React.JSX.Element {
             <Route path="/join/:inviteId" element={<JoinSessionPage />} />
             <Route path="/templates" element={<SheetTemplatesPage />} />
             <Route path="/templates/:templateId" element={<SheetBuilderPage />} />
+            <Route path="/bestiary" element={<BestiaryPage />} />
+            <Route path="/bestiary/:creatureId" element={<CreatureEditorPage />} />
             <Route path="/guide" element={<FormulaGuidePage />} />
             <Route path="/sheets" element={<SheetsPage />} />
             {/*
@@ -50,6 +55,7 @@ export function AppRouter(): React.JSX.Element {
               <Route path="sheets/:sheetId" element={<SessionSheetPage />} />
             </Route>
             <Route path="/profile" element={<ProfilePage />} />
+            <Route path="/settings" element={<SettingsPage />} />
           </Route>
         </Route>
         <Route path="*" element={<NotFoundPage />} />
