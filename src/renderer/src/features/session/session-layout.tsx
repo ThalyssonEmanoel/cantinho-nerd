@@ -8,6 +8,7 @@ import type { ChannelStatus } from '@/lib/db/realtime'
 import { useAppStore } from '@/stores/app-store'
 import { useAuthStore } from '@/stores/auth-store'
 import { cn } from '@/lib/utils'
+import { TurnNotifier } from '@/features/combat/turn-banner'
 import { copyInvite } from './copy-invite'
 import { ManageSessionDialog } from './manage-session-dialog'
 import { useSessionStore } from './session-store'
@@ -126,6 +127,8 @@ export function SessionLayout(): React.JSX.Element {
       <div className="min-h-0 flex-1">
         <Outlet />
       </div>
+      {/* "Sua vez!" em qualquer tela da sessão, não só no tabuleiro (7.3). */}
+      <TurnNotifier />
 
       {session.role === 'gm' && (
         <ManageSessionDialog open={managing} session={session} onClose={() => setManaging(false)} />

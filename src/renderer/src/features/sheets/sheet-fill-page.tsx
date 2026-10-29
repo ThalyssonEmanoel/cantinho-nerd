@@ -26,6 +26,13 @@ interface SheetFillPageProps {
   audience: SheetAudience
   backLabel: string
   onBack: () => void
+  /**
+   * Para onde vão as rolagens dos botões. Na mesa, para o chat (Fase 7); sem isto, ficam
+   * num painel local, como no teste do construtor.
+   */
+  onRoll?: (request: RollRequest) => void
+  /** O que ocupa a coluna da direita no lugar do painel local (o chat da mesa). */
+  sidePanel?: React.ReactNode
 }
 
 /**
@@ -40,7 +47,9 @@ export function SheetFillPage({
   sheetId,
   audience: viewerAudience,
   backLabel,
-  onBack
+  onBack,
+  onRoll,
+  sidePanel
 }: SheetFillPageProps): React.JSX.Element {
   const store = useSheetStore()
   const {
@@ -95,6 +104,10 @@ export function SheetFillPage({
   )
 
   function handleRoll(request: RollRequest): void {
+    if (onRoll !== undefined) {
+      onRoll(request)
+      return
+    }
     const result = rollFormula(request.formula, {
       label: request.label,
       critical: request.critical,
@@ -212,7 +225,12 @@ export function SheetFillPage({
         </div>
       )}
 
-      <div className="grid min-h-0 flex-1 grid-cols-[1fr_18rem] divide-x">
+      <div
+        className={cn(
+          'grid min-h-0 flex-1 divide-x',
+          sidePanel === undefined ? 'grid-cols-[1fr_18rem]' : 'grid-cols-[1fr_20rem]'
+        )}
+      >
         <div className="flex min-h-0 flex-col">
           <div className="flex items-center gap-1 border-b px-3 py-2">
             {schema.tabs.map((tab) => (
@@ -257,11 +275,13 @@ export function SheetFillPage({
           </div>
         </div>
 
-        <RollLog
-          entries={log}
-          onClear={() => setLog([])}
-          emptyHint="As rolagens aparecem aqui. Na Fase 7 elas passam a ir para o chat da mesa."
-        />
+        {sidePanel ?? (
+          <RollLog
+            entries={log}
+            onClear={() => setLog([])}
+            emptyHint="As rolagens aparecem aqui."
+          />
+        )}
       </div>
     </div>
   )

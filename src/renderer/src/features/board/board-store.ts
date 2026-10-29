@@ -13,17 +13,29 @@ import {
   type BoardMap,
   type BoardToken,
   type Camera,
+  type Drawing,
+  type DrawingsCleared,
+  type DrawingTool,
   type GridSettings,
   type Point,
   type SessionScale,
-  type Size
+  type Size,
+  type StrokeLevel
 } from '@/lib/board'
-import { mapFromRow, tokenFromRow, type MapRow, type TokenRow } from '@/lib/db/board-rows'
+import {
+  drawingFromRow,
+  mapFromRow,
+  tokenFromRow,
+  type MapRow,
+  type TokenRow
+} from '@/lib/db/board-rows'
+import { listDrawings } from '@/lib/db/drawings'
 import { errorMessage } from '@/lib/db/errors'
 import { listMaps } from '@/lib/db/maps'
 import { listTokens, moveToken } from '@/lib/db/tokens'
 import type { TableChange } from '@/lib/db/realtime'
 import type { SessionRole } from '@/lib/db/sessions'
+import { useLiveStore } from './live-store'
 
 /**
  * O tabuleiro aberto (seções 6.1 a 6.3).
@@ -34,9 +46,14 @@ import type { SessionRole } from '@/lib/db/sessions'
  *
  * O mestre pode abrir um mapa **sem ativar** (6.1): `openMapId` é a tela dele, e
  * `activeMapId` é o que a mesa está vendo.
+ *
+ * Os desenhos (6.5) são do mapa, como os tokens: trocar de mapa troca os dois.
  */
 
-export type BoardTool = 'select' | 'pan'
+export type BoardTool = 'select' | 'pan' | 'ruler' | 'draw' | 'erase'
+
+/** Cor inicial do traço: vermelho, que aparece bem em quase todo mapa. */
+export const DEFAULT_DRAW_COLOR = '#ef4444'
 
 interface BoardState {
   sessionId: string | null
@@ -46,6 +63,8 @@ interface BoardState {
   /** Mapa desenhado agora. Para o jogador é sempre o ativo. */
   openMapId: string | null
   tokens: BoardToken[]
+  /** Desenhos do mapa aberto, na ordem em que foram feitos. */
+  drawings: Drawing[]
   scale: SessionScale
   loading: boolean
   problem: string | null
@@ -58,6 +77,11 @@ interface BoardState {
   /** Posições durante o arrasto (meu e dos outros, via broadcast). */
   dragging: Record<string, Point>
 
+  /** Preferências do traço. Ficam entre uma mesa e outra (não voltam ao padrão ao abrir). */
+  drawTool: DrawingTool
+  drawColor: string
+  strokeLevel: StrokeLevel
+
   open: (input: {
     sessionId: string
     role: SessionRole
@@ -69,11 +93,15 @@ interface BoardState {
   syncSession: (activeMapId: string | null, scale: SessionScale) => void
   reloadMaps: () => Promise<void>
   reloadTokens: () => Promise<void>
+  reloadDrawings: () => Promise<void>
   /** Abre um mapa só para mim (o mestre preparando). */
   openMap: (mapId: string) => void
 
   setViewport: (viewport: Size) => void
   setTool: (tool: BoardTool) => void
+  setDrawTool: (tool: DrawingTool) => void
+  setDrawColor: (color: string) => void
+  setStrokeLevel: (level: StrokeLevel) => void
   setCamera: (camera: Camera) => void
   zoomAtPoint: (screen: Point, factor: number) => void
   zoomStep: (factor: number) => void
@@ -97,6 +125,13 @@ interface BoardState {
   /** Põe (ou atualiza) um token que já veio pronto do banco. */
   upsertToken: (token: BoardToken) => void
   removeTokenLocally: (id: string) => void
+
+  applyDrawingChange: (change: TableChange) => void
+  /** Põe (ou troca, pelo id) um desenho: o otimista e o que voltou do banco. */
+  upsertDrawing: (drawing: Drawing) => void
+  removeDrawingsLocally: (ids: readonly string[]) => void
+  /** "Apagar meus desenhos" ou "limpar todos" de alguém, pelo canal. */
+  applyDrawingsCleared: (cleared: DrawingsCleared) => void
 }
 
 /** Quanto tempo uma posição vinda do canal vale, antes de o token voltar ao que o banco diz. */
@@ -109,6 +144,13 @@ function clearGhostTimers(): void {
   ghostTimers.clear()
 }
 
+/**
+ * Desenhos já apagados nesta tela. O INSERT de um traço desfeito enquanto gravava (ou um
+ * INSERT atrasado que chega depois do DELETE) não pode ressuscitá-lo. O id é um UUID que
+ * nunca volta, então lembrar dele até fechar a mesa não tem efeito colateral.
+ */
+const erasedDrawings = new Set<string>()
+
 const emptyState = {
   sessionId: null,
   role: 'player' as SessionRole,
@@ -116,6 +158,7 @@ const emptyState = {
   activeMapId: null,
   openMapId: null,
   tokens: [],
+  drawings: [],
   scale: normalizeScale(null),
   loading: false,
   problem: null,
@@ -151,6 +194,19 @@ export const useBoardStore = create<BoardState>()((set, get) => {
     set({ cameras: { ...get().cameras, [openMapId]: limited } })
   }
 
+  async function loadDrawings(mapId: string | null): Promise<void> {
+    if (mapId === null) {
+      set({ drawings: [] })
+      return
+    }
+    try {
+      const drawings = await listDrawings(mapId)
+      if (get().openMapId === mapId) set({ drawings })
+    } catch (error) {
+      console.warn('Não consegui carregar os desenhos:', errorMessage(error))
+    }
+  }
+
   async function loadTokens(mapId: string | null): Promise<void> {
     if (mapId === null) {
       set({ tokens: [] })
@@ -167,16 +223,22 @@ export const useBoardStore = create<BoardState>()((set, get) => {
   /** Troca de mapa: tokens novos, seleção limpa e a câmera daquele mapa. */
   function switchTo(mapId: string | null): void {
     if (get().openMapId === mapId) return
-    set({ openMapId: mapId, selection: [], dragging: {}, tokens: [] })
+    set({ openMapId: mapId, selection: [], dragging: {}, tokens: [], drawings: [] })
     clearGhostTimers()
     void loadTokens(mapId)
+    void loadDrawings(mapId)
   }
 
   return {
     ...emptyState,
+    drawTool: 'pencil',
+    drawColor: DEFAULT_DRAW_COLOR,
+    strokeLevel: 1,
 
     open: async ({ sessionId, role, activeMapId, scale }) => {
       clearGhostTimers()
+      erasedDrawings.clear()
+      useLiveStore.getState().reset()
       set({ ...emptyState, sessionId, role, activeMapId, scale, loading: true })
 
       try {
@@ -186,7 +248,7 @@ export const useBoardStore = create<BoardState>()((set, get) => {
         // O jogador só recebe o mapa ativo; o mestre começa vendo o ativo, se houver.
         const openId = activeMapId ?? (role === 'gm' ? (maps[0]?.id ?? null) : null)
         set({ maps, openMapId: openId, loading: false })
-        await loadTokens(openId)
+        await Promise.all([loadTokens(openId), loadDrawings(openId)])
       } catch (error) {
         if (get().sessionId === sessionId) {
           set({ loading: false, problem: errorMessage(error) })
@@ -196,6 +258,8 @@ export const useBoardStore = create<BoardState>()((set, get) => {
 
     close: () => {
       clearGhostTimers()
+      erasedDrawings.clear()
+      useLiveStore.getState().reset()
       set({ ...emptyState })
     },
 
@@ -224,6 +288,10 @@ export const useBoardStore = create<BoardState>()((set, get) => {
       await loadTokens(get().openMapId)
     },
 
+    reloadDrawings: async () => {
+      await loadDrawings(get().openMapId)
+    },
+
     openMap: (mapId) => switchTo(mapId),
 
     setViewport: (viewport) => {
@@ -246,6 +314,9 @@ export const useBoardStore = create<BoardState>()((set, get) => {
     },
 
     setTool: (tool) => set({ tool }),
+    setDrawTool: (drawTool) => set({ drawTool, tool: 'draw' }),
+    setDrawColor: (drawColor) => set({ drawColor }),
+    setStrokeLevel: (strokeLevel) => set({ strokeLevel }),
 
     setCamera: (camera) => writeCamera(camera),
 
@@ -400,6 +471,49 @@ export const useBoardStore = create<BoardState>()((set, get) => {
         tokens: get().tokens.filter((token) => token.id !== id),
         selection: get().selection.filter((item) => item !== id),
         dragging: withoutKey(get().dragging, id)
+      })
+    },
+
+    applyDrawingChange: (change) => {
+      if (change.event === 'DELETE') {
+        // O DELETE chega só com o id (10.3).
+        get().removeDrawingsLocally([String(change.old.id ?? '')])
+        return
+      }
+      const drawing = drawingFromRow(change.row)
+      if (drawing === null) return
+      // O salvo toma o lugar do traço ao vivo que tinha o mesmo id.
+      useLiveStore.getState().dropStroke(drawing.id)
+      get().upsertDrawing(drawing)
+    },
+
+    upsertDrawing: (drawing) => {
+      if (drawing.mapId !== get().openMapId || erasedDrawings.has(drawing.id)) return
+      const drawings = get().drawings
+      const index = drawings.findIndex((item) => item.id === drawing.id)
+      set({
+        drawings:
+          index === -1
+            ? [...drawings, drawing]
+            : drawings.map((item) => (item.id === drawing.id ? drawing : item))
+      })
+    },
+
+    removeDrawingsLocally: (ids) => {
+      if (ids.length === 0) return
+      for (const id of ids) erasedDrawings.add(id)
+      const gone = new Set(ids)
+      const drawings = get().drawings
+      if (!drawings.some((drawing) => gone.has(drawing.id))) return
+      set({ drawings: drawings.filter((drawing) => !gone.has(drawing.id)) })
+    },
+
+    applyDrawingsCleared: ({ mapId, authorId }) => {
+      if (mapId !== get().openMapId) return
+      set({
+        drawings: get().drawings.filter(
+          (drawing) => authorId !== null && drawing.authorId !== authorId
+        )
       })
     }
   }

@@ -1,5 +1,5 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
-import { DEFAULT_GRID, type BoardMap, type BoardToken } from '@/lib/board'
+import { DEFAULT_GRID, type BoardMap, type BoardToken, type Drawing } from '@/lib/board'
 import { FriendlyError } from '@/lib/db/errors'
 import type { TokenRow } from '@/lib/db/board-rows'
 
@@ -11,13 +11,16 @@ import type { TokenRow } from '@/lib/db/board-rows'
 const db = vi.hoisted(() => ({
   listMaps: vi.fn(),
   listTokens: vi.fn(),
-  moveToken: vi.fn()
+  moveToken: vi.fn(),
+  listDrawings: vi.fn(async (): Promise<Drawing[]> => [])
 }))
 
 vi.mock('@/lib/db/maps', () => ({ listMaps: db.listMaps }))
 vi.mock('@/lib/db/tokens', () => ({ listTokens: db.listTokens, moveToken: db.moveToken }))
+vi.mock('@/lib/db/drawings', () => ({ listDrawings: db.listDrawings }))
 
 const { drawPosition, useBoardStore } = await import('./board-store')
+const { useLiveStore } = await import('./live-store')
 
 const grid = { ...DEFAULT_GRID, size: 50, offsetX: 0, offsetY: 0 }
 
@@ -60,6 +63,7 @@ function token(partial: Partial<BoardToken> & { id: string }): BoardToken {
     showBars: true,
     visionM: null,
     bars: {},
+    conditions: [],
     ...partial
   }
 }
@@ -310,5 +314,68 @@ describe('câmera', () => {
     store().setViewport({ width: 500, height: 500 })
     for (let index = 0; index < 50; index += 1) store().zoomStep(2)
     expect(store().cameras['mapa-1']?.scale).toBeLessThanOrEqual(8)
+  })
+})
+
+describe('desenhos (6.5)', () => {
+  function drawing(id: string, mapId: string, authorId = 'mestre'): Drawing {
+    return {
+      id,
+      sessionId: 'mesa',
+      mapId,
+      authorId,
+      tool: 'line',
+      points: [0, 0, 10, 10],
+      color: '#ef4444',
+      width: 4,
+      createdAt: ''
+    }
+  }
+
+  it('abrir e trocar de mapa troca os desenhos junto com os tokens', async () => {
+    db.listMaps.mockResolvedValue([taverna, cripta])
+    db.listTokens.mockResolvedValue([])
+    db.listDrawings
+      .mockResolvedValueOnce([drawing('d-mapa-1', 'mapa-1')])
+      .mockResolvedValueOnce([drawing('d-mapa-2', 'mapa-2')])
+
+    await useBoardStore.getState().open({
+      sessionId: 'mesa',
+      role: 'gm',
+      activeMapId: 'mapa-1',
+      scale: { metersPerSquare: 1.5, diagonal: 'simple' }
+    })
+    expect(useBoardStore.getState().drawings.map((item) => item.id)).toEqual(['d-mapa-1'])
+
+    useBoardStore.getState().openMap('mapa-2')
+    expect(useBoardStore.getState().drawings).toEqual([])
+    await vi.waitFor(() =>
+      expect(useBoardStore.getState().drawings.map((item) => item.id)).toEqual(['d-mapa-2'])
+    )
+  })
+
+  it('desenho de outro mapa não entra nesta tela', () => {
+    useBoardStore.setState({ openMapId: 'mapa-1', drawings: [] })
+    useBoardStore.getState().upsertDrawing(drawing('d1', 'mapa-2'))
+    expect(useBoardStore.getState().drawings).toEqual([])
+  })
+
+  it('"apagar meus desenhos" de outra pessoa tira só os dela', () => {
+    useBoardStore.setState({
+      openMapId: 'mapa-1',
+      drawings: [drawing('a', 'mapa-1', 'carla'), drawing('b', 'mapa-1', 'bruno')]
+    })
+    useBoardStore.getState().applyDrawingsCleared({ mapId: 'mapa-1', authorId: 'carla' })
+    expect(useBoardStore.getState().drawings.map((item) => item.id)).toEqual(['b'])
+
+    // Aviso de outro mapa (o mestre limpando o que prepara) não mexe nesta tela.
+    useBoardStore.getState().applyDrawingsCleared({ mapId: 'mapa-2', authorId: null })
+    expect(useBoardStore.getState().drawings.map((item) => item.id)).toEqual(['b'])
+  })
+
+  it('fechar a mesa limpa os efeitos passageiros também', () => {
+    useLiveStore.getState().addPing({ userId: 'carla', mapId: 'mapa-1', point: { x: 1, y: 1 } })
+    useBoardStore.getState().close()
+    expect(useLiveStore.getState().pings).toEqual([])
   })
 })

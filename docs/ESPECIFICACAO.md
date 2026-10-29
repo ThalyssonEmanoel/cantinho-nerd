@@ -348,12 +348,17 @@ Cada fase termina com algo que eu consigo abrir e testar.
 - [X] Aceite: três janelas de tamanhos diferentes veem os mesmos tokens nas mesmas posições; token oculto não chega ao jogador.
 
 **Fase 7 — Dados e chat**
-- [ ] Bandeja de dados (7.1), rolagens das fichas indo para a sessão, histórico com limpeza pelo mestre.
-- [ ] Chat com sussurro, comandos e não lidas (7.2).
+- [X] Bandeja de dados (7.1), rolagens das fichas indo para a sessão, histórico com limpeza pelo mestre.
+- [X] Chat com sussurro, comandos e não lidas (7.2).
 
 **Fase 8 — Desenho, régua, ping e reações** (6.5 e reações do 6.3)
+- [X] Lápis, linha, círculo, retângulo e borracha, com cor e espessura; traço ao vivo e salvo ao terminar; Ctrl+Z, "apagar meus desenhos" e "limpar todos" (6.5).
+- [X] Régua em metros, ping com Alt+clique e reações com emoji, tudo em tempo real (6.5, 6.3).
 
 **Fase 9 — Combate** (7.3 completo, incluindo condições com duração)
+- [X] Tracker de iniciativa: iniciar, adicionar (selecionados, todos do mapa, só jogadores), rolar pelo papel `initiative`, editar, arrastar, turno com brilho no token, "Sua vez!", próximo turno / encerrar meu turno, rodadas, ocultos só para o mestre, encerrar limpa.
+- [X] Condições com ícone e duração em rodadas (lista por sessão); a duração cai no turno do token.
+- [X] Dano/cura nos selecionados e a partir de uma rolagem do chat, entre 0 e o máximo; log de combate com limpeza pelo mestre.
 
 **Fase 10 — Ferramentas do mestre** (seção 8: bestiário, fichas-instância, encontros, puxar jogadores)
 
@@ -430,3 +435,57 @@ Combinado na Fase 5 (29/10/2026):
     removido ou que saiu perde o acesso, mas a ficha fica com o mestre e volta se ele voltar.
 15. **Fichas locais das Fases 2 e 3** não aparecem mais: toda ficha nasce dentro de uma mesa.
 16. **Capa da sessão** fica para a Fase 6, junto com o bucket `assets`.
+
+Combinado na Fase 7 (29/10/2026):
+
+17. **Chat e dados no painel da direita da mesa**, numa aba "Chat" (aberta por padrão) ao lado
+    da aba "Mesa" (mapas, fichas, jogadores). Mensagens e rolagens numa linha do tempo só. Na
+    ficha dentro da mesa, o chat fica ao lado e os botões rolam para ele.
+18. **`/w`** aceita o nome de exibição (mesmo com espaço, sem diferenciar acento e
+    maiúscula), o nome de usuário ou a palavra "mestre". Além do comando, dá para escolher o
+    destinatário do sussurro num seletor.
+19. **Rolagem secreta** é uma caixa na bandeja (não há comando para ela). Na bandeja, clique
+    põe um dado e o botão direito tira.
+20. **Favoritas** são de cada pessoa, em cada mesa, e só ela as vê.
+21. **Som do sussurro** é ligado de saída, com um sino no topo do chat para desligar; vale
+    para a máquina, não para a conta.
+22. **Crítico da bandeja** configurável no "Gerenciar" da sessão: natural, margem (2 a 20) ou
+    nenhum, e falha crítica no 1 liga/desliga. Vale também para o `/r`.
+
+Decidido na Fase 8 (29/10/2026), para confirmar no teste:
+
+23. **Desenhos são do mapa**, como os tokens: o jogador vê só os do mapa ativo, e o mestre
+    também desenha no mapa que está preparando. Ficam abaixo dos tokens.
+24. **Espessura em quatro níveis** (fina, média, grossa, bem grossa), proporcionais ao
+    quadrado da grade — não em pixels fixos, que somem num mapa grande e engrossam num
+    pequeno.
+25. **Círculo** vai do centro até a borda (o raio). Círculo e retângulo são só o contorno, e
+    é pelo contorno que a borracha os apaga.
+26. **Régua** existe enquanto o botão está apertado. Com a grade ligada, mede de centro a
+    centro de quadrado; Shift mede livre. A minha é azul; a dos outros, amarela com o nome.
+27. **Ctrl+Z** desfaz o meu traço mais recente do mapa, inclusive os de antes de abrir o app.
+    Não há "refazer".
+28. **Reações** ficam no menu do botão direito do token, para qualquer pessoa em qualquer
+    token que ela vê. Reação do mestre em token oculto aparece só para ele.
+29. **Ping** aparece também para quem clicou, com o nome de quem pingou.
+
+Decidido na Fase 9 (29/10/2026), para confirmar no teste:
+
+30. **Combate numa aba "Combate"** do painel da direita (tracker e log), e uma faixa por
+    cima do mapa com a rodada, de quem é a vez e o botão de passar.
+31. **Só o mestre conduz**: inicia, adiciona e tira participantes, rola e edita a
+    iniciativa, reordena e passa o turno. O jogador encerra o próprio turno. As rolagens de
+    iniciativa não vão para o chat; o valor aparece no tracker.
+32. **"Rolar iniciativa" rola só para quem ainda não tem**; o dado ao lado de cada um rola
+    de novo. A fila fica com a maior primeiro (empate mantém a ordem); rolar ou editar
+    reordena, e arrastar ajusta depois. "Todos do mapa" deixa os objetos de fora.
+33. **A duração da condição cai no fim do turno do token**: "Atordoado por 1 rodada" vale
+    durante o turno dele e sai quando ele passa a vez.
+34. **Dano/cura** numa barra que aparece embaixo do mapa ao selecionar tokens (Enter aplica
+    dano). Pelo chat, cada rolagem tem os botões Dano e Cura "nos selecionados".
+35. **Log**: entrada de token oculto, só o mestre vê; de token com as barras escondidas,
+    só o mestre e o dono do token; nome escondido aparece como "???".
+36. **"Sua vez!"** (aviso e som) só para jogadores: o mestre é dono de todos os monstros.
+37. **Condições**: o jogador põe e tira nos próprios tokens; o mestre em todos. A lista
+    padrão tem 16 condições genéricas com emoji, editável em "Gerenciar".
+38. **Dois tokens da mesma ficha** selecionados: o dano/cura vale uma vez.

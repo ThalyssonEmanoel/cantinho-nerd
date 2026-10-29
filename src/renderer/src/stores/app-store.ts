@@ -13,8 +13,11 @@ interface AppState {
   role: Role | null
   /** Para oferecer "Voltar para <sessão>" no lobby. */
   lastSession: LastSession | null
+  /** Som ao receber sussurro (7.2). Opcional, ligado de saída. */
+  whisperSound: boolean
   setRole: (role: Role) => void
   rememberSession: (session: LastSession) => void
+  setWhisperSound: (enabled: boolean) => void
   clear: () => void
 }
 
@@ -28,8 +31,11 @@ export const useAppStore = create<AppState>()(
     (set) => ({
       role: null,
       lastSession: null,
+      whisperSound: true,
       setRole: (role) => set({ role }),
       rememberSession: (lastSession) => set({ lastSession }),
+      setWhisperSound: (whisperSound) => set({ whisperSound }),
+      // O som é preferência da máquina, não da conta: sair não o desliga.
       clear: () => set({ role: null, lastSession: null })
     }),
     { name: 'cantinho-nerd:app' }

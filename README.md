@@ -13,9 +13,11 @@ chat, iniciativa, bestiário e encontros — tudo em tempo real.
 ## Estado
 
 Em construção, por fases. Prontos: motor de fórmulas e dados, construtor de fichas, ficha
-preenchível, contas (nome + senha), perfil com avatar, modelos de ficha na conta e, na
-**Fase 5**, sessões com convite e senha, com fichas editadas por mestre e jogador ao mesmo
-tempo, em tempo real. O plano completo está em [docs/ESPECIFICACAO.md](docs/ESPECIFICACAO.md).
+preenchível, contas (nome + senha), perfil com avatar, modelos de ficha na conta, sessões
+com convite e senha e fichas em tempo real, tabuleiro com mapas e tokens, bandeja de dados
+e chat com sussurros, desenho, régua, ping e reações no mapa e, na **Fase 9**, o combate:
+tracker de iniciativa pelo papel da ficha, turnos com "Sua vez!", condições com duração,
+dano/cura nos tokens selecionados (ou direto de uma rolagem do chat) e log de combate. O plano completo está em [docs/ESPECIFICACAO.md](docs/ESPECIFICACAO.md).
 
 ## Rodar em desenvolvimento
 

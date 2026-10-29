@@ -33,6 +33,7 @@ function token(partial: Partial<BoardToken> & { id: string }): BoardToken {
     showBars: true,
     visionM: null,
     bars: {},
+    conditions: [],
     ...partial
   }
 }

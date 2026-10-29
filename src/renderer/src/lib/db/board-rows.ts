@@ -1,17 +1,24 @@
 import {
+  clampStrokeWidth,
+  isDrawingTool,
+  isHexColor,
   normalizeGrid,
+  parsePointList,
+  parseTokenConditions,
   parseTokenCrop,
   type BarValue,
   type BoardMap,
   type BoardToken,
+  type Drawing,
   type GridSettings,
   type TokenBars,
+  type TokenCondition,
   type TokenKind
 } from '@/lib/board'
 import type { Json, TablesUpdate } from './database.types'
 
 /**
- * Conversão entre as linhas de `maps`/`tokens` e os objetos do tabuleiro (6.1 a 6.3).
+ * Conversão entre as linhas de `maps`/`tokens`/`drawings` e os objetos do tabuleiro (6.1 a 6.5).
  * Separado do acesso ao banco para ser testado sem rede.
  *
  * Tudo que vem de `jsonb` passa por normalização: a grade e o recorte são livres no banco,
@@ -48,6 +55,8 @@ export interface TokenRow {
   show_bars: boolean
   vision_m: number | null
   bars: Json
+  /** Opcional: linhas lidas antes da Fase 9 não traziam a coluna. */
+  conditions?: Json
 }
 
 function asObject(value: Json | undefined | null): Record<string, Json> {
@@ -135,7 +144,8 @@ export function tokenFromRow(row: TokenRow): BoardToken {
     showName: row.show_name,
     showBars: row.show_bars,
     visionM: row.vision_m === null ? null : Number(row.vision_m),
-    bars: barsFromJson(row.bars)
+    bars: barsFromJson(row.bars),
+    conditions: parseTokenConditions(row.conditions)
   }
 }
 
@@ -156,6 +166,8 @@ export interface TokenPatch {
   mapId?: string
   /** Só o mestre: vida de um token **sem ficha** (6.3). Com ficha, quem manda é o gatilho. */
   bars?: TokenBars
+  /** Condições (6.3): o mestre em qualquer token, o jogador nos próprios. */
+  conditions?: TokenCondition[]
 }
 
 export function tokenPatchToRow(patch: TokenPatch): TablesUpdate<'tokens'> {
@@ -174,5 +186,46 @@ export function tokenPatchToRow(patch: TokenPatch): TablesUpdate<'tokens'> {
   if (patch.sheetId !== undefined) row.sheet_id = patch.sheetId
   if (patch.mapId !== undefined) row.map_id = patch.mapId
   if (patch.bars !== undefined) row.bars = barsToJson(patch.bars)
+  if (patch.conditions !== undefined) {
+    row.conditions = patch.conditions.map((item) => ({
+      key: item.key,
+      name: item.name,
+      icon: item.icon,
+      rounds: item.rounds
+    }))
+  }
   return row
+}
+
+/**
+ * Desenho (6.5). O banco já confere o formato, mas a linha também chega pelo tempo real e
+ * vem do app de outra pessoa: o que não fecha é descartado em vez de quebrar o tabuleiro.
+ */
+export function drawingFromRow(row: Record<string, unknown>): Drawing | null {
+  const points = parsePointList(row.points)
+  if (
+    typeof row.id !== 'string' ||
+    typeof row.session_id !== 'string' ||
+    typeof row.map_id !== 'string' ||
+    typeof row.author_id !== 'string' ||
+    !isDrawingTool(row.tool) ||
+    !isHexColor(row.color) ||
+    points === null
+  ) {
+    return null
+  }
+
+  // `real` pode chegar como texto, conforme o caminho (REST ou tempo real).
+  const width = Number(row.width)
+  return {
+    id: row.id,
+    sessionId: row.session_id,
+    mapId: row.map_id,
+    authorId: row.author_id,
+    tool: row.tool,
+    points,
+    color: row.color,
+    width: clampStrokeWidth(width),
+    createdAt: typeof row.created_at === 'string' ? row.created_at : ''
+  }
 }

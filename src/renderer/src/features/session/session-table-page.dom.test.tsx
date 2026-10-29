@@ -13,6 +13,10 @@ vi.mock('@/features/sheets/repository', () => ({ sheetRepository: repo }))
 vi.mock('@/lib/db/sessions', () => ({ fetchSession: vi.fn() }))
 vi.mock('@/lib/db/sheets', () => ({ migrateOutdatedSheets: vi.fn() }))
 vi.mock('@/lib/db/realtime', () => ({ openSessionChannel: () => () => {} }))
+vi.mock('@/lib/db/chat', () => ({
+  fetchFeed: vi.fn(async () => []),
+  listMacros: vi.fn(async () => [])
+}))
 vi.mock('@/lib/db/auth', () => ({ onAuthChange: () => () => {} }))
 vi.mock('@/lib/db/profiles', () => ({ fetchProfile: vi.fn(), avatarUrl: (path: string) => path }))
 
@@ -50,6 +54,8 @@ function session(role: 'gm' | 'player', templateId: string | null = 't1'): Sessi
     characterTemplateId: templateId,
     activeMapId: null,
     scale: { metersPerSquare: 1.5, diagonal: 'simple' as const },
+    diceRules: { critical: { kind: 'natural' as const }, criticalFailureOnOne: true },
+    conditions: [],
     updatedAt: 'x',
     members
   }
@@ -85,6 +91,11 @@ async function render(): Promise<void> {
       </MemoryRouter>
     )
   })
+  // Desde a Fase 7 o painel abre no Chat; fichas e jogadores ficam na aba "Mesa".
+  const tableTab = [...container.querySelectorAll('[role="tab"]')].find(
+    (tab) => tab.textContent?.includes('Mesa') === true
+  )
+  await act(async () => (tableTab as HTMLButtonElement | undefined)?.click())
 }
 
 afterEach(() => {

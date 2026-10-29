@@ -36,6 +36,15 @@ export interface SessionChannelHandlers {
   onGmDataChange: (change: TableChange) => void
   onMapChange: (change: TableChange) => void
   onTokenChange: (change: TableChange) => void
+  /** Desenhos salvos (6.5). O jogador só recebe os do mapa ativo. */
+  onDrawingChange: (change: TableChange) => void
+  /** Combate (7.3). Participante oculto e entrada do log escondida só chegam ao mestre. */
+  onCombatStateChange: (change: TableChange) => void
+  onCombatEntryChange: (change: TableChange) => void
+  onCombatLogChange: (change: TableChange) => void
+  /** Chat e rolagens (7.1, 7.2). Sussurro e rolagem secreta só chegam a quem pode ver. */
+  onMessageChange: (change: TableChange) => void
+  onRollChange: (change: TableChange) => void
   /** Mensagens efêmeras, que não passam pelo banco (10.3). */
   onBroadcast: (event: BroadcastEvent, payload: Record<string, unknown>) => void
 }
@@ -47,10 +56,44 @@ export interface SessionChannelHandlers {
  * - `token-gone`: um token deixou de ser visível para o jogador. Precisa de broadcast
  *   porque um UPDATE que o RLS esconde simplesmente não chega a ele.
  * - `camera-focus`: o mestre leva a câmera de todos para um ponto (6.1).
+ * - `feed-cleared`: o mestre limpou o chat ou o histórico de rolagens. Os DELETE de cada
+ *   linha também chegam, mas um a um e só com o id; o aviso esvazia a tela de uma vez.
+ * - `draw-live`: o traço sendo desenhado (6.5), ~20 por segundo. O id é o que ele terá no
+ *   banco, então o INSERT que chega depois toma o lugar dele sem piscar.
+ * - `draw-end`: o traço ao vivo não vai ser salvo (o banco recusou ou foi desfeito).
+ * - `drawings-cleared`: "apagar meus desenhos" ou "limpar todos", de uma vez (como o
+ *   `feed-cleared`).
+ * - `ruler`: a régua de alguém, enquanto ela existe (6.5).
+ * - `ping`: Alt+clique, um pulso no ponto para todos (6.5).
+ * - `reaction`: emoji sobre um token (6.3). Nunca de token oculto.
+ * - `combat-log-cleared`: o mestre limpou o log de combate (como o `feed-cleared`).
  */
-export type BroadcastEvent = 'token-drag' | 'token-gone' | 'camera-focus'
+export type BroadcastEvent =
+  | 'token-drag'
+  | 'token-gone'
+  | 'camera-focus'
+  | 'feed-cleared'
+  | 'draw-live'
+  | 'draw-end'
+  | 'drawings-cleared'
+  | 'ruler'
+  | 'ping'
+  | 'reaction'
+  | 'combat-log-cleared'
 
-const BROADCAST_EVENTS: readonly BroadcastEvent[] = ['token-drag', 'token-gone', 'camera-focus']
+const BROADCAST_EVENTS: readonly BroadcastEvent[] = [
+  'token-drag',
+  'token-gone',
+  'camera-focus',
+  'feed-cleared',
+  'draw-live',
+  'draw-end',
+  'drawings-cleared',
+  'ruler',
+  'ping',
+  'reaction',
+  'combat-log-cleared'
+]
 
 export interface SessionChannel {
   close: () => void
@@ -144,6 +187,56 @@ export function openSessionChannel(
         { event: '*', schema: 'public', table: 'tokens', filter: `session_id=eq.${sessionId}` },
         (payload) => handlers.onTokenChange(toChange(payload))
       )
+      .on(
+        'postgres_changes',
+        {
+          event: '*',
+          schema: 'public',
+          table: 'drawings',
+          filter: `session_id=eq.${sessionId}`
+        },
+        (payload) => handlers.onDrawingChange(toChange(payload))
+      )
+      .on(
+        'postgres_changes',
+        {
+          event: '*',
+          schema: 'public',
+          table: 'combat_state',
+          filter: `session_id=eq.${sessionId}`
+        },
+        (payload) => handlers.onCombatStateChange(toChange(payload))
+      )
+      .on(
+        'postgres_changes',
+        {
+          event: '*',
+          schema: 'public',
+          table: 'combat_entries',
+          filter: `session_id=eq.${sessionId}`
+        },
+        (payload) => handlers.onCombatEntryChange(toChange(payload))
+      )
+      .on(
+        'postgres_changes',
+        {
+          event: '*',
+          schema: 'public',
+          table: 'combat_log',
+          filter: `session_id=eq.${sessionId}`
+        },
+        (payload) => handlers.onCombatLogChange(toChange(payload))
+      )
+      .on(
+        'postgres_changes',
+        { event: '*', schema: 'public', table: 'messages', filter: `session_id=eq.${sessionId}` },
+        (payload) => handlers.onMessageChange(toChange(payload))
+      )
+      .on(
+        'postgres_changes',
+        { event: '*', schema: 'public', table: 'rolls', filter: `session_id=eq.${sessionId}` },
+        (payload) => handlers.onRollChange(toChange(payload))
+      )
 
     for (const event of BROADCAST_EVENTS) {
       channel.on('broadcast', { event }, (message) => {
@@ -155,15 +248,15 @@ export function openSessionChannel(
     }
 
     channel.subscribe((status) => {
-        if (closed) return
-        if (status === 'SUBSCRIBED') {
-          handlers.onStatus('live')
-          void channel?.track(me)
-        } else {
-          // CHANNEL_ERROR, TIMED_OUT ou CLOSED: o realtime-js tenta de novo sozinho.
-          handlers.onStatus('reconnecting')
-        }
-      })
+      if (closed) return
+      if (status === 'SUBSCRIBED') {
+        handlers.onStatus('live')
+        void channel?.track(me)
+      } else {
+        // CHANNEL_ERROR, TIMED_OUT ou CLOSED: o realtime-js tenta de novo sozinho.
+        handlers.onStatus('reconnecting')
+      }
+    })
   }
 
   void connect().catch((error: unknown) => {

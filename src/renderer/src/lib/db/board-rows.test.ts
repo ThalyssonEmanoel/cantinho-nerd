@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest'
 import { DEFAULT_GRID, DEFAULT_TOKEN_CROP } from '@/lib/board'
 import {
   barsFromJson,
+  drawingFromRow,
   gridFromJson,
   mapFromRow,
   tokenFromRow,
@@ -123,5 +124,44 @@ describe('tokenPatchToRow', () => {
     })
     // Máximo zerado = sem barra nenhuma.
     expect(tokenPatchToRow({ bars: {} })).toEqual({ bars: {} })
+  })
+})
+
+describe('drawingFromRow', () => {
+  const row = {
+    id: 'd1',
+    session_id: 'sessao-1',
+    map_id: 'map-1',
+    author_id: 'bruno',
+    tool: 'pencil',
+    points: [0, 0, 10, 5, 20, 0],
+    color: '#22c55e',
+    width: 4,
+    created_at: '2026-10-29T12:00:00Z'
+  }
+
+  it('converte a linha', () => {
+    expect(drawingFromRow(row)).toEqual({
+      id: 'd1',
+      sessionId: 'sessao-1',
+      mapId: 'map-1',
+      authorId: 'bruno',
+      tool: 'pencil',
+      points: [0, 0, 10, 5, 20, 0],
+      color: '#22c55e',
+      width: 4,
+      createdAt: '2026-10-29T12:00:00Z'
+    })
+  })
+
+  it('espessura em texto (tempo real) vira número', () => {
+    expect(drawingFromRow({ ...row, width: '8' })?.width).toBe(8)
+  })
+
+  it('descarta a linha que não fecha, em vez de quebrar o tabuleiro', () => {
+    expect(drawingFromRow({ ...row, tool: 'spray' })).toBeNull()
+    expect(drawingFromRow({ ...row, points: [1, 2, 3] })).toBeNull()
+    expect(drawingFromRow({ ...row, color: 'red' })).toBeNull()
+    expect(drawingFromRow({ id: 'só o id' })).toBeNull()
   })
 })

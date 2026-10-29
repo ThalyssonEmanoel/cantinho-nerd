@@ -68,6 +68,7 @@ src/
       account/   regras de nome de usuário, senha e e-mail interno
       image/     recorte do avatar (conta pura) e preparo para o Storage (WebP, hash)
       color/     conversões e paleta do seletor de cor
+      chat/      bandeja de dados, comandos /r e /w, links, linha do tempo do chat, som
       formula/   motor de fórmulas: tokenizer, parser (Pratt), avaliador, grafo de dependências
       dice/      motor de dados: interpolação dos `{…}`, rolagem, regras de crítico, geradores
       sheet/     modelo de ficha: tipos, zod, chaves, validação, contexto de fórmulas, repositório
@@ -376,7 +377,7 @@ Pendências, de propósito:
   dos jogadores: avaliar antes da Fase 7, quando as rolagens vão para a mesa.
 - O teste definitivo do deep link no Windows é com o app instalado (`npm run build:win`).
 
-**Fase 6 (Tabuleiro e tokens) — implementada, aguardando teste.** 575 testes no total.
+**Fase 6 (Tabuleiro e tokens) — aprovada; o Thalysson liberou a Fase 7.** 575 testes.
 
 Falta aplicar a migração `20261029140000_maps_tokens_and_galleries.sql` (ver abaixo) e
 rodar `npm run db:types`. O Konva entrou como dependência: `konva@10.8.0` e
@@ -425,4 +426,149 @@ Pendências, de propósito:
 - Reações com emoji (6.3) estão na Fase 8, junto com ping e régua.
 - O teste de 60 fps com mapa de 4096 px e 50 tokens é da Fase 13.
 
-**Próxima fase: 7 — Dados e chat.** Só começar depois do ok dele.
+**Fase 7 (Dados e chat) — aprovada; o Thalysson liberou a Fase 8.** 638 testes no total.
+
+Falta aplicar a migração `20261029180000_dice_and_chat.sql` (`npx supabase db push
+--password <senha>`) e rodar `npm run db:types`.
+
+- Migração: `rolls`, `messages` e `dice_macros`, com RLS. Rolagem secreta só para autor e
+  mestre; sussurro só para autor, destinatário e mestre; só o mestre apaga (limpar chat e
+  histórico); favoritas são de cada um, por mesa. `rolls` e `messages` na publicação do
+  Realtime. Testada no PGlite em cima das migrações 4 a 6 (sussurro do mestre para a Carla
+  não chega ao Bruno, secreta some para os outros jogadores, cascata com a sessão).
+- `lib/chat/`: `tray.ts` (dados clicados → `2d6 + 1d20 + 3`, vantagem/desvantagem, regra de
+  crítico da mesa em `settings.dice`), `commands.ts` (`/r`, `/w` com nome de várias palavras,
+  sem acento, nome de usuário ou "mestre"), `links.ts` (só http/https vira clique),
+  `feed.ts` (mensagens e rolagens numa linha, sem eco duplicado) e `sound.ts` (Web Audio).
+- `lib/db/chat.ts` + `chat-rows.ts` (conversão testada; o `result` de cada rolagem é
+  conferido dado a dado, porque vem do app de outra pessoa).
+- `features/chat/`: store (abre com a sessão, no mesmo canal), painel, bandeja e
+  `roll-result.tsx` (usado também pelo painel local do construtor).
+- A mesa ganhou abas Chat / Mesa no painel da direita, com contador de não lidas (também no
+  botão de recolher). A ficha dentro da mesa rola para o chat e mostra o chat ao lado.
+- Gerenciar ganhou a regra de crítico da bandeja (natural, margem, nenhuma; falha no 1).
+
+Decisões e armadilhas registradas:
+
+- **Privacidade é do RLS, inclusive no tempo real**: o store do chat não filtra nada. Quem
+  não pode ver um sussurro ou uma rolagem secreta nem recebe o evento.
+- **Limpar o chat manda `feed-cleared` pelo canal**: os DELETE chegam um a um e só com o id;
+  o aviso esvazia a tela de todos de uma vez.
+- **Eco do tempo real**: o próprio item entra na tela assim que a gravação volta, e o INSERT
+  que chega depois é deduplicado por tipo + id (e não conta como não lido).
+- Não lidas contam só o que chega de outra pessoa com nenhum painel de chat à vista
+  (`watch` conta os painéis: a mesa e a ficha têm cada uma o seu).
+- `/r` e a bandeja usam a regra de crítico da mesa; os botões da ficha, a do próprio botão.
+- Texto do chat é sempre texto puro; o link abre pelo `openExternal` do processo principal,
+  que só aceita http/https.
+
+Pendências, de propósito:
+
+- "Aplicar como dano/cura nos selecionados" a partir de uma rolagem do chat é da Fase 9.
+- Os comandos são só `/r` e `/w` (7.2); rolagem secreta é pela caixa da bandeja.
+- O histórico abre com as últimas 150 mensagens e 150 rolagens; o resto continua no banco.
+
+**Fase 8 (Desenho, régua, ping e reações) — aprovada; o Thalysson liberou a Fase 9.** 716 testes.
+
+Falta aplicar a migração `20261029200000_drawings.sql` (junto com as das Fases 6 e 7, se
+ainda não foram) e rodar `npm run db:types`. As decisões de produto que tomei estão no fim
+da especificação (itens 23 a 29), para o Thalysson confirmar.
+
+- Migração: `drawings` (id, sessão, mapa, autor, ferramenta, pontos, cor, espessura) com
+  RLS — o jogador vê e desenha só no mapa ativo, apaga só os seus; o mestre vê, desenha e
+  apaga em todos — e a tabela na publicação do Realtime. `is_point_list` confere os pontos
+  no CHECK; o gatilho `check_drawing_map` garante que o mapa é da mesma sessão. Testada no
+  PGlite em cima das migrações 4 a 7.
+- `lib/board/drawing.ts` (formato, simplificação do lápis, espessura pela grade, teste da
+  borracha, Ctrl+Z), `ruler.ts` (centro do quadrado, metros, texto) e `live.ts` (reações e a
+  conferência de cada payload que chega pelo canal).
+- `lib/db/drawings.ts` + `drawingFromRow` em `board-rows.ts`. Seis eventos novos no canal:
+  `draw-live`, `draw-end`, `drawings-cleared`, `ruler`, `ping`, `reaction`.
+- `features/board/`: `live-store.ts` (o passageiro: traços dos outros, réguas, pings,
+  reações, e o meu rascunho), `drawing-actions.ts`, `board-layers.tsx` (camada dos desenhos
+  e a de cima, com réguas e borracha), `drawing-shape.tsx`, `board-effects.tsx` (ping e
+  reação em HTML), `drawing-bar.tsx` (segunda linha da barra). O menu do token ganhou a
+  fileira de reações.
+
+Decisões e armadilhas registradas:
+
+- **O id do traço nasce no app** (`crypto.randomUUID`): é o mesmo no traço ao vivo e no
+  banco, então o INSERT toma o lugar do rascunho na tela dos outros sem piscar.
+- **Desfazer e apagar esperam a gravação em voo** daquele traço (`pendingSaves`): apagar
+  antes de o INSERT chegar ao banco não apagaria nada. E o `board-store` lembra os ids
+  apagados (`erasedDrawings`), para o eco do INSERT não ressuscitar o traço desfeito.
+- **O passageiro expira sozinho** (`live-store`): o traço de quem caiu some em 5 s, a régua
+  em 3 s sem notícia (quem mede reenvia a cada segundo), ping e reação no fim da animação.
+  Mensagem efêmera se perde, e nada pode ficar na tela para sempre por isso.
+- **O meu rascunho, a minha régua e o cursor da borracha moram no `live-store`**, não em
+  estado do `BoardCanvas`: só as camadas que os desenham re-renderizam a cada pixel, e não
+  os tokens.
+- **Rótulo do Konva com preenchimento, contorno e `opacity`** é desenhado num canvas
+  auxiliar a cada quadro (e quebra no canvas falso dos testes): a transparência vai na cor.
+- Ping e reação são **HTML com animação CSS** (`globals.css`), posicionados pela câmera —
+  não redesenham o canvas a cada quadro.
+- Com régua, lápis ou borracha na mão, **o token não arrasta nem seleciona**: o clique é da
+  ferramenta. O menu do botão direito continua valendo.
+- **Reconectar agora recarrega os tokens e os desenhos** do mapa (faltava desde a Fase 6:
+  o snapshot da reconexão só trazia sessão e fichas).
+- O `session-store.test` chegava ao Supabase de verdade pelo chat (desde a Fase 7): agora
+  `@/lib/db/chat` tem dublê lá.
+- Os testes de montagem simulam o mouse no Konva de verdade (`mousedown` no
+  `.konvajs-content`): no jsdom o alvo é sempre o Stage, que é o caso de desenhar e medir.
+
+Pendências, de propósito:
+
+- Atalhos de uma letra (R régua, D desenho, E borracha…) são da Fase 13.
+- Arrastar um token mostrando a distância percorrida não está na 6.5; não foi feito.
+
+**Fase 9 (Combate) — implementada, aguardando teste.** 780 testes.
+
+Falta aplicar a migração `20261029220000_combat.sql` (junto com as das Fases 6 a 8, se
+ainda não foram) e rodar `npm run db:types`. As decisões de produto estão no fim da
+especificação (itens 30 a 38), para o Thalysson confirmar.
+
+- Migração: `combat_state`, `combat_entries` (nome, imagem e visibilidade copiados do token
+  e mantidos pelo gatilho `sync_combat_entries`), `combat_log`, RLS (participante oculto e
+  entrada escondida só para o mestre) e as RPCs `apply_hp_change`, `combat_start`,
+  `combat_end`, `combat_add`, `combat_set_initiatives`, `combat_reorder`,
+  `combat_next_turn` e `combat_end_my_turn` (as duas últimas por `combat_advance`, que
+  também passa `tick_conditions` no token que terminou o turno). Testada no PGlite em cima
+  das migrações 4 a 8 (61 checagens).
+- `lib/board/conditions.ts` (lista da mesa em `settings.conditions`, condições do token,
+  duração) e `lib/combat/` (ordem, vez, iniciativa pelo papel, alvos do dano/cura, texto do
+  log). `lib/db/combat.ts` + `combat-rows.ts`; `tokens.conditions` agora é lido e gravado.
+- `features/combat/`: store (abre com a sessão, no mesmo canal), ações, painel (tracker com
+  dnd-kit e log), `turn-banner.tsx` (faixa sobre o mapa e o `TurnNotifier` do "Sua vez!",
+  montado na casca da sessão) e `roll-apply.tsx` (dano/cura a partir do chat).
+- `features/board/`: `selection-bar.tsx` (dano/cura e "adicionar ao combate"),
+  `conditions-dialog.tsx`, ícones de condição e brilho do turno no `token-shape`, e o menu
+  do token com "Condições…" e "Adicionar/Tirar do combate". Em Gerenciar, a lista de
+  condições da mesa (`features/session/conditions-settings.tsx`).
+
+Decisões e armadilhas registradas:
+
+- **Bug da Fase 6 corrigido aqui:** `guard_token_update` recusava a cópia das barras que o
+  gatilho da ficha faz quando o **jogador** grava a própria vida — com o token no mapa, ele
+  não conseguia mexer na vida. Agora a mudança em `bars` passa quando vem de outro gatilho
+  (`pg_trigger_depth() > 1`) ou do `apply_hp_change` (que liga `cantinho.hp_change` só na
+  transação). O PGlite reproduz o bug antes da migração e confere a correção depois.
+- **A vida de verdade é a da ficha.** O dano num token com ficha muda o recurso de papel
+  `hp` (na tabela do mestre, se o campo é só dele) e o resumo; o gatilho leva aos tokens.
+  O cache dos calculados da ficha não é refeito pelo banco (ele não calcula fórmulas): quem
+  abre a ficha vê tudo recalculado dos valores.
+- **Seletor do zustand não pode devolver lista nova a cada leitura** (o React 19 entra em
+  laço). O `RollApply` assina só a contagem de alvos e lê a lista na hora do clique.
+- **Participante que passa a oculto:** o UPDATE não chega ao jogador; o `token-gone` que a
+  Fase 6 já manda também tira o participante do tracker dele.
+- **Depois de cada ação do combate, o app relê o combate** (são poucas linhas): várias
+  RPCs mexem em muitas de uma vez, e a tela não fica dependendo da ordem dos eventos.
+- Iniciativa digitada grava ao sair do campo (gravar a cada tecla reordenaria a fila no meio
+  da digitação); a `key` do campo inclui o valor, para recomeçar do que o banco tem.
+- O teste do `session-store` agora dubla também `@/lib/db/combat` (abre com a sessão).
+
+Pendências, de propósito:
+
+- Ligar/desligar o som do "Sua vez!" fica para a tela de Configurações (Fase 12).
+- O tracker mostra a inicial do nome com a cor do tipo, não a imagem do token.
+
+**Próxima fase: 10 — Ferramentas do mestre.** Só começar depois do ok dele.

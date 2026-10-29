@@ -1,7 +1,7 @@
 import { Trash2 } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import type { RollOutcome, RolledDie } from '@/lib/dice'
-import { cn } from '@/lib/utils'
+import { RollResult } from '@/features/chat/roll-result'
 
 export interface RollLogEntry {
   id: string
@@ -21,8 +21,9 @@ interface RollLogProps {
 }
 
 /**
- * Painel local de rolagens. Na Fase 7 o resultado passa a ir para o chat da sessão; aqui
- * ele serve para o mestre conferir se os botões do modelo fazem o que ele esperava.
+ * Painel local de rolagens do "Ver como jogador" do construtor: serve para o mestre
+ * conferir se os botões do modelo fazem o que ele esperava. Na mesa, as rolagens vão para o
+ * chat (Fase 7).
  */
 export function RollLog({ entries, onClear, emptyHint }: RollLogProps): React.JSX.Element {
   return (
@@ -51,54 +52,7 @@ export function RollLog({ entries, onClear, emptyHint }: RollLogProps): React.JS
         )}
 
         {entries.map((entry) => (
-          <div
-            key={entry.id}
-            className={cn(
-              'rounded-md border p-2 text-sm',
-              entry.outcome === 'critical' && 'border-primary/60 bg-primary/10',
-              entry.outcome === 'critical-failure' && 'border-destructive/60 bg-destructive/10'
-            )}
-          >
-            <div className="flex items-baseline justify-between gap-2">
-              <span className="truncate font-medium">{entry.label}</span>
-              <span className="text-lg font-semibold tabular-nums">{entry.total}</span>
-            </div>
-
-            <div className="text-muted-foreground mt-1 flex flex-wrap items-center gap-1 text-xs">
-              <code className="bg-muted rounded px-1">{entry.notation}</code>
-              {entry.dice.map((die, index) => (
-                <span
-                  key={index}
-                  title={`d${die.sides}${die.dropped ? ' (descartado)' : ''}`}
-                  className={cn(
-                    'rounded border px-1',
-                    die.dropped && 'text-muted-foreground/60 line-through',
-                    !die.dropped &&
-                      die.sides === 20 &&
-                      die.value === 20 &&
-                      'border-primary text-primary',
-                    !die.dropped &&
-                      die.sides === 20 &&
-                      die.value === 1 &&
-                      'border-destructive text-destructive'
-                  )}
-                >
-                  {die.value}
-                </span>
-              ))}
-            </div>
-
-            {entry.outcome !== 'normal' && (
-              <p
-                className={cn(
-                  'mt-1 text-xs font-semibold uppercase',
-                  entry.outcome === 'critical' ? 'text-primary' : 'text-destructive'
-                )}
-              >
-                {entry.outcome === 'critical' ? 'Crítico!' : 'Falha crítica'}
-              </p>
-            )}
-          </div>
+          <RollResult key={entry.id} roll={entry} />
         ))}
       </div>
     </div>

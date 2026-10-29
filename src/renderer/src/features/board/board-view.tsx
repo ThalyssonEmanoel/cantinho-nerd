@@ -1,11 +1,29 @@
 import { useEffect, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
-import { ArrowUpToLine, Crosshair, Eye, EyeOff, Image as ImageIcon, Images, Loader2, Maximize, ScrollText, Settings2, Trash2, UserPlus } from 'lucide-react'
+import {
+  ArrowUpToLine,
+  CircleDot,
+  Crosshair,
+  Eye,
+  EyeOff,
+  Image as ImageIcon,
+  Images,
+  Loader2,
+  Maximize,
+  ScrollText,
+  Settings2,
+  Swords,
+  Trash2,
+  UserPlus
+} from 'lucide-react'
 import { toast } from 'sonner'
-import { nextZ, toWorld, type BoardToken, type Point } from '@/lib/board'
+import { nextZ, toWorld, type BoardToken, type Point, type Reaction } from '@/lib/board'
 import { errorMessage } from '@/lib/db/errors'
 import { useAuthStore } from '@/stores/auth-store'
 import { useSessionStore } from '@/features/session/session-store'
+import { addTokensToCombat, removeParticipant } from '@/features/combat/combat-actions'
+import { useCombatStore } from '@/features/combat/combat-store'
+import { TurnBanner } from '@/features/combat/turn-banner'
 import {
   applyTokenPatch,
   focusEveryone,
@@ -18,9 +36,13 @@ import { BoardCanvas } from './board-canvas'
 import { BoardMenu, type MenuItem } from './board-menu'
 import { BoardToolbar } from './board-toolbar'
 import { useBoardStore } from './board-store'
+import { ConditionsDialog } from './conditions-dialog'
+import { DrawingBar } from './drawing-bar'
+import { sendReaction, undoLastDrawing } from './drawing-actions'
 import { GalleryPicker } from './gallery-picker'
 import { GridSettingsDialog } from './grid-settings-dialog'
 import { ImageLightbox } from './image-lightbox'
+import { SelectionBar } from './selection-bar'
 import { TokenEditorDialog } from './token-editor-dialog'
 
 /**
@@ -40,25 +62,37 @@ export function BoardView(): React.JSX.Element {
   const openMapId = useBoardStore((state) => state.openMapId)
   const activeMapId = useBoardStore((state) => state.activeMapId)
   const tokens = useBoardStore((state) => state.tokens)
-  const selection = useBoardStore((state) => state.selection)
   const scale = useBoardStore((state) => state.scale)
   const loading = useBoardStore((state) => state.loading)
 
   const [editing, setEditing] = useState<BoardToken | null>(null)
+  const [conditioning, setConditioning] = useState<BoardToken | null>(null)
   const [lightbox, setLightbox] = useState<BoardToken | null>(null)
   const [gallery, setGallery] = useState(false)
   const [gridOpen, setGridOpen] = useState(false)
-  const [menu, setMenu] = useState<{ at: Point; items: MenuItem[] } | null>(null)
+  const [menu, setMenu] = useState<{
+    at: Point
+    items: MenuItem[]
+    onReact?: (emoji: Reaction) => void
+  } | null>(null)
 
   const role = session?.role ?? 'player'
   const map = maps.find((item) => item.id === openMapId) ?? null
 
-  // Del apaga o que está selecionado; Esc limpa a seleção.
+  // Del apaga o que está selecionado; Esc limpa a seleção; Ctrl+Z desfaz o meu último traço.
   useEffect(() => {
     const onKeyDown = (event: KeyboardEvent): void => {
       if (event.target instanceof HTMLElement) {
         const tag = event.target.tagName
         if (event.target.isContentEditable || ['INPUT', 'TEXTAREA', 'SELECT'].includes(tag)) return
+      }
+
+      if ((event.ctrlKey || event.metaKey) && !event.shiftKey && event.key.toLowerCase() === 'z') {
+        event.preventDefault()
+        void undoLastDrawing(userId).catch((error: unknown) => {
+          toast.error('Não consegui desfazer', { description: errorMessage(error) })
+        })
+        return
       }
 
       if (event.key === 'Escape') useBoardStore.getState().clearSelection()
@@ -111,6 +145,11 @@ export function BoardView(): React.JSX.Element {
     const { viewport } = state
     if (viewport.width === 0 && map !== null) return { x: map.width / 2, y: map.height / 2 }
     return toWorld(camera, { x: viewport.width / 2, y: viewport.height / 2 })
+  }
+
+  /** Nome de quem mede, pinga ou reage, pelos membros da mesa. */
+  function nameOf(id: string): string {
+    return session?.members.find((member) => member.userId === id)?.displayName ?? ''
   }
 
   const mySheet = sheets.find((sheet) => sheet.ownerId === userId)
@@ -167,6 +206,38 @@ export function BoardView(): React.JSX.Element {
         icon: <Settings2 className="size-3.5" />,
         onPick: () => setEditing(token)
       })
+      items.push({
+        label: 'Condições…',
+        icon: <CircleDot className="size-3.5" />,
+        onPick: () => setConditioning(token)
+      })
+    }
+
+    if (role === 'gm') {
+      const entry = useCombatStore.getState().entries.find((item) => item.tokenId === token.id)
+      items.push(
+        entry === undefined
+          ? {
+              label: 'Adicionar ao combate',
+              icon: <Swords className="size-3.5" />,
+              onPick: () => {
+                void addTokensToCombat([token.id]).catch((error: unknown) => {
+                  toast.error('Não consegui adicionar ao combate', {
+                    description: errorMessage(error)
+                  })
+                })
+              }
+            }
+          : {
+              label: 'Tirar do combate',
+              icon: <Swords className="size-3.5" />,
+              onPick: () => {
+                void removeParticipant(entry.id).catch((error: unknown) => {
+                  toast.error('Não consegui tirar do combate', { description: errorMessage(error) })
+                })
+              }
+            }
+      )
     }
 
     if (token.imagePath !== null) {
@@ -271,8 +342,10 @@ export function BoardView(): React.JSX.Element {
           toast.success('A câmera de todos foi para cá')
         }}
       />
+      <DrawingBar role={role} userId={userId} />
 
       <div className="relative min-h-0 flex-1">
+        <TurnBanner />
         <BoardCanvas
           map={map}
           role={role}
@@ -281,13 +354,26 @@ export function BoardView(): React.JSX.Element {
             if (role === 'gm' || token.ownerId === userId) setEditing(token)
             else setLightbox(token)
           }}
-          onTokenMenu={(token, at) => setMenu({ at, items: tokenMenuItems(token) })}
+          onTokenMenu={(token, at) =>
+            setMenu({
+              at,
+              items: tokenMenuItems(token),
+              onReact:
+                userId === null ? undefined : (emoji) => sendReaction(token, userId, emoji)
+            })
+          }
           onBoardMenu={(world, at) => setMenu({ at, items: boardMenuItems(world) })}
+          nameOf={nameOf}
         />
       </div>
 
       {menu !== null && (
-        <BoardMenu at={menu.at} items={menu.items} onClose={() => setMenu(null)} />
+        <BoardMenu
+          at={menu.at}
+          items={menu.items}
+          onReact={menu.onReact}
+          onClose={() => setMenu(null)}
+        />
       )}
 
       {editing !== null && (
@@ -327,10 +413,15 @@ export function BoardView(): React.JSX.Element {
         />
       )}
 
-      {selection.length > 1 && (
-        <div className="text-muted-foreground border-t px-3 py-1 text-xs">
-          {selection.length} tokens selecionados · Del exclui
-        </div>
+      <SelectionBar role={role} userId={userId} />
+
+      {conditioning !== null && (
+        <ConditionsDialog
+          key={conditioning.id}
+          token={conditioning}
+          available={session?.conditions ?? []}
+          onClose={() => setConditioning(null)}
+        />
       )}
     </div>
   )

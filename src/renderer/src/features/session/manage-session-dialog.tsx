@@ -12,6 +12,8 @@ import {
   regenerateInvite,
   removeMember,
   renameSession,
+  setSessionConditions,
+  setSessionDiceRules,
   setSessionPassword,
   setSessionTemplate,
   type SessionDetail,
@@ -23,7 +25,9 @@ import {
   validateSessionPassword
 } from '@/lib/session/invite'
 import type { SheetTemplateSummary } from '@/lib/sheet'
+import type { DiceRules } from '@/lib/chat/tray'
 import { templateRepository } from '@/features/sheet-templates/repository'
+import { ConditionsSettings } from './conditions-settings'
 import { copyInvite } from './copy-invite'
 import { useSessionStore } from './session-store'
 
@@ -33,8 +37,16 @@ interface ManageSessionDialogProps {
   onClose: () => void
 }
 
+/** Crítico da bandeja a partir do valor do seletor. */
+function rulesWithKind(rules: DiceRules, kind: string): DiceRules {
+  if (kind === 'none') return { ...rules, critical: { kind: 'none' } }
+  if (kind === 'margin') return { ...rules, critical: { kind: 'margin', threshold: 19 } }
+  return { ...rules, critical: { kind: 'natural' } }
+}
+
 /**
- * O que o mestre muda na sessão (4.3): convite novo, senha, sistema, nome e jogadores.
+ * O que o mestre muda na sessão (4.3): convite novo, senha, sistema, regras da mesa (crítico,
+ * condições), nome e jogadores.
  * Excluir a sessão fica no lobby, longe do dia a dia da mesa.
  */
 export function ManageSessionDialog({
@@ -205,6 +217,94 @@ export function ManageSessionDialog({
               Os personagens novos usam a última versão publicada deste modelo. As fichas que já
               existem continuam no modelo em que nasceram.
             </p>
+          </Section>
+
+          <Section title="Crítico na bandeja de dados">
+            <div className="flex flex-wrap items-center gap-2">
+              <Select
+                className="w-52"
+                value={session.diceRules.critical.kind}
+                disabled={busy}
+                aria-label="Regra de crítico da bandeja"
+                onChange={(event) =>
+                  void run(
+                    () =>
+                      setSessionDiceRules(
+                        session.id,
+                        rulesWithKind(session.diceRules, event.target.value)
+                      ),
+                    'Regra de crítico salva'
+                  )
+                }
+              >
+                <option value="natural">Natural (d20 tirou 20)</option>
+                <option value="margin">Margem (d20 a partir de…)</option>
+                <option value="none">Sem crítico</option>
+              </Select>
+              {session.diceRules.critical.kind === 'margin' && (
+                <Input
+                  type="number"
+                  className="w-20"
+                  min={2}
+                  max={20}
+                  defaultValue={
+                    typeof session.diceRules.critical.threshold === 'number'
+                      ? session.diceRules.critical.threshold
+                      : 19
+                  }
+                  aria-label="Margem de crítico"
+                  onBlur={(event) => {
+                    const threshold = Math.min(
+                      20,
+                      Math.max(2, Math.trunc(Number(event.target.value)))
+                    )
+                    if (!Number.isFinite(threshold)) return
+                    void run(
+                      () =>
+                        setSessionDiceRules(session.id, {
+                          ...session.diceRules,
+                          critical: { kind: 'margin', threshold }
+                        }),
+                      'Margem salva'
+                    )
+                  }}
+                />
+              )}
+            </div>
+            <label className="flex items-center gap-2 text-sm">
+              <input
+                type="checkbox"
+                className="accent-primary size-4"
+                checked={session.diceRules.criticalFailureOnOne}
+                disabled={busy}
+                onChange={(event) =>
+                  void run(
+                    () =>
+                      setSessionDiceRules(session.id, {
+                        ...session.diceRules,
+                        criticalFailureOnOne: event.target.checked
+                      }),
+                    'Regra de falha crítica salva'
+                  )
+                }
+              />
+              Falha crítica quando o d20 tira 1
+            </label>
+            <p className="text-muted-foreground text-xs">
+              Vale para a bandeja e para o <code>/r</code> do chat. Os botões das fichas seguem a
+              regra de cada botão, definida no modelo.
+            </p>
+          </Section>
+
+          <Section title="Condições dos tokens">
+            <ConditionsSettings
+              key={JSON.stringify(session.conditions)}
+              conditions={session.conditions}
+              busy={busy}
+              onSave={(list) =>
+                void run(() => setSessionConditions(session.id, list), 'Condições salvas')
+              }
+            />
           </Section>
 
           <Section title="Nome">

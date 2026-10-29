@@ -12,7 +12,7 @@ import { describeDbError, FriendlyError, type DbErrorLike } from './errors'
  */
 
 const TOKEN_COLUMNS =
-  'id, session_id, map_id, sheet_id, kind, owner_id, name, image_path, image_crop, x, y, size, z, hidden, show_name, show_bars, vision_m, bars'
+  'id, session_id, map_id, sheet_id, kind, owner_id, name, image_path, image_crop, x, y, size, z, hidden, show_name, show_bars, vision_m, bars, conditions'
 
 function fail(error: DbErrorLike): FriendlyError {
   return new FriendlyError(describeDbError(error), { cause: error })
@@ -24,6 +24,17 @@ export async function listTokens(mapId: string): Promise<BoardToken[]> {
     .from('tokens')
     .select(TOKEN_COLUMNS)
     .eq('map_id', mapId)
+  if (error !== null) throw fail(error)
+  return (data as TokenRow[]).map(tokenFromRow)
+}
+
+/** Tokens pelo id, em qualquer mapa (o tracker de combate pode ter gente de outro mapa). */
+export async function listTokensByIds(ids: readonly string[]): Promise<BoardToken[]> {
+  if (ids.length === 0) return []
+  const { data, error } = await getSupabase()
+    .from('tokens')
+    .select(TOKEN_COLUMNS)
+    .in('id', [...ids])
   if (error !== null) throw fail(error)
   return (data as TokenRow[]).map(tokenFromRow)
 }

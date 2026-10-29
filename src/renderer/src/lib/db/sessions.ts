@@ -1,4 +1,11 @@
-import { normalizeScale, type SessionScale } from '@/lib/board'
+import {
+  conditionsFromSettings,
+  conditionsToSettings,
+  normalizeScale,
+  type ConditionDef,
+  type SessionScale
+} from '@/lib/board'
+import { diceRulesFromSettings, type DiceRules } from '@/lib/chat/tray'
 import { getSupabase } from './client'
 import type { Json } from './database.types'
 import { describeDbError, FriendlyError, type DbErrorLike } from './errors'
@@ -22,6 +29,10 @@ export interface SessionSummary {
   activeMapId: string | null
   /** Escala e regra de diagonal da mesa (6.2), guardadas em `settings`. */
   scale: SessionScale
+  /** Crítico da bandeja de dados (5.5, 7.1), também em `settings`. */
+  diceRules: DiceRules
+  /** Condições que dá para pôr nos tokens (6.3), também em `settings`. */
+  conditions: ConditionDef[]
   updatedAt: string
 }
 
@@ -78,7 +89,8 @@ function scaleFromSettings(settings: Json): SessionScale {
   const raw = scale as Record<string, Json>
   return normalizeScale({
     metersPerSquare: typeof raw.metersPerSquare === 'number' ? raw.metersPerSquare : undefined,
-    diagonal: typeof raw.diagonal === 'string' ? (raw.diagonal as SessionScale['diagonal']) : undefined
+    diagonal:
+      typeof raw.diagonal === 'string' ? (raw.diagonal as SessionScale['diagonal']) : undefined
   })
 }
 
@@ -93,6 +105,8 @@ function summaryFrom(row: SessionRowLike, role: SessionRole): SessionSummary {
     characterTemplateId: row.character_template_id,
     activeMapId: row.active_map_id,
     scale: scaleFromSettings(row.settings),
+    diceRules: diceRulesFromSettings(row.settings),
+    conditions: conditionsFromSettings(row.settings),
     updatedAt: row.updated_at
   }
 }
@@ -194,6 +208,31 @@ export async function setActiveMap(sessionId: string, mapId: string | null): Pro
 
 /** Escala e diagonal da mesa (6.2). Mescla com o que já está em `settings`. */
 export async function setSessionScale(sessionId: string, scale: SessionScale): Promise<void> {
+  await mergeSettings(sessionId, 'scale', { ...scale })
+}
+
+/** Regra de crítico da bandeja de dados da mesa (7.1). */
+export async function setSessionDiceRules(sessionId: string, rules: DiceRules): Promise<void> {
+  await mergeSettings(sessionId, 'dice', {
+    critical: { ...rules.critical },
+    criticalFailureOnOne: rules.criticalFailureOnOne
+  })
+}
+
+/** Lista de condições da mesa (6.3). As chaves são refeitas a partir dos nomes. */
+export async function setSessionConditions(
+  sessionId: string,
+  conditions: readonly ConditionDef[]
+): Promise<void> {
+  await mergeSettings(
+    sessionId,
+    'conditions',
+    conditionsToSettings(conditions).map((item) => ({ ...item }))
+  )
+}
+
+/** `settings` guarda coisas de várias fases: troca só uma chave, mantendo as outras. */
+async function mergeSettings(sessionId: string, key: string, value: Json): Promise<void> {
   const { data, error } = await getSupabase()
     .from('sessions')
     .select('settings')
@@ -206,7 +245,7 @@ export async function setSessionScale(sessionId: string, scale: SessionScale): P
       ? (data.settings as Record<string, Json>)
       : {}
 
-  await updateSession(sessionId, { settings: { ...current, scale: { ...scale } } })
+  await updateSession(sessionId, { settings: { ...current, [key]: value } })
 }
 
 async function updateSession(

@@ -18,6 +18,8 @@ interface TokenShapeProps {
   /** Onde desenhar agora (pode ser a posição do arrasto, não a do banco). */
   position: Point
   selected: boolean
+  /** É a vez deste token no combate (7.3): brilho em volta. */
+  active?: boolean
   draggable: boolean
   /** O mestre vê o token oculto semitransparente e sempre vê o nome de verdade (6.3). */
   isGm: boolean
@@ -42,6 +44,7 @@ export const TokenShape = memo(function TokenShape({
   grid,
   position,
   selected,
+  active = false,
   draggable,
   isGm,
   scale,
@@ -90,6 +93,21 @@ export const TokenShape = memo(function TokenShape({
         )
       }
     >
+      {/* Vez deste token no combate: um anel com brilho, por baixo de tudo. */}
+      {active && (
+        <Circle
+          x={radius}
+          y={radius}
+          radius={radius + frame * 2.5}
+          stroke="#fbbf24"
+          strokeWidth={frame * 2}
+          shadowColor="#fbbf24"
+          shadowBlur={18}
+          shadowOpacity={0.9}
+          listening={false}
+        />
+      )}
+
       {/* Fundo: aparece quando não há imagem e por baixo dela enquanto carrega. */}
       <Circle x={radius} y={radius} radius={radius} fill="#111827" />
 
@@ -149,6 +167,8 @@ export const TokenShape = memo(function TokenShape({
         )
       })}
 
+      <ConditionIcons conditions={token.conditions} side={side} scale={scale} />
+
       {showLabel && (
         <Text
           y={side + bars.length * (barHeight + 1) + 2}
@@ -166,3 +186,65 @@ export const TokenShape = memo(function TokenShape({
     </Group>
   )
 })
+
+/** Quantos ícones cabem em cima do token antes do "+N". */
+const MAX_ICONS = 4
+
+/**
+ * Condições (6.3) sobre a borda de cima do token: o emoji de cada uma e, se tiver duração,
+ * as rodadas que faltam num número pequeno no canto.
+ */
+function ConditionIcons({
+  conditions,
+  side,
+  scale
+}: {
+  conditions: BoardToken['conditions']
+  side: number
+  scale: number
+}): React.JSX.Element | null {
+  if (conditions.length === 0) return null
+
+  // Tamanho de tela, mas sem passar de metade do token (num token pequeno, longe).
+  const size = Math.min(side * 0.45, Math.max(8, 16 / scale))
+  const shown = conditions.slice(0, conditions.length > MAX_ICONS ? MAX_ICONS - 1 : MAX_ICONS)
+  const hidden = conditions.length - shown.length
+  const step = size * 0.95
+  const y = -size * 0.6
+
+  return (
+    <Group listening={false}>
+      {shown.map((item, index) => (
+        <Group key={item.key} x={index * step} y={y}>
+          <Text text={item.icon} fontSize={size} />
+          {item.rounds !== null && (
+            <Text
+              x={size * 0.55}
+              y={size * 0.55}
+              text={String(item.rounds)}
+              fontSize={size * 0.5}
+              fontStyle="bold"
+              fill="#fde68a"
+              stroke="#020617"
+              strokeWidth={size * 0.12}
+              fillAfterStrokeEnabled
+            />
+          )}
+        </Group>
+      ))}
+      {hidden > 0 && (
+        <Text
+          x={shown.length * step}
+          y={y + size * 0.15}
+          text={`+${hidden}`}
+          fontSize={size * 0.7}
+          fontStyle="bold"
+          fill="#f8fafc"
+          stroke="#020617"
+          strokeWidth={size * 0.12}
+          fillAfterStrokeEnabled
+        />
+      )}
+    </Group>
+  )
+}

@@ -24,6 +24,7 @@ vi.mock('@/lib/db/maps', () => ({
   reorderMaps: db.reorderMaps
 }))
 vi.mock('@/lib/db/tokens', () => ({ listTokens: db.listTokens, moveToken: db.moveToken }))
+vi.mock('@/lib/db/drawings', () => ({ listDrawings: () => Promise.resolve([]) }))
 vi.mock('@/lib/db/sessions', () => ({ setActiveMap: db.setActiveMap }))
 vi.mock('@/features/session/session-store', () => ({
   useSessionStore: { getState: () => ({ reload: async () => undefined }) }

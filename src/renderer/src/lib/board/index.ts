@@ -1,5 +1,5 @@
 /**
- * Tabuleiro (seções 6.1 a 6.3). Ponto único de entrada: o resto do app importa daqui.
+ * Tabuleiro (seções 6.1 a 6.3 e 6.5). Ponto único de entrada: o resto do app importa daqui.
  */
 export * from './types'
 
@@ -59,3 +59,67 @@ export {
   toCropState,
   tokenSourceRect
 } from './token-image'
+
+export type { ConditionDef, TokenCondition } from './conditions'
+export {
+  conditionKey,
+  conditionListProblem,
+  conditionsFromSettings,
+  conditionsToSettings,
+  DEFAULT_CONDITIONS,
+  MAX_CONDITION_ICON,
+  MAX_CONDITION_NAME,
+  MAX_CONDITION_ROUNDS,
+  MAX_CONDITIONS,
+  normalizeRounds,
+  parseTokenConditions,
+  setConditionRounds,
+  tickConditions,
+  toggleCondition
+} from './conditions'
+
+export type { Drawing, DrawingTool, StrokeLevel } from './drawing'
+export {
+  appendPoint,
+  canEraseDrawing,
+  circleRadius,
+  clampStrokeWidth,
+  distanceToSegment,
+  DRAWING_TOOLS,
+  drawingHit,
+  erasableAt,
+  finishStroke,
+  isDrawingTool,
+  isHexColor,
+  lastDrawingBy,
+  MAX_STROKE_WIDTH,
+  MIN_STROKE_WIDTH,
+  parsePointList,
+  rectFromPoints,
+  samplesAlong,
+  shapePoints,
+  simplifyStroke,
+  STROKE_LEVELS,
+  strokeWidthFor
+} from './drawing'
+
+export type { Measurement } from './ruler'
+export { formatSquares, measure, rulerLabel, rulerPoint } from './ruler'
+
+export type {
+  DrawingsCleared,
+  LiveStroke,
+  PingShare,
+  Reaction,
+  ReactionShare,
+  RulerShare
+} from './live'
+export {
+  isReaction,
+  parseDrawingsCleared,
+  parseLiveStroke,
+  parsePing,
+  parseReaction,
+  parseRuler,
+  REACTIONS
+} from './live'

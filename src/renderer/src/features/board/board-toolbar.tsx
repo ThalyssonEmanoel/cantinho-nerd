@@ -1,12 +1,16 @@
+import type { ReactNode } from 'react'
 import {
   Crosshair,
+  Eraser,
   Grid3x3,
   Hand,
   Images,
   Maximize,
   Minus,
   MousePointer2,
+  Pencil,
   Plus,
+  Ruler,
   Square,
   UserPlus
 } from 'lucide-react'
@@ -15,7 +19,40 @@ import { Button } from '@/components/ui/button'
 import { formatMeters, ZOOM_STEP, type BoardMap, type SessionScale } from '@/lib/board'
 import type { SessionRole } from '@/lib/db/sessions'
 import { cn } from '@/lib/utils'
-import { useBoardStore } from './board-store'
+import { useBoardStore, type BoardTool } from './board-store'
+
+const TOOLS: ReadonlyArray<{ tool: BoardTool; label: string; title: string; icon: ReactNode }> = [
+  {
+    tool: 'select',
+    label: 'Selecionar',
+    title: 'Selecionar (clique, Shift+clique ou caixa) · Alt+clique: ping para todos',
+    icon: <MousePointer2 className="size-4" />
+  },
+  {
+    tool: 'pan',
+    label: 'Mãozinha',
+    title: 'Mãozinha (ou segure a barra de espaço / botão do meio)',
+    icon: <Hand className="size-4" />
+  },
+  {
+    tool: 'ruler',
+    label: 'Régua',
+    title: 'Régua: arraste para medir (todos veem a medição)',
+    icon: <Ruler className="size-4" />
+  },
+  {
+    tool: 'draw',
+    label: 'Desenhar',
+    title: 'Desenhar: lápis, linha, círculo e retângulo (Ctrl+Z desfaz)',
+    icon: <Pencil className="size-4" />
+  },
+  {
+    tool: 'erase',
+    label: 'Borracha',
+    title: 'Borracha: apaga o traço inteiro que tocar',
+    icon: <Eraser className="size-4" />
+  }
+]
 
 interface BoardToolbarProps {
   map: BoardMap
@@ -51,26 +88,20 @@ export function BoardToolbar({
   return (
     <div className="bg-card/60 flex flex-wrap items-center gap-1.5 border-b px-2 py-1.5 backdrop-blur">
       <div className="flex items-center gap-0.5">
-        <Button
-          variant={tool === 'select' ? 'default' : 'ghost'}
-          size="icon"
-          className="size-8"
-          onClick={() => useBoardStore.getState().setTool('select')}
-          aria-label="Selecionar"
-          title="Selecionar (clique, Shift+clique ou caixa)"
-        >
-          <MousePointer2 className="size-4" />
-        </Button>
-        <Button
-          variant={tool === 'pan' ? 'default' : 'ghost'}
-          size="icon"
-          className="size-8"
-          onClick={() => useBoardStore.getState().setTool('pan')}
-          aria-label="Mãozinha"
-          title="Mãozinha (ou segure a barra de espaço / botão do meio)"
-        >
-          <Hand className="size-4" />
-        </Button>
+        {TOOLS.map((item) => (
+          <Button
+            key={item.tool}
+            variant={tool === item.tool ? 'default' : 'ghost'}
+            size="icon"
+            className="size-8"
+            onClick={() => useBoardStore.getState().setTool(item.tool)}
+            aria-label={item.label}
+            aria-pressed={tool === item.tool}
+            title={item.title}
+          >
+            {item.icon}
+          </Button>
+        ))}
       </div>
 
       <div className="bg-border mx-1 h-6 w-px" />

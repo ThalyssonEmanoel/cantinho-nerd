@@ -2,19 +2,43 @@ import { useEffect, useRef, useState } from 'react'
 import type Konva from 'konva'
 import type { KonvaEventObject } from 'konva/lib/Node'
 import { Image as KonvaImage, Layer, Rect, Shape, Stage } from 'react-konva'
+import { toast } from 'sonner'
 import {
+  appendPoint,
   byDrawOrder,
+  erasableAt,
+  finishStroke,
   gridLines,
+  rulerPoint,
+  samplesAlong,
+  shapePoints,
+  strokeWidthFor,
   toWorld,
   visibleRect,
   type BoardMap,
   type BoardToken,
+  type LiveStroke,
   type Point,
   type Rect as WorldRect
 } from '@/lib/board'
+import { currentEntry } from '@/lib/combat'
+import { errorMessage } from '@/lib/db/errors'
 import type { SessionRole } from '@/lib/db/sessions'
+import { useCombatStore } from '@/features/combat/combat-store'
 import { broadcastDrag } from './board-actions'
+import { BoardEffects } from './board-effects'
+import { DrawingLayer, ERASER_RADIUS_PX, OverlayLayer } from './board-layers'
 import { drawPosition, useBoardStore } from './board-store'
+import {
+  broadcastStroke,
+  cancelStroke,
+  eraseDrawings,
+  newDrawingId,
+  saveDrawing,
+  sendPing,
+  shareRuler
+} from './drawing-actions'
+import { useLiveStore } from './live-store'
 import { TokenShape } from './token-shape'
 import { useAssetImage } from './use-asset-image'
 
@@ -25,10 +49,21 @@ interface BoardCanvasProps {
   onOpenToken: (token: BoardToken) => void
   onTokenMenu: (token: BoardToken, screen: Point) => void
   onBoardMenu: (world: Point, screen: Point) => void
+  /** Nome de quem mede ou pinga, para os outros saberem quem foi. */
+  nameOf?: (userId: string) => string
 }
 
+/** Quem segura a régua reenvia a cada segundo: parado, ela não some da tela dos outros. */
+const RULER_KEEPALIVE_MS = 1000
+
+/** Acima disso, o lápis ao vivo vai simplificado pelo canal (o salvo é sempre simplificado). */
+const LIVE_POINTS_LIMIT = 1000
+
+const noName = (): string => ''
+
 /**
- * O tabuleiro (6.1 a 6.3): mapa, grade e tokens, com câmera própria de cada um.
+ * O tabuleiro (6.1 a 6.3 e 6.5): mapa, grade, desenhos e tokens, com câmera própria de
+ * cada um.
  *
  * O Stage inteiro é transladado e escalado pela câmera, então todo desenho aqui está em
  * coordenadas do mapa. É o que garante o aceite da fase: três janelas de tamanhos
@@ -40,7 +75,8 @@ export function BoardCanvas({
   userId,
   onOpenToken,
   onTokenMenu,
-  onBoardMenu
+  onBoardMenu,
+  nameOf = noName
 }: BoardCanvasProps): React.JSX.Element {
   const container = useRef<HTMLDivElement | null>(null)
   const stage = useRef<Konva.Stage | null>(null)
@@ -51,6 +87,11 @@ export function BoardCanvas({
   const dragging = useBoardStore((state) => state.dragging)
   const selection = useBoardStore((state) => state.selection)
   const tool = useBoardStore((state) => state.tool)
+  const measuring = useLiveStore((state) => state.myRuler !== null)
+  // De quem é a vez no combate (7.3): o token ganha brilho.
+  const activeTokenId = useCombatStore(
+    (state) => currentEntry(state.entries, state.state)?.tokenId ?? null
+  )
 
   const background = useAssetImage(map.imagePath)
 
@@ -59,6 +100,8 @@ export function BoardCanvas({
   /** Caixa de seleção, em coordenadas do mapa. */
   const [box, setBox] = useState<WorldRect | null>(null)
   const boxFrom = useRef<Point | null>(null)
+  /** Última posição da borracha com o botão apertado. */
+  const eraseFrom = useRef<Point | null>(null)
   const [spaceHeld, setSpaceHeld] = useState(false)
 
   // A janela manda no tamanho do Stage: o Konva precisa de pixels, não de CSS.
@@ -79,12 +122,24 @@ export function BoardCanvas({
     return () => observer.disconnect()
   }, [map.id])
 
-  // Barra de espaço = mãozinha enquanto segurada (6.1).
+  // Barra de espaço = mãozinha enquanto segurada (6.1). Esc desiste do traço ou da régua.
   useEffect(() => {
     const down = (event: KeyboardEvent): void => {
-      if (event.code === 'Space' && !isTyping(event.target)) {
+      if (isTyping(event.target)) return
+      if (event.code === 'Space') {
         event.preventDefault()
         setSpaceHeld(true)
+      }
+      if (event.key === 'Escape') {
+        const live = useLiveStore.getState()
+        if (live.draft !== null) {
+          cancelStroke(live.draft.id)
+          live.setDraft(null)
+        }
+        if (live.myRuler !== null && userId !== null) {
+          shareRuler(map.id, userId, live.myRuler.from, null)
+          live.setMyRuler(null)
+        }
       }
     }
     const up = (event: KeyboardEvent): void => {
@@ -96,7 +151,17 @@ export function BoardCanvas({
       window.removeEventListener('keydown', down)
       window.removeEventListener('keyup', up)
     }
-  }, [])
+  }, [map.id, userId])
+
+  // A régua parada também continua na tela dos outros (6.5): reenvia de tempos em tempos.
+  useEffect(() => {
+    if (!measuring || userId === null) return
+    const timer = setInterval(() => {
+      const ruler = useLiveStore.getState().myRuler
+      if (ruler !== null) shareRuler(map.id, userId, ruler.from, ruler.to)
+    }, RULER_KEEPALIVE_MS)
+    return () => clearInterval(timer)
+  }, [measuring, map.id, userId])
 
   const panning = tool === 'pan' || spaceHeld
   const view = visibleRect(camera, viewport)
@@ -112,6 +177,84 @@ export function BoardCanvas({
     // O jogador mexe só nos próprios tokens; o mestre, em todos (6.3).
     return role === 'gm' || token.ownerId === userId
   }
+
+  // --- desenho (6.5) ------------------------------------------------------------------
+
+  function startStroke(world: Point): void {
+    if (userId === null) return
+    const { drawTool, drawColor, strokeLevel } = useBoardStore.getState()
+    const draft: LiveStroke = {
+      id: newDrawingId(),
+      mapId: map.id,
+      authorId: userId,
+      tool: drawTool,
+      points: drawTool === 'pencil' ? [world.x, world.y] : shapePoints(world, world),
+      color: drawColor,
+      width: strokeWidthFor(strokeLevel, map.grid)
+    }
+    useLiveStore.getState().setDraft(draft)
+    broadcastStroke(draft)
+  }
+
+  function moveStroke(draft: LiveStroke, world: Point): void {
+    const points =
+      draft.tool === 'pencil'
+        ? appendPoint(draft.points, world, 1.5 / camera.scale)
+        : shapePoints({ x: draft.points[0] ?? world.x, y: draft.points[1] ?? world.y }, world)
+    if (points === draft.points) return
+
+    const next = { ...draft, points }
+    useLiveStore.getState().setDraft(next)
+
+    // Um traço de lápis muito longo vai simplificado pelo canal, para caber na mensagem.
+    const minSize = 2 / camera.scale
+    broadcastStroke(next, (live) =>
+      live.length > LIVE_POINTS_LIMIT ? (finishStroke(next.tool, live, minSize) ?? live) : live
+    )
+  }
+
+  function endStroke(draft: LiveStroke): void {
+    useLiveStore.getState().setDraft(null)
+    const points = finishStroke(draft.tool, draft.points, 2 / camera.scale)
+    if (points === null) {
+      cancelStroke(draft.id)
+      return
+    }
+    void saveDrawing({ ...draft, points }).catch((error: unknown) => {
+      toast.error('Não consegui salvar o desenho', { description: errorMessage(error) })
+    })
+  }
+
+  // --- borracha (6.5) -----------------------------------------------------------------
+
+  function eraseAlong(from: Point, to: Point): void {
+    const radius = ERASER_RADIUS_PX / camera.scale
+    const ids = erasableAt(
+      useBoardStore.getState().drawings,
+      samplesAlong(from, to, radius),
+      radius,
+      role,
+      userId
+    )
+    if (ids.length === 0) return
+    void eraseDrawings(ids).catch((error: unknown) => {
+      toast.error('Não consegui apagar o desenho', { description: errorMessage(error) })
+    })
+  }
+
+  // --- régua (6.5) --------------------------------------------------------------------
+
+  function moveRuler(world: Point, free: boolean): void {
+    const live = useLiveStore.getState()
+    const ruler = live.myRuler
+    if (ruler === null || userId === null) return
+    const to = rulerPoint(world, map.grid, free)
+    if (to.x === ruler.to.x && to.y === ruler.to.y) return
+    live.setMyRuler({ from: ruler.from, to })
+    shareRuler(map.id, userId, ruler.from, to)
+  }
+
+  // --- mouse --------------------------------------------------------------------------
 
   function handleWheel(event: KonvaEventObject<WheelEvent>): void {
     event.evt.preventDefault()
@@ -130,11 +273,34 @@ export function BoardCanvas({
       return
     }
 
-    if (onEmpty && event.evt.button === 0) {
+    // Alt+clique é o ping (no `onClick`): não começa caixa, traço nem régua.
+    if (event.evt.button !== 0 || event.evt.altKey || panning) return
+    const world = pointerWorld()
+    if (world === null) return
+
+    if (tool === 'draw') {
+      startStroke(world)
+      return
+    }
+
+    if (tool === 'erase') {
+      eraseFrom.current = world
+      eraseAlong(world, world)
+      return
+    }
+
+    if (tool === 'ruler') {
+      if (userId === null) return
+      const from = rulerPoint(world, map.grid, event.evt.shiftKey)
+      useLiveStore.getState().setMyRuler({ from, to: from })
+      shareRuler(map.id, userId, from, from)
+      return
+    }
+
+    if (onEmpty) {
       useBoardStore.getState().clearSelection()
-      const world = pointerWorld()
       // A caixa de seleção é do mestre (6.3); o jogador seleciona por clique.
-      if (world !== null && !panning && role === 'gm') {
+      if (role === 'gm') {
         boxFrom.current = world
         setBox({ x: world.x, y: world.y, width: 0, height: 0 })
       }
@@ -149,9 +315,32 @@ export function BoardCanvas({
       return
     }
 
+    const world = pointerWorld()
+    if (world === null) return
+    const live = useLiveStore.getState()
+
+    if (tool === 'erase') {
+      live.setEraser(world)
+      const last = eraseFrom.current
+      if (last !== null) {
+        eraseAlong(last, world)
+        eraseFrom.current = world
+      }
+      return
+    }
+
+    if (live.draft !== null) {
+      moveStroke(live.draft, world)
+      return
+    }
+
+    if (live.myRuler !== null) {
+      moveRuler(world, event.evt.shiftKey)
+      return
+    }
+
     const start = boxFrom.current
-    const world = start === null ? null : pointerWorld()
-    if (start !== null && world !== null) {
+    if (start !== null) {
       setBox({
         x: Math.min(start.x, world.x),
         y: Math.min(start.y, world.y),
@@ -163,6 +352,15 @@ export function BoardCanvas({
 
   function handleMouseUp(): void {
     panFrom.current = null
+    eraseFrom.current = null
+
+    const live = useLiveStore.getState()
+    if (live.draft !== null) endStroke(live.draft)
+    if (live.myRuler !== null) {
+      // A régua existe enquanto o botão está apertado: soltou, some para todos.
+      if (userId !== null) shareRuler(map.id, userId, live.myRuler.from, null)
+      live.setMyRuler(null)
+    }
 
     const current = box
     boxFrom.current = null
@@ -182,11 +380,31 @@ export function BoardCanvas({
     useBoardStore.getState().select(inside.map((token) => token.id))
   }
 
+  function handleMouseLeave(): void {
+    useLiveStore.getState().setEraser(null)
+    handleMouseUp()
+  }
+
+  /** Alt+clique: ping para todos (6.5). O Konva não dispara o clique depois de um arrasto. */
+  function handleClick(event: KonvaEventObject<MouseEvent>): void {
+    if (!event.evt.altKey || event.evt.button !== 0 || userId === null) return
+    const world = pointerWorld()
+    if (world !== null) sendPing(map.id, userId, world)
+  }
+
+  const cursor = panning
+    ? 'grab'
+    : tool === 'draw' || tool === 'ruler'
+      ? 'crosshair'
+      : tool === 'erase'
+        ? 'none'
+        : 'default'
+
   return (
     <div
       ref={container}
       className="relative size-full overflow-hidden"
-      style={{ cursor: panning ? 'grab' : 'default' }}
+      style={{ cursor }}
       onContextMenu={(event) => event.preventDefault()}
     >
       {viewport.width > 0 && (
@@ -202,7 +420,8 @@ export function BoardCanvas({
           onMouseDown={handleMouseDown}
           onMouseMove={handleMouseMove}
           onMouseUp={handleMouseUp}
-          onMouseLeave={handleMouseUp}
+          onMouseLeave={handleMouseLeave}
+          onClick={handleClick}
           onContextMenu={(event: KonvaEventObject<PointerEvent>) => {
             event.evt.preventDefault()
             const onEmpty = event.target === event.target.getStage() || event.target.name() === 'fundo'
@@ -254,6 +473,8 @@ export function BoardCanvas({
             )}
           </Layer>
 
+          <DrawingLayer mapId={map.id} />
+
           <Layer>
             {[...tokens].sort(byDrawOrder).map((token) => (
               <TokenShape
@@ -262,14 +483,19 @@ export function BoardCanvas({
                 grid={map.grid}
                 position={drawPosition(token, dragging)}
                 selected={selection.includes(token.id)}
-                draggable={canMove(token) && !panning}
+                active={token.id === activeTokenId}
+                // Com régua, lápis ou borracha na mão, o clique é da ferramenta, não do token.
+                draggable={canMove(token) && tool === 'select' && !spaceHeld}
                 isGm={role === 'gm'}
                 scale={camera.scale}
                 onSelect={(event) => {
+                  if (tool !== 'select' || event.evt.altKey) return
                   if (event.evt.shiftKey) useBoardStore.getState().toggleSelected(token.id)
                   else useBoardStore.getState().select([token.id])
                 }}
-                onOpen={() => onOpenToken(token)}
+                onOpen={() => {
+                  if (tool === 'select') onOpenToken(token)
+                }}
                 onContextMenu={(event) => {
                   event.evt.preventDefault()
                   useBoardStore.getState().select([token.id])
@@ -287,21 +513,17 @@ export function BoardCanvas({
             ))}
           </Layer>
 
-          {box !== null && (
-            <Layer listening={false}>
-              <Rect
-                x={box.x}
-                y={box.y}
-                width={box.width}
-                height={box.height}
-                fill="#38bdf822"
-                stroke="#38bdf8"
-                strokeWidth={1 / camera.scale}
-              />
-            </Layer>
-          )}
+          <OverlayLayer
+            map={map}
+            scale={camera.scale}
+            userId={userId}
+            box={box}
+            nameOf={nameOf}
+          />
         </Stage>
       )}
+
+      <BoardEffects map={map} camera={camera} nameOf={nameOf} />
     </div>
   )
 }

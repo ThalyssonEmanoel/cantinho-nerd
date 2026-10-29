@@ -1,3 +1,5 @@
+import type { TokenCondition } from './conditions'
+
 /**
  * Tabuleiro: mapas, tokens, grade e escala (seções 6.1 a 6.3).
  *
@@ -126,6 +128,8 @@ export interface BoardToken {
   showBars: boolean
   visionM: number | null
   bars: TokenBars
+  /** Condições com ícone e duração (6.3). */
+  conditions: TokenCondition[]
 }
 
 export const MIN_TOKEN_SIZE = 0.5

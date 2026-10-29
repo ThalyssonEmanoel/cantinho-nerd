@@ -60,6 +60,8 @@ const mesa: SessionSummary = {
   characterTemplateId: 't1',
   activeMapId: null,
   scale: { metersPerSquare: 1.5, diagonal: 'simple' as const },
+  diceRules: { critical: { kind: 'natural' as const }, criticalFailureOnOne: true },
+  conditions: [],
   updatedAt: '2026-10-29T10:00:00Z'
 }
 

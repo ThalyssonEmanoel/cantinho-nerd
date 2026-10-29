@@ -14,6 +14,395 @@ export type Database = {
   }
   public: {
     Tables: {
+      combat_entries: {
+        Row: {
+          created_at: string
+          hidden: boolean
+          id: string
+          image_path: string | null
+          initiative: number | null
+          kind: string
+          name: string
+          owner_id: string
+          session_id: string
+          show_name: boolean
+          sort_order: number
+          token_id: string
+        }
+        Insert: {
+          created_at?: string
+          hidden?: boolean
+          id?: string
+          image_path?: string | null
+          initiative?: number | null
+          kind: string
+          name?: string
+          owner_id: string
+          session_id: string
+          show_name?: boolean
+          sort_order?: number
+          token_id: string
+        }
+        Update: {
+          created_at?: string
+          hidden?: boolean
+          id?: string
+          image_path?: string | null
+          initiative?: number | null
+          kind?: string
+          name?: string
+          owner_id?: string
+          session_id?: string
+          show_name?: boolean
+          sort_order?: number
+          token_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "combat_entries_owner_id_fkey"
+            columns: ["owner_id"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "combat_entries_session_id_fkey"
+            columns: ["session_id"]
+            isOneToOne: false
+            referencedRelation: "sessions"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "combat_entries_token_id_fkey"
+            columns: ["token_id"]
+            isOneToOne: false
+            referencedRelation: "tokens"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      combat_log: {
+        Row: {
+          actor_id: string
+          amount: number
+          bars_hidden: boolean
+          created_at: string
+          hp_after: number
+          hp_before: number
+          id: string
+          kind: string
+          name_hidden: boolean
+          session_id: string
+          token_hidden: boolean
+          token_id: string | null
+          token_name: string
+          token_owner_id: string | null
+        }
+        Insert: {
+          actor_id: string
+          amount: number
+          bars_hidden?: boolean
+          created_at?: string
+          hp_after: number
+          hp_before: number
+          id?: string
+          kind: string
+          name_hidden?: boolean
+          session_id: string
+          token_hidden?: boolean
+          token_id?: string | null
+          token_name?: string
+          token_owner_id?: string | null
+        }
+        Update: {
+          actor_id?: string
+          amount?: number
+          bars_hidden?: boolean
+          created_at?: string
+          hp_after?: number
+          hp_before?: number
+          id?: string
+          kind?: string
+          name_hidden?: boolean
+          session_id?: string
+          token_hidden?: boolean
+          token_id?: string | null
+          token_name?: string
+          token_owner_id?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "combat_log_actor_id_fkey"
+            columns: ["actor_id"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "combat_log_session_id_fkey"
+            columns: ["session_id"]
+            isOneToOne: false
+            referencedRelation: "sessions"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "combat_log_token_id_fkey"
+            columns: ["token_id"]
+            isOneToOne: false
+            referencedRelation: "tokens"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "combat_log_token_owner_id_fkey"
+            columns: ["token_owner_id"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      combat_state: {
+        Row: {
+          active: boolean
+          round: number
+          session_id: string
+          turn_entry_id: string | null
+          updated_at: string
+        }
+        Insert: {
+          active?: boolean
+          round?: number
+          session_id: string
+          turn_entry_id?: string | null
+          updated_at?: string
+        }
+        Update: {
+          active?: boolean
+          round?: number
+          session_id?: string
+          turn_entry_id?: string | null
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "combat_state_session_id_fkey"
+            columns: ["session_id"]
+            isOneToOne: false
+            referencedRelation: "sessions"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "combat_state_turn_entry_id_fkey"
+            columns: ["turn_entry_id"]
+            isOneToOne: false
+            referencedRelation: "combat_entries"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      dice_macros: {
+        Row: {
+          created_at: string
+          formula: string
+          id: string
+          label: string
+          owner_id: string
+          session_id: string
+        }
+        Insert: {
+          created_at?: string
+          formula: string
+          id?: string
+          label?: string
+          owner_id?: string
+          session_id: string
+        }
+        Update: {
+          created_at?: string
+          formula?: string
+          id?: string
+          label?: string
+          owner_id?: string
+          session_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "dice_macros_owner_id_fkey"
+            columns: ["owner_id"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "dice_macros_session_id_fkey"
+            columns: ["session_id"]
+            isOneToOne: false
+            referencedRelation: "sessions"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      drawings: {
+        Row: {
+          author_id: string
+          color: string
+          created_at: string
+          id: string
+          map_id: string
+          points: Json
+          session_id: string
+          tool: string
+          width: number
+        }
+        Insert: {
+          author_id?: string
+          color: string
+          created_at?: string
+          id?: string
+          map_id: string
+          points: Json
+          session_id: string
+          tool: string
+          width: number
+        }
+        Update: {
+          author_id?: string
+          color?: string
+          created_at?: string
+          id?: string
+          map_id?: string
+          points?: Json
+          session_id?: string
+          tool?: string
+          width?: number
+        }
+        Relationships: [
+          {
+            foreignKeyName: "drawings_author_id_fkey"
+            columns: ["author_id"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "drawings_map_id_fkey"
+            columns: ["map_id"]
+            isOneToOne: false
+            referencedRelation: "maps"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "drawings_session_id_fkey"
+            columns: ["session_id"]
+            isOneToOne: false
+            referencedRelation: "sessions"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      messages: {
+        Row: {
+          author_id: string
+          body: string
+          created_at: string
+          id: string
+          recipient_id: string | null
+          session_id: string
+        }
+        Insert: {
+          author_id?: string
+          body: string
+          created_at?: string
+          id?: string
+          recipient_id?: string | null
+          session_id: string
+        }
+        Update: {
+          author_id?: string
+          body?: string
+          created_at?: string
+          id?: string
+          recipient_id?: string | null
+          session_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "messages_author_id_fkey"
+            columns: ["author_id"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "messages_recipient_id_fkey"
+            columns: ["recipient_id"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "messages_session_id_fkey"
+            columns: ["session_id"]
+            isOneToOne: false
+            referencedRelation: "sessions"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      rolls: {
+        Row: {
+          author_id: string
+          created_at: string
+          formula: string
+          id: string
+          label: string
+          outcome: string
+          result: Json
+          secret: boolean
+          session_id: string
+          total: number
+        }
+        Insert: {
+          author_id?: string
+          created_at?: string
+          formula: string
+          id?: string
+          label?: string
+          outcome?: string
+          result: Json
+          secret?: boolean
+          session_id: string
+          total: number
+        }
+        Update: {
+          author_id?: string
+          created_at?: string
+          formula?: string
+          id?: string
+          label?: string
+          outcome?: string
+          result?: Json
+          secret?: boolean
+          session_id?: string
+          total?: number
+        }
+        Relationships: [
+          {
+            foreignKeyName: "rolls_author_id_fkey"
+            columns: ["author_id"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "rolls_session_id_fkey"
+            columns: ["session_id"]
+            isOneToOne: false
+            referencedRelation: "sessions"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       gallery_images: {
         Row: {
           created_at: string
@@ -537,6 +926,38 @@ export type Database = {
       [_ in never]: never
     }
     Functions: {
+      apply_hp_change: {
+        Args: { p_amount: number; p_kind: string; p_session_id: string; p_token_ids: string[] }
+        Returns: Json
+      }
+      combat_add: {
+        Args: { p_session_id: string; p_token_ids: string[] }
+        Returns: number
+      }
+      combat_end: {
+        Args: { p_session_id: string }
+        Returns: undefined
+      }
+      combat_end_my_turn: {
+        Args: { p_session_id: string }
+        Returns: Json
+      }
+      combat_next_turn: {
+        Args: { p_session_id: string }
+        Returns: Json
+      }
+      combat_reorder: {
+        Args: { p_ids: string[]; p_session_id: string }
+        Returns: undefined
+      }
+      combat_set_initiatives: {
+        Args: { p_session_id: string; p_values: Json }
+        Returns: undefined
+      }
+      combat_start: {
+        Args: { p_session_id: string }
+        Returns: undefined
+      }
       publish_sheet_template: {
         Args: { p_template_id: string }
         Returns: number
@@ -603,6 +1024,10 @@ export type Database = {
       }
       is_gm: {
         Args: { p_session_id: string }
+        Returns: boolean
+      }
+      is_point_list: {
+        Args: { p_points: Json }
         Returns: boolean
       }
       is_member: {
