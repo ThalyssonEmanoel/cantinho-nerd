@@ -13,7 +13,10 @@ const mocks = vi.hoisted(() => ({
   migrate: vi.fn(async () => 0),
   handlers: null as SessionChannelHandlers | null,
   closeChannel: vi.fn(),
-  applyRemote: vi.fn()
+  broadcast: vi.fn(),
+  applyRemote: vi.fn(),
+  listMaps: vi.fn(async () => []),
+  listTokens: vi.fn(async () => [])
 }))
 
 vi.mock('@/lib/db/sessions', () => ({ fetchSession: mocks.fetchSession }))
@@ -21,9 +24,12 @@ vi.mock('@/lib/db/sheets', () => ({ migrateOutdatedSheets: mocks.migrate }))
 vi.mock('@/lib/db/realtime', () => ({
   openSessionChannel: (_id: string, _me: unknown, handlers: SessionChannelHandlers) => {
     mocks.handlers = handlers
-    return mocks.closeChannel
+    // O canal agora é um objeto: fecha e manda evento efêmero (Fase 6).
+    return { close: mocks.closeChannel, broadcast: mocks.broadcast }
   }
 }))
+vi.mock('@/lib/db/maps', () => ({ listMaps: mocks.listMaps }))
+vi.mock('@/lib/db/tokens', () => ({ listTokens: mocks.listTokens, moveToken: vi.fn() }))
 vi.mock('@/features/sheets/repository', () => ({ sheetRepository: { list: mocks.list } }))
 vi.mock('@/features/sheets/sheet-store', () => ({
   useSheetStore: { getState: () => ({ applyRemote: mocks.applyRemote }) }
@@ -42,6 +48,8 @@ function session(role: 'gm' | 'player'): SessionDetail {
     gmName: 'Ana',
     role,
     characterTemplateId: 't1',
+    activeMapId: null,
+    scale: { metersPerSquare: 1.5, diagonal: 'simple' as const },
     updatedAt: 'x',
     members: []
   }

@@ -34,6 +34,28 @@ export interface SessionChannelHandlers {
   onMembersChange: (change: TableChange) => void
   onSheetChange: (change: TableChange) => void
   onGmDataChange: (change: TableChange) => void
+  onMapChange: (change: TableChange) => void
+  onTokenChange: (change: TableChange) => void
+  /** Mensagens efêmeras, que não passam pelo banco (10.3). */
+  onBroadcast: (event: BroadcastEvent, payload: Record<string, unknown>) => void
+}
+
+/**
+ * Eventos efêmeros do canal (10.3): não são salvos e podem se perder sem prejuízo.
+ *
+ * - `token-drag`: posição durante o arrasto, ~20 por segundo. **Nunca** de token oculto.
+ * - `token-gone`: um token deixou de ser visível para o jogador. Precisa de broadcast
+ *   porque um UPDATE que o RLS esconde simplesmente não chega a ele.
+ * - `camera-focus`: o mestre leva a câmera de todos para um ponto (6.1).
+ */
+export type BroadcastEvent = 'token-drag' | 'token-gone' | 'camera-focus'
+
+const BROADCAST_EVENTS: readonly BroadcastEvent[] = ['token-drag', 'token-gone', 'camera-focus']
+
+export interface SessionChannel {
+  close: () => void
+  /** Manda um evento efêmero. Silencioso se o canal ainda não está de pé. */
+  broadcast: (event: BroadcastEvent, payload: Record<string, unknown>) => void
 }
 
 function isPresenceMember(value: unknown): value is PresenceMember {
@@ -44,12 +66,12 @@ function isPresenceMember(value: unknown): value is PresenceMember {
   )
 }
 
-/** Abre o canal e devolve a função que fecha. */
+/** Abre o canal da sessão. */
 export function openSessionChannel(
   sessionId: string,
   me: PresenceMember,
   handlers: SessionChannelHandlers
-): () => void {
+): SessionChannel {
   const supabase = getSupabase()
   let channel: RealtimeChannel | null = null
   let closed = false
@@ -112,7 +134,27 @@ export function openSessionChannel(
         },
         (payload) => handlers.onGmDataChange(toChange(payload))
       )
-      .subscribe((status) => {
+      .on(
+        'postgres_changes',
+        { event: '*', schema: 'public', table: 'maps', filter: `session_id=eq.${sessionId}` },
+        (payload) => handlers.onMapChange(toChange(payload))
+      )
+      .on(
+        'postgres_changes',
+        { event: '*', schema: 'public', table: 'tokens', filter: `session_id=eq.${sessionId}` },
+        (payload) => handlers.onTokenChange(toChange(payload))
+      )
+
+    for (const event of BROADCAST_EVENTS) {
+      channel.on('broadcast', { event }, (message) => {
+        const payload = (message as { payload?: unknown }).payload
+        if (typeof payload === 'object' && payload !== null) {
+          handlers.onBroadcast(event, payload as Record<string, unknown>)
+        }
+      })
+    }
+
+    channel.subscribe((status) => {
         if (closed) return
         if (status === 'SUBSCRIBED') {
           handlers.onStatus('live')
@@ -129,8 +171,17 @@ export function openSessionChannel(
     if (!closed) handlers.onStatus('reconnecting')
   })
 
-  return () => {
-    closed = true
-    if (channel !== null) void supabase.removeChannel(channel)
+  return {
+    close: () => {
+      closed = true
+      if (channel !== null) void supabase.removeChannel(channel)
+    },
+
+    broadcast: (event, payload) => {
+      // Evento efêmero: se o canal caiu, perder não faz falta — o estado de verdade está
+      // no banco e chega pelo postgres_changes.
+      if (channel === null || closed) return
+      void channel.send({ type: 'broadcast', event, payload })
+    }
   }
 }

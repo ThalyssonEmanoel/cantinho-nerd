@@ -342,10 +342,10 @@ Cada fase termina com algo que eu consigo abrir e testar.
 - [X] Aceite: com duas instâncias, o mestre cria e convida, o jogador entra, e os dois editam a mesma ficha ao mesmo tempo sem perder dados.
 
 **Fase 6 — Tabuleiro e tokens**
-- [ ] Mapas, tokens e galerias, com RLS e bucket `assets`; upload em WebP; cache de imagens.
-- [ ] Biblioteca de mapas, ativar, preparar sem ativar; câmera (zoom, mãozinha, caber na tela, foco do mestre); grade e escala (6.1, 6.2).
-- [ ] Tokens completos (6.3), exceto condições; barras vindas da ficha; reconexão com snapshot.
-- [ ] Aceite: três janelas de tamanhos diferentes veem os mesmos tokens nas mesmas posições; token oculto não chega ao jogador.
+- [X] Mapas, tokens e galerias, com RLS e bucket `assets`; upload em WebP; cache de imagens.
+- [X] Biblioteca de mapas, ativar, preparar sem ativar; câmera (zoom, mãozinha, caber na tela, foco do mestre); grade e escala (6.1, 6.2).
+- [X] Tokens completos (6.3), exceto condições; barras vindas da ficha; reconexão com snapshot.
+- [X] Aceite: três janelas de tamanhos diferentes veem os mesmos tokens nas mesmas posições; token oculto não chega ao jogador.
 
 **Fase 7 — Dados e chat**
 - [ ] Bandeja de dados (7.1), rolagens das fichas indo para a sessão, histórico com limpeza pelo mestre.

@@ -55,12 +55,13 @@ fases do projeto (seção 11). Leia-a antes de qualquer tarefa não trivial.
 scripts/     wrappers do npm (ambiente limpo para subir o Electron)
 supabase/    config.toml da CLI e migrations/ (uma por mudança de banco, nunca editar a aplicada)
 src/
-  main/      processo principal: janela, segurança (CSP, navegação), deep link, instância única, IPC
+  main/      processo principal: janela, segurança (CSP, navegação), deep link, instância única, IPC,
+             cache em disco das imagens do Storage (asset-cache)
   preload/   ponte mínima via contextBridge (window.api)
   shared/    lógica pura usada pelos dois lados (deep link, CSP, política de navegação)
   renderer/src/
     app/         router (HashRouter), layout, ponte do deep link, portão de login (require-auth)
-    features/    uma pasta por área (auth, profile, sheet-builder, formula-guide, …)
+    features/    uma pasta por área (auth, profile, sheet-builder, board, formula-guide, …)
     components/  componentes compartilhados (seletor de cor, avatar…); `ui/` é o shadcn
     lib/         utilidades e lógica pura
       db/        ÚNICO lugar que fala com o Supabase: cliente, auth, perfis, modelos, erros
@@ -103,6 +104,22 @@ Decisões que não são óbvias:
 - **Tipos do banco** em `lib/db/database.types.ts`: gerados com `npm run db:types`. Na Fase 4
   foram escritos à mão no mesmo formato (a CLI ainda não estava ligada ao projeto).
 
+- **Tabuleiro em coordenadas do mapa.** O tamanho lógico de um mapa é o tamanho da imagem;
+  posições e tamanhos de token são sempre nessas coordenadas, nunca em pixels de tela. A
+  câmera (zoom e deslocamento) é de cada pessoa e só traduz tela ↔ mapa. É o que faz três
+  janelas diferentes mostrarem o mesmo tabuleiro.
+- **Token oculto é filtrado no banco** (RLS), não na tela. Como um `UPDATE` que o RLS passa
+  a esconder simplesmente não chega ao jogador, ocultar um token também manda um
+  `token-gone` pelo canal — senão ele ficaria para sempre na tela de quem já não pode vê-lo.
+- **O arrasto de token oculto não é transmitido** (6.3): o broadcast de posição sai só para
+  token visível, no máximo ~20 por segundo.
+- **Cache das imagens em disco**, no processo principal: o nome do arquivo no Storage é o
+  hash do conteúdo, então o mesmo nome nunca aponta para outra imagem e o cache nunca
+  precisa ser invalidado. A chave vem do renderer e é validada (`isSafeAssetKey`) antes de
+  virar caminho em disco.
+- **Imagem da galeria é copiada para a pasta da sessão** ao virar token: o jogador lê os
+  arquivos da mesa, mas não a galeria do mestre (evita spoiler, seção 8).
+
 ## Ambiente desta máquina
 
 - Windows 11, npm (o bun não está instalado).
@@ -111,10 +128,12 @@ Decisões que não são óbvias:
 - Shell lançado pelo host de extensões do VS Code vem com `ELECTRON_RUN_AS_NODE=1`; os
   scripts em `scripts/` já removem isso, mas se um dia o Electron subir "como Node"
   (erro `Cannot read properties of undefined (reading 'isPackaged')`), é essa variável.
-- O npm desta máquina é o 10.9 (conferido na Fase 4), que roda scripts de instalação
-  normalmente — o `postinstall` da CLI do Supabase baixou o binário sem pedir nada. Se um
-  dia o npm virar 11 e passar a bloquear esses scripts, use `npm install-scripts ls` e
-  aprove explicitamente.
+- O npm desta máquina **bloqueia scripts de instalação** (avisa
+  `install-scripts ... not yet covered by allowScripts`). A CLI do Supabase e o Konva não
+  dependem disso; se algum pacote precisar, use `npm install-scripts ls` e aprove.
+- Na Fase 6 o `node_modules` estava defasado (sem `@supabase/supabase-js` nem a CLI, que o
+  `package.json` já declarava): se o typecheck acusar "Cannot find module" num pacote que
+  está no `package.json`, é só rodar `npm install`.
 - Ao adicionar pacote, prefira uma versão publicada há pelo menos duas semanas (proteção
   contra pacote comprometido recém-publicado).
 - Projeto Supabase: `https://bpxtvjlkkuxkxhxyjlbl.supabase.co` (livre para remodelar). O
@@ -295,7 +314,7 @@ Pendências, de propósito:
 
 - Excluir sessões e excluir conta são da Fase 12 (o aviso no Perfil diz isso).
 
-**Fase 5 (Sessões e convites) — implementada, aguardando teste.** 476 testes no total.
+**Fase 5 (Sessões e convites) — aprovada; o Thalysson liberou a Fase 6.**
 
 Falta o `db push` da migração `20261029120000_sessions_and_sheets.sql` (depois do
 `migration repair` acima) e o `npm run db:types`.
@@ -357,4 +376,53 @@ Pendências, de propósito:
   dos jogadores: avaliar antes da Fase 7, quando as rolagens vão para a mesa.
 - O teste definitivo do deep link no Windows é com o app instalado (`npm run build:win`).
 
-**Próxima fase: 6 — Tabuleiro e tokens.** Só começar depois do ok dele.
+**Fase 6 (Tabuleiro e tokens) — implementada, aguardando teste.** 575 testes no total.
+
+Falta aplicar a migração `20261029140000_maps_tokens_and_galleries.sql` (ver abaixo) e
+rodar `npm run db:types`. O Konva entrou como dependência: `konva@10.8.0` e
+`react-konva@19.3.0` (versões com mais de duas semanas de publicadas).
+
+- Migração: `maps`, `tokens`, `gallery_images`, `sessions.active_map_id`, o bucket privado
+  `assets` com as políticas de 10.2, o gatilho que copia `bars` da ficha para os tokens
+  (5.6), o gatilho `guard_token_update` (o que o jogador pode mudar no próprio token) e a
+  RPC `reorder_maps`. `maps` e `tokens` entraram na publicação do Realtime.
+- `lib/board/`: câmera (zoom no cursor, caber na tela, foco, limites do arrasto), grade
+  (encaixe, deslocamento, linhas só do visível), distância em quadrados e metros com as
+  três regras de diagonal, tokens (cor da vida, lugar livre, numeração automática) e o
+  recorte normalizado da imagem do token.
+- `lib/db/`: `maps.ts`, `tokens.ts`, `gallery.ts`, `assets.ts` (download com cache e
+  cópia dentro do bucket) e `board-rows.ts` (conversão linha ↔ objeto, testada).
+- `features/board/`: `board-canvas` (Konva), `token-shape`, barra de ferramentas,
+  biblioteca de mapas, grade e escala, janela do token com reenquadramento, galeria, menu
+  de contexto, lightbox e o store do tabuleiro.
+- `main/asset-cache.ts` + dois canais de IPC: cache em disco das imagens do Storage.
+
+Decisões e armadilhas registradas:
+
+- **Token sem ficha tem vida própria** (6.3), editável na janela dele; com ficha, as barras
+  vêm dela pelos papéis e o gatilho do banco é que as mantém em dia.
+- **Colocar e arrastar encaixam diferente, e os dois estão certos:** colocar usa o quadrado
+  em que o ponto caiu (clicou dentro, cai ali); arrastar leva o canto do token para o canto
+  mais perto. Alt solta livre.
+- **Com o mapa inteiro à vista não há o que arrastar:** o limitador centraliza o mapa menor
+  que a janela. Para testar o arrasto, aproxime primeiro.
+- **`guard_token_update` é gatilho, não política:** no Postgres a política de UPDATE não
+  consegue comparar a linha velha com a nova, então é ele que decide o que o jogador pode
+  mudar no próprio token.
+- **Efeito que copia prop para estado é erro de lint** (`set-state-in-effect`): a janela do
+  token é montada com `key={token.id}` e a de grade só existe quando aberta, então o estado
+  inicial já vem certo. O `useAssetImage` guarda o resultado **junto com o caminho**, para
+  "carregando" sair de uma conta, e não de um `setState` dentro do efeito.
+- **O jsdom não faz layout nem tem canvas:** os testes de montagem do tabuleiro forçam
+  `clientWidth/clientHeight` e o `setup-dom` dá um contexto 2D de mentira para o Konva. É o
+  canário de quebra da react-konva com o React 19.
+- O bundle do renderer foi de 3,34 MB para **5,30 MB** com o Konva. Dividir é da Fase 13.
+
+Pendências, de propósito:
+
+- Névoa de guerra é da Fase 11 (a coluna `fog` do mapa já existe), desenho e régua da Fase 8,
+  condições e dano/cura da Fase 9, bestiário e "puxar jogadores" da Fase 10.
+- Reações com emoji (6.3) estão na Fase 8, junto com ping e régua.
+- O teste de 60 fps com mapa de 4096 px e 50 tokens é da Fase 13.
+
+**Próxima fase: 7 — Dados e chat.** Só começar depois do ok dele.

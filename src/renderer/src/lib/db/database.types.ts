@@ -14,6 +14,94 @@ export type Database = {
   }
   public: {
     Tables: {
+      gallery_images: {
+        Row: {
+          created_at: string
+          id: string
+          image_path: string
+          kind: string
+          name: string
+          owner_id: string
+          token_size: number
+        }
+        Insert: {
+          created_at?: string
+          id?: string
+          image_path: string
+          kind: string
+          name?: string
+          owner_id?: string
+          token_size?: number
+        }
+        Update: {
+          created_at?: string
+          id?: string
+          image_path?: string
+          kind?: string
+          name?: string
+          owner_id?: string
+          token_size?: number
+        }
+        Relationships: [
+          {
+            foreignKeyName: "gallery_images_owner_id_fkey"
+            columns: ["owner_id"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      maps: {
+        Row: {
+          created_at: string
+          fog: Json
+          grid: Json
+          height: number
+          id: string
+          image_path: string
+          name: string
+          session_id: string
+          sort_order: number
+          updated_at: string
+          width: number
+        }
+        Insert: {
+          created_at?: string
+          fog?: Json
+          grid?: Json
+          height: number
+          id?: string
+          image_path: string
+          name: string
+          session_id: string
+          sort_order?: number
+          updated_at?: string
+          width: number
+        }
+        Update: {
+          created_at?: string
+          fog?: Json
+          grid?: Json
+          height?: number
+          id?: string
+          image_path?: string
+          name?: string
+          session_id?: string
+          sort_order?: number
+          updated_at?: string
+          width?: number
+        }
+        Relationships: [
+          {
+            foreignKeyName: "maps_session_id_fkey"
+            columns: ["session_id"]
+            isOneToOne: false
+            referencedRelation: "sessions"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       profiles: {
         Row: {
           avatar_path: string | null
@@ -111,6 +199,7 @@ export type Database = {
       }
       sessions: {
         Row: {
+          active_map_id: string | null
           character_template_id: string | null
           created_at: string
           gm_id: string
@@ -121,6 +210,7 @@ export type Database = {
           updated_at: string
         }
         Insert: {
+          active_map_id?: string | null
           character_template_id?: string | null
           created_at?: string
           gm_id?: string
@@ -131,6 +221,7 @@ export type Database = {
           updated_at?: string
         }
         Update: {
+          active_map_id?: string | null
           character_template_id?: string | null
           created_at?: string
           gm_id?: string
@@ -141,6 +232,13 @@ export type Database = {
           updated_at?: string
         }
         Relationships: [
+          {
+            foreignKeyName: "sessions_active_map_id_fkey"
+            columns: ["active_map_id"]
+            isOneToOne: false
+            referencedRelation: "maps"
+            referencedColumns: ["id"]
+          },
           {
             foreignKeyName: "sessions_character_template_id_fkey"
             columns: ["character_template_id"]
@@ -333,6 +431,107 @@ export type Database = {
           },
         ]
       }
+      tokens: {
+        Row: {
+          bars: Json
+          conditions: Json
+          created_at: string
+          hidden: boolean
+          id: string
+          image_crop: Json
+          image_path: string | null
+          kind: string
+          map_id: string
+          name: string
+          owner_id: string
+          session_id: string
+          sheet_id: string | null
+          show_bars: boolean
+          show_name: boolean
+          size: number
+          updated_at: string
+          vision_m: number | null
+          x: number
+          y: number
+          z: number
+        }
+        Insert: {
+          bars?: Json
+          conditions?: Json
+          created_at?: string
+          hidden?: boolean
+          id?: string
+          image_crop?: Json
+          image_path?: string | null
+          kind: string
+          map_id: string
+          name?: string
+          owner_id?: string
+          session_id: string
+          sheet_id?: string | null
+          show_bars?: boolean
+          show_name?: boolean
+          size?: number
+          updated_at?: string
+          vision_m?: number | null
+          x?: number
+          y?: number
+          z?: number
+        }
+        Update: {
+          bars?: Json
+          conditions?: Json
+          created_at?: string
+          hidden?: boolean
+          id?: string
+          image_crop?: Json
+          image_path?: string | null
+          kind?: string
+          map_id?: string
+          name?: string
+          owner_id?: string
+          session_id?: string
+          sheet_id?: string | null
+          show_bars?: boolean
+          show_name?: boolean
+          size?: number
+          updated_at?: string
+          vision_m?: number | null
+          x?: number
+          y?: number
+          z?: number
+        }
+        Relationships: [
+          {
+            foreignKeyName: "tokens_map_id_fkey"
+            columns: ["map_id"]
+            isOneToOne: false
+            referencedRelation: "maps"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "tokens_owner_id_fkey"
+            columns: ["owner_id"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "tokens_session_id_fkey"
+            columns: ["session_id"]
+            isOneToOne: false
+            referencedRelation: "sessions"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "tokens_sheet_id_fkey"
+            columns: ["sheet_id"]
+            isOneToOne: false
+            referencedRelation: "sheets"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
     }
     Views: {
       [_ in never]: never
@@ -409,6 +608,22 @@ export type Database = {
       is_member: {
         Args: { p_session_id: string }
         Returns: boolean
+      }
+      active_map_id: {
+        Args: { p_session_id: string }
+        Returns: string | null
+      }
+      owns_sheet: {
+        Args: { p_sheet_id: string }
+        Returns: boolean
+      }
+      reorder_maps: {
+        Args: { p_ids: string[]; p_session_id: string }
+        Returns: number
+      }
+      asset_session_id: {
+        Args: { p_name: string }
+        Returns: string | null
       }
     }
     Enums: {

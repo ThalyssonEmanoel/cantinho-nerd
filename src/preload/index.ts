@@ -31,6 +31,16 @@ const api = {
   openTextFile: (request?: OpenTextFileRequest): Promise<TextFileResult> =>
     ipcRenderer.invoke(IpcChannel.openTextFile, request ?? {}),
 
+  /**
+   * Cache local das imagens do Storage (10.2). A chave é o nome do arquivo, que é o hash
+   * do conteúdo — então nunca aponta para outra imagem e vale cache eterno.
+   */
+  readCachedAsset: (key: string): Promise<Uint8Array | null> =>
+    ipcRenderer.invoke(IpcChannel.readCachedAsset, key),
+
+  writeCachedAsset: (key: string, data: Uint8Array): Promise<boolean> =>
+    ipcRenderer.invoke(IpcChannel.writeCachedAsset, key, data),
+
   /** Deep link com o app já aberto. Devolve a função para remover o listener. */
   onDeepLink: (callback: (link: DeepLink) => void): (() => void) => {
     const listener = (_event: IpcRendererEvent, link: DeepLink): void => callback(link)

@@ -48,6 +48,8 @@ function session(role: 'gm' | 'player', templateId: string | null = 't1'): Sessi
     gmName: 'Ana',
     role,
     characterTemplateId: templateId,
+    activeMapId: null,
+    scale: { metersPerSquare: 1.5, diagonal: 'simple' as const },
     updatedAt: 'x',
     members
   }

@@ -1,4 +1,6 @@
+import { normalizeScale, type SessionScale } from '@/lib/board'
 import { getSupabase } from './client'
+import type { Json } from './database.types'
 import { describeDbError, FriendlyError, type DbErrorLike } from './errors'
 
 /**
@@ -16,6 +18,10 @@ export interface SessionSummary {
   gmName: string
   role: SessionRole
   characterTemplateId: string | null
+  /** Mapa que todos estão vendo (6.1). */
+  activeMapId: string | null
+  /** Escala e regra de diagonal da mesa (6.2), guardadas em `settings`. */
+  scale: SessionScale
   updatedAt: string
 }
 
@@ -40,7 +46,7 @@ export interface InvitePreview {
 }
 
 const SESSION_COLUMNS =
-  'id, name, invite_id, gm_id, character_template_id, updated_at, gm:profiles!sessions_gm_id_fkey(display_name)'
+  'id, name, invite_id, gm_id, character_template_id, active_map_id, settings, updated_at, gm:profiles!sessions_gm_id_fkey(display_name)'
 
 function fail(error: DbErrorLike): FriendlyError {
   return new FriendlyError(describeDbError(error), { cause: error })
@@ -54,8 +60,26 @@ interface SessionRowLike {
   invite_id: string
   gm_id: string
   character_template_id: string | null
+  active_map_id: string | null
+  settings: Json
   updated_at: string
   gm: { display_name: string } | null
+}
+
+/** A escala vive dentro de `settings`, junto com o que as fases seguintes guardarem lá. */
+function scaleFromSettings(settings: Json): SessionScale {
+  if (typeof settings !== 'object' || settings === null || Array.isArray(settings)) {
+    return normalizeScale(null)
+  }
+  const scale = (settings as Record<string, Json>).scale
+  if (typeof scale !== 'object' || scale === null || Array.isArray(scale)) {
+    return normalizeScale(null)
+  }
+  const raw = scale as Record<string, Json>
+  return normalizeScale({
+    metersPerSquare: typeof raw.metersPerSquare === 'number' ? raw.metersPerSquare : undefined,
+    diagonal: typeof raw.diagonal === 'string' ? (raw.diagonal as SessionScale['diagonal']) : undefined
+  })
 }
 
 function summaryFrom(row: SessionRowLike, role: SessionRole): SessionSummary {
@@ -67,6 +91,8 @@ function summaryFrom(row: SessionRowLike, role: SessionRole): SessionSummary {
     gmName: row.gm?.display_name ?? '',
     role,
     characterTemplateId: row.character_template_id,
+    activeMapId: row.active_map_id,
+    scale: scaleFromSettings(row.settings),
     updatedAt: row.updated_at
   }
 }
@@ -161,9 +187,36 @@ export async function setSessionTemplate(
   await updateSession(sessionId, { character_template_id: templateId })
 }
 
+/** Mapa ativo da mesa (6.1): todos passam a ver este. */
+export async function setActiveMap(sessionId: string, mapId: string | null): Promise<void> {
+  await updateSession(sessionId, { active_map_id: mapId })
+}
+
+/** Escala e diagonal da mesa (6.2). Mescla com o que já está em `settings`. */
+export async function setSessionScale(sessionId: string, scale: SessionScale): Promise<void> {
+  const { data, error } = await getSupabase()
+    .from('sessions')
+    .select('settings')
+    .eq('id', sessionId)
+    .maybeSingle()
+  if (error !== null) throw fail(error)
+
+  const current =
+    typeof data?.settings === 'object' && data.settings !== null && !Array.isArray(data.settings)
+      ? (data.settings as Record<string, Json>)
+      : {}
+
+  await updateSession(sessionId, { settings: { ...current, scale: { ...scale } } })
+}
+
 async function updateSession(
   sessionId: string,
-  change: { name?: string; character_template_id?: string | null }
+  change: {
+    name?: string
+    character_template_id?: string | null
+    active_map_id?: string | null
+    settings?: Json
+  }
 ): Promise<void> {
   const { data, error } = await getSupabase()
     .from('sessions')

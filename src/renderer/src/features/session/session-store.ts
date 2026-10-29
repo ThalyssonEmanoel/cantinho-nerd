@@ -1,9 +1,12 @@
 import { create } from 'zustand'
+import { normalizeScale } from '@/lib/board'
 import { errorMessage } from '@/lib/db/errors'
 import {
   openSessionChannel,
+  type BroadcastEvent,
   type ChannelStatus,
   type PresenceMember,
+  type SessionChannel,
   type TableChange
 } from '@/lib/db/realtime'
 import { fetchSession, type SessionDetail } from '@/lib/db/sessions'
@@ -12,6 +15,7 @@ import { migrateOutdatedSheets } from '@/lib/db/sheets'
 import type { SheetSummaryRow } from '@/lib/sheet'
 import { sheetRepository } from '@/features/sheets/repository'
 import { useSheetStore } from '@/features/sheets/sheet-store'
+import { useBoardStore } from '@/features/board/board-store'
 
 /**
  * A sessão aberta (seção 10.3): o snapshot (sessão, membros e fichas) e o canal de tempo
@@ -41,12 +45,14 @@ interface SessionState {
 
   open: (sessionId: string, viewer: SessionViewer) => Promise<void>
   close: () => void
+  /** Manda um evento efêmero pelo canal da mesa (arrasto, foco de câmera). */
+  broadcast: (event: BroadcastEvent, payload: Record<string, unknown>) => void
   /** Recarrega sessão e fichas (depois de mudar algo, ou ao reconectar). */
   reload: () => Promise<void>
   refreshSheets: () => Promise<void>
 }
 
-let closeChannel: (() => void) | null = null
+let channel: SessionChannel | null = null
 let refreshTimer: ReturnType<typeof setTimeout> | undefined
 let viewer: SessionViewer | null = null
 
@@ -81,6 +87,10 @@ export const useSessionStore = create<SessionState>()((set, get) => {
 
     set({ session, sheets, loadState: 'ready', problem: null })
 
+    // O tabuleiro acompanha o mapa ativo e a escala da mesa (6.1, 6.2).
+    const board = useBoardStore.getState()
+    if (board.sessionId === sessionId) board.syncSession(session.activeMapId, session.scale)
+
     // O mestre é quem leva as fichas para a versão nova do sistema (só ele vê tudo, 5.7).
     if (session.role === 'gm') {
       void migrateOutdatedSheets(sheetRepository, sheets).then((count) => {
@@ -110,6 +120,28 @@ export const useSessionStore = create<SessionState>()((set, get) => {
     if (remote !== null) useSheetStore.getState().applyRemote(remote)
   }
 
+  /** Eventos efêmeros do tabuleiro (10.3). */
+  function handleBroadcast(event: BroadcastEvent, payload: Record<string, unknown>): void {
+    const board = useBoardStore.getState()
+    const id = typeof payload.id === 'string' ? payload.id : null
+    const x = typeof payload.x === 'number' ? payload.x : null
+    const y = typeof payload.y === 'number' ? payload.y : null
+
+    if (event === 'token-drag' && id !== null && x !== null && y !== null) {
+      board.applyGhost(id, { x, y })
+      return
+    }
+
+    // Token que passou a oculto: o UPDATE não chega a quem não pode mais vê-lo, então o
+    // aviso vem pelo canal.
+    if (event === 'token-gone' && id !== null) {
+      board.removeTokenLocally(id)
+      return
+    }
+
+    if (event === 'camera-focus' && x !== null && y !== null) board.focusOn({ x, y })
+  }
+
   return {
     ...emptyState,
 
@@ -125,9 +157,19 @@ export const useSessionStore = create<SessionState>()((set, get) => {
         return
       }
 
-      const role = get().session?.role ?? 'player'
+      const session = get().session
+      const role = session?.role ?? 'player'
+
+      await useBoardStore.getState().open({
+        sessionId,
+        role,
+        activeMapId: session?.activeMapId ?? null,
+        scale: session?.scale ?? normalizeScale(null)
+      })
+      if (get().sessionId !== sessionId) return
+
       let wasLive = false
-      closeChannel = openSessionChannel(
+      channel = openSessionChannel(
         sessionId,
         { ...who, role },
         {
@@ -150,15 +192,21 @@ export const useSessionStore = create<SessionState>()((set, get) => {
           },
           onMembersChange: () => void get().reload(),
           onSheetChange: handleSheetChange,
-          onGmDataChange: handleGmDataChange
+          onGmDataChange: handleGmDataChange,
+          onMapChange: (change) => useBoardStore.getState().applyMapChange(change),
+          onTokenChange: (change) => useBoardStore.getState().applyTokenChange(change),
+          onBroadcast: handleBroadcast
         }
       )
     },
 
+    broadcast: (event, payload) => channel?.broadcast(event, payload),
+
     close: () => {
       if (refreshTimer !== undefined) clearTimeout(refreshTimer)
-      closeChannel?.()
-      closeChannel = null
+      channel?.close()
+      channel = null
+      useBoardStore.getState().close()
       set({ ...emptyState })
     },
 

@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { MAX_UPLOAD_BYTES, sha256Hex, validateImageFile } from './upload'
+import { MAX_MAP_SIDE, MAX_UPLOAD_BYTES, scaleToFit, sha256Hex, validateImageFile } from './upload'
 
 describe('validateImageFile', () => {
   it('aceita imagem até 15 MB (10.4)', () => {
@@ -19,5 +19,20 @@ describe('sha256Hex', () => {
     expect(a).toBe('ba7816bf8f01cfea414140de5dae2223b00361a396177a9cb410ff61f20015ad')
     expect(await sha256Hex(new Blob(['abc']))).toBe(a)
     expect(await sha256Hex(new Blob(['abd']))).not.toBe(a)
+  })
+})
+
+describe('scaleToFit', () => {
+  it('não aumenta imagem pequena', () => {
+    expect(scaleToFit({ width: 800, height: 600 }, MAX_MAP_SIDE)).toBe(1)
+  })
+
+  it('reduz pelo maior lado (6.1: no máximo 4096)', () => {
+    expect(scaleToFit({ width: 8192, height: 2048 }, MAX_MAP_SIDE)).toBe(0.5)
+    expect(scaleToFit({ width: 1000, height: 10000 }, 500)).toBe(0.05)
+  })
+
+  it('tamanho zerado não vira divisão por zero', () => {
+    expect(scaleToFit({ width: 0, height: 0 }, 100)).toBe(1)
   })
 })

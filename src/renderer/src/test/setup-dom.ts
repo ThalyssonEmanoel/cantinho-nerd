@@ -46,3 +46,48 @@ if (!('api' in globalThis)) {
     writable: true
   })
 }
+
+/**
+ * O jsdom não tem canvas de verdade: `getContext('2d')` devolve null, e o Konva recusa
+ * subir sem contexto. Este dublê aceita qualquer chamada de desenho sem fazer nada — o que
+ * se quer dos testes de montagem é saber que a árvore do tabuleiro monta, não conferir
+ * pixel.
+ */
+function fakeContext(canvas: HTMLCanvasElement): CanvasRenderingContext2D {
+  const values: Record<string, unknown> = {}
+
+  const target = {
+    canvas,
+    measureText: () => ({ width: 0 }),
+    getImageData: () => ({ data: new Uint8ClampedArray(4), width: 1, height: 1 }),
+    createImageData: () => ({ data: new Uint8ClampedArray(4), width: 1, height: 1 }),
+    createLinearGradient: () => ({ addColorStop: () => {} }),
+    createRadialGradient: () => ({ addColorStop: () => {} }),
+    createPattern: () => null,
+    getLineDash: () => [],
+    isPointInPath: () => false
+  }
+
+  return new Proxy(target, {
+    get: (object, property) => {
+      if (property in object) return object[property as keyof typeof object]
+      if (property in values) return values[property as string]
+      // Qualquer outro método de desenho é um no-op.
+      return () => undefined
+    },
+    set: (_object, property, value) => {
+      values[property as string] = value
+      return true
+    }
+  }) as unknown as CanvasRenderingContext2D
+}
+
+if (typeof HTMLCanvasElement !== 'undefined') {
+  HTMLCanvasElement.prototype.getContext = function getContext(
+    this: HTMLCanvasElement
+  ): CanvasRenderingContext2D {
+    return fakeContext(this)
+  } as unknown as typeof HTMLCanvasElement.prototype.getContext
+
+  HTMLCanvasElement.prototype.toDataURL = () => 'data:image/png;base64,'
+}

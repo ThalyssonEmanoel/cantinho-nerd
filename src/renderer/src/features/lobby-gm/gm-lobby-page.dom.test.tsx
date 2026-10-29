@@ -58,6 +58,8 @@ const mesa: SessionSummary = {
   gmName: 'Ana',
   role: 'gm',
   characterTemplateId: 't1',
+  activeMapId: null,
+  scale: { metersPerSquare: 1.5, diagonal: 'simple' as const },
   updatedAt: '2026-10-29T10:00:00Z'
 }
 

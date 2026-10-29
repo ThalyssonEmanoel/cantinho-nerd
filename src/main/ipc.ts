@@ -8,6 +8,7 @@ import {
   type FileFilter,
   type TextFileResult
 } from '../shared/ipc'
+import { readCachedAsset, writeCachedAsset } from './asset-cache'
 import { consumePendingDeepLink } from './deep-link'
 import { profileName } from './profile'
 import { openExternalSafely } from './security'
@@ -126,4 +127,10 @@ export function registerIpcHandlers(): void {
 
   ipcMain.handle(IpcChannel.saveTextFile, (_event, request: unknown) => handleSaveTextFile(request))
   ipcMain.handle(IpcChannel.openTextFile, (_event, request: unknown) => handleOpenTextFile(request))
+
+  // Cache das imagens do Storage (10.2). A chave é validada no asset-cache.
+  ipcMain.handle(IpcChannel.readCachedAsset, (_event, key: unknown) => readCachedAsset(key))
+  ipcMain.handle(IpcChannel.writeCachedAsset, (_event, key: unknown, data: unknown) =>
+    writeCachedAsset(key, data)
+  )
 }

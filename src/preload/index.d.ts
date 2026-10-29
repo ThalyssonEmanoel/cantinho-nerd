@@ -12,6 +12,8 @@ export interface CantinhoApi {
   takePendingDeepLink: () => Promise<DeepLink | null>
   saveTextFile: (request: SaveTextFileRequest) => Promise<TextFileResult>
   openTextFile: (request?: OpenTextFileRequest) => Promise<TextFileResult>
+  readCachedAsset: (key: string) => Promise<Uint8Array | null>
+  writeCachedAsset: (key: string, data: Uint8Array) => Promise<boolean>
   onDeepLink: (callback: (link: DeepLink) => void) => () => void
 }
 

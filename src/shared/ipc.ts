@@ -10,11 +10,32 @@ export const IpcChannel = {
   pendingDeepLink: 'deep-link:pending',
   deepLink: 'deep-link',
   saveTextFile: 'file:save-text',
-  openTextFile: 'file:open-text'
+  openTextFile: 'file:open-text',
+  readCachedAsset: 'asset:read',
+  writeCachedAsset: 'asset:write'
 } as const
 
 /** Limite dos arquivos de texto que o app lê e escreve (modelos de ficha em .json). */
 export const MAX_TEXT_FILE_BYTES = 2 * 1024 * 1024
+
+/** Teto de cada imagem guardada no cache local (10.2). */
+export const MAX_CACHED_ASSET_BYTES = 12 * 1024 * 1024
+
+/**
+ * Chave do cache de imagens: o nome do arquivo no Storage, que é o hash do conteúdo.
+ *
+ * A chave vem do renderer e vira caminho em disco no processo principal, então aqui é
+ * onde se garante que ela é só um nome — sem barra, sem `..`, sem letra de unidade.
+ */
+export function isSafeAssetKey(key: unknown): key is string {
+  return (
+    typeof key === 'string' &&
+    key.length > 0 &&
+    key.length <= 128 &&
+    /^[A-Za-z0-9][A-Za-z0-9._-]*$/.test(key) &&
+    !key.includes('..')
+  )
+}
 
 export interface FileFilter {
   name: string

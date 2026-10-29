@@ -1,8 +1,9 @@
 import { useState } from 'react'
-import { Loader2, ScrollText, UserPlus } from 'lucide-react'
+import { ChevronLeft, ChevronRight, Loader2, ScrollText, UserPlus } from 'lucide-react'
 import { useNavigate } from 'react-router-dom'
 import { toast } from 'sonner'
-import { PhaseNotice } from '@/components/phase-notice'
+import { BoardView } from '@/features/board/board-view'
+import { MapLibrary } from '@/features/board/map-library'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
 import { UserAvatar } from '@/components/user-avatar'
@@ -14,33 +15,36 @@ import { cn } from '@/lib/utils'
 import { useSessionStore } from './session-store'
 
 /**
- * A mesa: o tabuleiro no centro (Fase 6) e, à direita, as fichas e quem está na sessão.
- * O jogador cria o personagem aqui (5.7); o mestre vê a ficha de todo mundo (8).
+ * A mesa: o tabuleiro no centro (seção 6) e, à direita, mapas, fichas e quem está na
+ * sessão. O painel recolhe para o tabuleiro ocupar a janela toda (6.1).
  */
 export function SessionTablePage(): React.JSX.Element {
+  const role = useSessionStore((state) => state.session?.role ?? 'player')
+  const [panelOpen, setPanelOpen] = useState(true)
+
   return (
-    <div className="grid h-full min-h-0 grid-cols-[1fr_20rem] divide-x">
-      <div className="bg-muted/20 relative min-h-0 overflow-auto p-4">
-        <div className="text-muted-foreground flex h-full min-h-64 flex-col items-center justify-center gap-4 rounded-lg border border-dashed p-6 text-sm">
-          <p>Tabuleiro — mapas, tokens, grade e névoa chegam na Fase 6.</p>
-          <div className="w-full max-w-md">
-            <PhaseNotice
-              phase="Fase 6"
-              title="Tabuleiro"
-              items={[
-                'Mapas por sessão, com ativação e preparação sem ativar',
-                'Câmera por mapa: zoom no cursor, mãozinha e caber na tela',
-                'Tokens com as barras vindas da ficha pelos papéis'
-              ]}
-            />
-          </div>
-        </div>
+    <div className="flex h-full min-h-0">
+      <div className="relative min-w-0 flex-1">
+        <BoardView />
       </div>
 
-      <aside className="flex min-h-0 flex-col divide-y overflow-y-auto">
-        <SheetsPanel />
-        <MembersPanel />
-      </aside>
+      <button
+        type="button"
+        className="bg-card/60 text-muted-foreground hover:text-foreground border-l px-0.5"
+        onClick={() => setPanelOpen((open) => !open)}
+        aria-label={panelOpen ? 'Recolher o painel' : 'Mostrar o painel'}
+        title={panelOpen ? 'Recolher o painel' : 'Mostrar o painel'}
+      >
+        {panelOpen ? <ChevronRight className="size-4" /> : <ChevronLeft className="size-4" />}
+      </button>
+
+      {panelOpen && (
+        <aside className="flex w-80 shrink-0 flex-col divide-y overflow-y-auto border-l">
+          {role === 'gm' && <MapLibrary />}
+          <SheetsPanel />
+          <MembersPanel />
+        </aside>
+      )}
     </div>
   )
 }
