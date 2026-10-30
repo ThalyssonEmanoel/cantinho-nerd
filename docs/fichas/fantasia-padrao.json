@@ -486,7 +486,7 @@
               "h": 1
             },
             "type": "computed",
-            "formula": "=\"Todos começam em 2 e você distribui mais 3 pontos (máx. 5 antes da raça). Embaixo, o valor final.\"",
+            "formula": "=\"Comece com 0 em tudo e distribua 7 pontos (máx. 5 antes da raça). Modificador = valor + raça − 1.\"",
             "format": "integer"
           },
           {
@@ -501,12 +501,12 @@
               "w": 2,
               "h": 3
             },
-            "hint": "Em cima, os pontos distribuídos. Embaixo, o valor final com a raça: é ele que entra nas rolagens.",
+            "hint": "Em cima, os pontos distribuídos. Embaixo, o modificador (pontos + raça − 1: 0 dá −1, 2 dá +1): é ele que entra nas rolagens.",
             "type": "attribute",
-            "min": 2,
+            "min": 0,
             "max": 5,
-            "defaultValue": 2,
-            "modifierFormula": "=valor + raca_for"
+            "defaultValue": 0,
+            "modifierFormula": "=valor + raca_for - 1"
           },
           {
             "id": "c_agilidade",
@@ -520,12 +520,12 @@
               "w": 2,
               "h": 3
             },
-            "hint": "Em cima, os pontos distribuídos. Embaixo, o valor final com a raça: é ele que entra nas rolagens.",
+            "hint": "Em cima, os pontos distribuídos. Embaixo, o modificador (pontos + raça − 1: 0 dá −1, 2 dá +1): é ele que entra nas rolagens.",
             "type": "attribute",
-            "min": 2,
+            "min": 0,
             "max": 5,
-            "defaultValue": 2,
-            "modifierFormula": "=valor + raca_agi"
+            "defaultValue": 0,
+            "modifierFormula": "=valor + raca_agi - 1"
           },
           {
             "id": "c_inteligencia",
@@ -539,12 +539,12 @@
               "w": 2,
               "h": 3
             },
-            "hint": "Em cima, os pontos distribuídos. Embaixo, o valor final com a raça: é ele que entra nas rolagens.",
+            "hint": "Em cima, os pontos distribuídos. Embaixo, o modificador (pontos + raça − 1: 0 dá −1, 2 dá +1): é ele que entra nas rolagens.",
             "type": "attribute",
-            "min": 2,
+            "min": 0,
             "max": 5,
-            "defaultValue": 2,
-            "modifierFormula": "=valor + raca_int"
+            "defaultValue": 0,
+            "modifierFormula": "=valor + raca_int - 1"
           },
           {
             "id": "c_espirito",
@@ -558,12 +558,12 @@
               "w": 2,
               "h": 3
             },
-            "hint": "Em cima, os pontos distribuídos. Embaixo, o valor final com a raça: é ele que entra nas rolagens.",
+            "hint": "Em cima, os pontos distribuídos. Embaixo, o modificador (pontos + raça − 1: 0 dá −1, 2 dá +1): é ele que entra nas rolagens.",
             "type": "attribute",
-            "min": 2,
+            "min": 0,
             "max": 5,
-            "defaultValue": 2,
-            "modifierFormula": "=valor + raca_esp"
+            "defaultValue": 0,
+            "modifierFormula": "=valor + raca_esp - 1"
           },
           {
             "id": "c_vigor",
@@ -577,12 +577,12 @@
               "w": 2,
               "h": 3
             },
-            "hint": "Em cima, os pontos distribuídos. Embaixo, o valor final com a raça: é ele que entra nas rolagens.",
+            "hint": "Em cima, os pontos distribuídos. Embaixo, o modificador (pontos + raça − 1: 0 dá −1, 2 dá +1): é ele que entra nas rolagens.",
             "type": "attribute",
-            "min": 2,
+            "min": 0,
             "max": 5,
-            "defaultValue": 2,
-            "modifierFormula": "=valor + raca_vig"
+            "defaultValue": 0,
+            "modifierFormula": "=valor + raca_vig - 1"
           },
           {
             "id": "c_pontos_livres",
@@ -596,9 +596,9 @@
               "w": 2,
               "h": 3
             },
-            "hint": "2 em cada atributo + 3 pontos = 13, antes da raça.",
+            "hint": "7 pontos, antes da raça. A raça soma ou tira depois.",
             "type": "computed",
-            "formula": "=13 - (forca + agilidade + inteligencia + espirito + vigor)",
+            "formula": "=7 - (forca + agilidade + inteligencia + espirito + vigor)",
             "format": "integer"
           },
           {
@@ -710,7 +710,7 @@
               "h": 2
             },
             "type": "computed",
-            "formula": "=se(pontos_livres < 0, \"Pontos demais: antes da raça, o total é 13 (2 em cada + 3)\", se(pontos_livres > 0, \"Ainda há pontos para distribuir\", se(forca > 5 ou agilidade > 5 ou inteligencia > 5 ou espirito > 5 ou vigor > 5, \"Atributo acima de 5 antes da raça: só com aval do mestre\", se(forca < 2 ou agilidade < 2 ou inteligencia < 2 ou espirito < 2 ou vigor < 2, \"Atributo abaixo de 2: todos começam em 2\", se(raca == \"Humano\" e humano_bonus == \"A escolher\", \"Escolha o +1 do Humano no fim desta aba\", se(raca == \"Demônio\" e demonio_bonus == \"A escolher\", \"Escolha o +1 do Demônio no fim desta aba\", se(raca == \"Mutante\" e mutante_bonus == \"A escolher\", \"Escolha o +1 do Mutante no fim desta aba\", se(raca == \"Mutante\" e mutacao == \"A escolher\", \"Escolha a mutação no fim desta aba\", \"Distribuição certa\"))))))))",
+            "formula": "=se(pontos_livres < 0, \"Pontos demais: são 7 para distribuir, antes da raça\", se(pontos_livres > 0, \"Ainda há pontos para distribuir\", se(forca > 5 ou agilidade > 5 ou inteligencia > 5 ou espirito > 5 ou vigor > 5, \"Atributo acima de 5 antes da raça: só com aval do mestre\", se(forca < 0 ou agilidade < 0 ou inteligencia < 0 ou espirito < 0 ou vigor < 0, \"Atributo negativo: os pontos começam em 0\", se(raca == \"Humano\" e humano_bonus == \"A escolher\", \"Escolha o +1 do Humano no fim desta aba\", se(raca == \"Demônio\" e demonio_bonus == \"A escolher\", \"Escolha o +1 do Demônio no fim desta aba\", se(raca == \"Mutante\" e mutante_bonus == \"A escolher\", \"Escolha o +1 do Mutante no fim desta aba\", se(raca == \"Mutante\" e mutacao == \"A escolher\", \"Escolha a mutação no fim desta aba\", \"Distribuição certa\"))))))))",
             "format": "integer"
           },
           {
@@ -5171,7 +5171,7 @@
               "h": 2
             },
             "type": "computed",
-            "formula": "=se(arma1_for_minima > forca.mod, \"Falta FOR para esta arma\", \"Atendido\")",
+            "formula": "=se(arma1_for_minima > forca + raca_for, \"Falta FOR para esta arma\", \"Atendido\")",
             "format": "integer"
           },
           {
@@ -5365,7 +5365,7 @@
               "h": 2
             },
             "type": "computed",
-            "formula": "=se(arma2_for_minima > forca.mod, \"Falta FOR para esta arma\", \"Atendido\")",
+            "formula": "=se(arma2_for_minima > forca + raca_for, \"Falta FOR para esta arma\", \"Atendido\")",
             "format": "integer"
           },
           {
