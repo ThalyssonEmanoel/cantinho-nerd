@@ -1,0 +1,2 @@
+Donwload/ filter=lfs diff=lfs merge=lfs -text
+Donwload/** filter=lfs diff=lfs merge=lfs -text

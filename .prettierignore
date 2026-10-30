@@ -1,9 +1,0 @@
-node_modules
-out
-dist
-build
-package-lock.json
-# A especificação é o prompt original, mantido palavra por palavra.
-docs/ESPECIFICACAO.md
-# Gerado pela CLI do Supabase (npm run db:types).
-src/renderer/src/lib/db/database.types.ts
