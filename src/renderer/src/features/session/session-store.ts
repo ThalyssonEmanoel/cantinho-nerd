@@ -23,6 +23,7 @@ import type { SheetSummaryRow } from '@/lib/sheet'
 import { sheetRepository } from '@/features/sheets/repository'
 import { useSheetStore } from '@/features/sheets/sheet-store'
 import { useBoardStore } from '@/features/board/board-store'
+import { useCluesStore } from '@/features/clues/clues-store'
 import { useLiveStore } from '@/features/board/live-store'
 import { useChatStore } from '@/features/chat/chat-store'
 import { useCombatStore } from '@/features/combat/combat-store'
@@ -161,6 +162,15 @@ export const useSessionStore = create<SessionState>()((set, get) => {
     // O mestre limpou o log de combate (7.3).
     if (event === 'combat-log-cleared') useCombatStore.getState().applyLogCleared()
 
+    /*
+      Uma pista mudou de forma que pode ter saído da vista de alguém (Fase 13). Em vez de
+      dizer no aviso quem perdeu o acesso — o que contaria para a mesa inteira para quem a
+      pista estava revelada —, cada jogador reconfere no banco o que ele pode ver.
+    */
+    if (event === 'clue-gone' && get().session?.role !== 'gm') {
+      void useCluesStore.getState().reload()
+    }
+
     handleLiveBroadcast(event, payload)
   }
 
@@ -225,6 +235,9 @@ export const useSessionStore = create<SessionState>()((set, get) => {
       await useCombatStore.getState().open(sessionId)
       if (get().sessionId !== sessionId) return
 
+      await useCluesStore.getState().open(sessionId, role === 'gm')
+      if (get().sessionId !== sessionId) return
+
       let wasLive = false
       channel = openSessionChannel(
         sessionId,
@@ -240,6 +253,7 @@ export const useSessionStore = create<SessionState>()((set, get) => {
               void useBoardStore.getState().reloadTokens()
               void useBoardStore.getState().reloadDrawings()
               void useCombatStore.getState().reload()
+              void useCluesStore.getState().reload()
             }
             if (connection === 'live') wasLive = true
           },
@@ -264,6 +278,7 @@ export const useSessionStore = create<SessionState>()((set, get) => {
           onCombatLogChange: (change) => useCombatStore.getState().applyLogChange(change),
           onMessageChange: (change) => useChatStore.getState().applyChange('message', change),
           onRollChange: (change) => useChatStore.getState().applyChange('roll', change),
+          onClueChange: (change) => useCluesStore.getState().applyChange(change),
           onBroadcast: handleBroadcast
         }
       )
@@ -278,6 +293,7 @@ export const useSessionStore = create<SessionState>()((set, get) => {
       useBoardStore.getState().close()
       useChatStore.getState().close()
       useCombatStore.getState().close()
+      useCluesStore.getState().close()
       set({ ...emptyState })
     },
 

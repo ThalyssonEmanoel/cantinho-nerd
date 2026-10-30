@@ -377,9 +377,9 @@ Cada fase termina com algo que eu consigo abrir e testar.
 - [X] Excluir todas as minhas sessões e excluir conta (seção 9); tela de Configurações (sons, limpar cache, versão, verificar atualização, sair).
 
 **Fase 13 — Polimento**
-- [ ] Atalhos de teclado (V selecionar, H mãozinha, R régua, D desenho, E borracha, Del, Esc, +/−, F caber, Enter chat, N próximo turno) e tela de ajuda.
-- [ ] Notas privadas do mestre e **Pistas** (imagem/texto revelados para todos ou para jogadores escolhidos).
-- [ ] Abrir a ficha em janela separada (segundo monitor); estados vazios, carregamentos e erros; 60 fps com mapa de 4096 px e 50 tokens.
+- [X] Atalhos de teclado (V selecionar, H mãozinha, R régua, D desenho, E borracha, Del, Esc, +/−, F caber, Enter chat, N próximo turno) e tela de ajuda.
+- [X] Notas privadas do mestre e **Pistas** (imagem/texto revelados para todos ou para jogadores escolhidos).
+- [X] Abrir a ficha em janela separada (segundo monitor); estados vazios, carregamentos e erros; 60 fps com mapa de 4096 px e 50 tokens.
 
 ## 12. Fora do escopo da v1 (não implementar sem eu pedir)
 
@@ -541,3 +541,33 @@ Decidido na Fase 12 (30/10/2026):
 56. **Excluir as sessões**: a ficha de quem sai de uma mesa fica com o mestre dela, como
     quando alguém sai; uma mesa que falha não impede as outras, e a tela diz qual ficou.
 57. **Sons**: sussurro e "Sua vez!" ligam e desligam em separado, com botão para ouvir.
+
+Decidido na Fase 13 (30/10/2026), para confirmar no teste:
+
+58. **A ajuda é uma janela**, não uma página: F1, `?` ou o botão "?" no topo abrem por cima
+    do que estiver na tela, sem fazer ninguém sair da mesa. A tabela de teclas sai da mesma
+    lista que o tabuleiro usa de verdade, então a ajuda não envelhece sozinha.
+59. **Onde cada atalho vale:** ferramenta (V H R D E), zoom, F e Del só com o tabuleiro à
+    vista; Enter (chat) e N (turno) em qualquer tela da mesa, inclusive na ficha. Com o
+    cursor num campo ou uma janela aberta, atalho nenhum vale — ali o Esc é do campo e da
+    janela.
+60. **Notas e pistas ficam numa aba "Pistas"** do painel da direita. As notas do mestre
+    salvam sozinhas (como o rascunho do construtor). A pista nasce só dele e é revelada
+    depois: o olho na lista revela para a mesa inteira, e a janela da pista escolhe gente.
+61. **A pista pode ser só texto, só imagem ou os dois.** A imagem vai para
+    `sessions/<id>/clues/` e **só é legível por quem já pode ler a pista** — a política de
+    Storage da Fase 6 foi apertada para isso.
+62. **Revelar avisa o jogador** (aviso na tela e um ponto na aba). Esconder manda um aviso
+    pelo canal para quem perdeu o acesso reconferir as pistas — sem dizer para quem a pista
+    estava revelada, que seria contar o segredo para a mesa.
+63. **A ficha em janela separada** é uma janela nova do app, na mesma sessão do Electron:
+    compartilha o login com a principal (com "continuar conectado", que é o padrão). Nela
+    não há voltar para a mesa, chat ao lado, nem os avisos de "Sua vez!" e de pista — a
+    janela principal já dá os dois, e dois sons para a mesma coisa só atrapalham.
+64. **Abrir a ficha em outra janela devolve a janela principal para a mesa**: ficar com a
+    mesma ficha nas duas não ajuda ninguém.
+65. **Erro de renderização não dá mais janela branca:** cai numa tela com o motivo,
+    "Recarregar o app" e "Copiar o erro" para me mandar.
+66. **Os 60 fps continuam sendo teste de sensação** com o app aberto. O que entrou em teste
+    automático é o orçamento do que roda a cada quadro em JavaScript: as linhas da grade de
+    um mapa de 4096 px, a visão e a névoa com 50 tokens.

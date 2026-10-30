@@ -16,6 +16,7 @@ export interface CantinhoApi {
   writeCachedAsset: (key: string, data: Uint8Array) => Promise<boolean>
   assetCacheSize: () => Promise<number>
   clearAssetCache: () => Promise<number>
+  openSheetWindow: (sessionId: string, sheetId: string) => Promise<boolean>
   onDeepLink: (callback: (link: DeepLink) => void) => () => void
 }
 

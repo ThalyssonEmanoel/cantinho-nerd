@@ -1,4 +1,4 @@
-import { Dices, ImageIcon, Minus, Plus } from 'lucide-react'
+import { Dices, Minus, Plus } from 'lucide-react'
 import type { FormulaContext } from '@/lib/formula'
 import {
   formatComputedValue,
@@ -15,6 +15,7 @@ import { Select } from '@/components/ui/select'
 import { Textarea } from '@/components/ui/textarea'
 import { cn } from '@/lib/utils'
 import { FieldFrame } from './field-frame'
+import { ImageField } from './image-field'
 import { TableView } from './table-view'
 import { canEdit, type SheetRenderOptions } from './types'
 
@@ -139,15 +140,13 @@ export function ComponentView({
     case 'image':
       return (
         <FieldFrame component={component} showPermissions={showPermissions}>
-          <div
-            className={cn(
-              'bg-muted/40 text-muted-foreground flex h-full w-full items-center justify-center border border-dashed',
-              component.shape === 'circle' ? 'rounded-full' : 'rounded-md'
-            )}
-            title="O envio de imagens entra na Fase 6, junto com o Storage"
-          >
-            <ImageIcon className="size-5" />
-          </div>
+          <ImageField
+            componentId={component.id}
+            shape={component.shape}
+            path={typeof raw === 'string' ? raw : ''}
+            editable={editable}
+            options={options}
+          />
         </FieldFrame>
       )
 

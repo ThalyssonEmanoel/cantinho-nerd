@@ -18,7 +18,7 @@ import { errorMessage } from '@/lib/db/errors'
 import type { SessionRole } from '@/lib/db/sessions'
 import { applyTokenPatch, removeTokens, uploadTokenImage } from './board-actions'
 import { TokenCropEditor } from './token-crop-editor'
-import { useAssetImage } from './use-asset-image'
+import { useAssetImage } from '@/hooks/use-asset-image'
 
 interface TokenEditorDialogProps {
   /** Token a editar. O pai monta este componente com `key={token.id}`, então o estado

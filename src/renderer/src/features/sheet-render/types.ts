@@ -18,6 +18,13 @@ export interface RollRequest {
 export interface SheetRenderCallbacks {
   onChange?: (componentId: string, value: SheetValue) => void
   onRoll?: (request: RollRequest) => void
+  /**
+   * Envia a imagem de um campo (o retrato do personagem, 5.3) e grava o caminho.
+   *
+   * Sem isto o campo de imagem é só moldura: é o caso da pré-visualização do construtor,
+   * que não pertence a mesa nenhuma e portanto não tem onde guardar o arquivo.
+   */
+  uploadImage?: (componentId: string, image: Blob) => Promise<void>
 }
 
 export interface SheetRenderOptions extends SheetRenderCallbacks {

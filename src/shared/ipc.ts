@@ -14,7 +14,8 @@ export const IpcChannel = {
   readCachedAsset: 'asset:read',
   writeCachedAsset: 'asset:write',
   assetCacheSize: 'asset:cache-size',
-  clearAssetCache: 'asset:cache-clear'
+  clearAssetCache: 'asset:cache-clear',
+  openSheetWindow: 'window:open-sheet'
 } as const
 
 /** Limite dos arquivos de texto que o app lê e escreve (modelos de ficha em .json). */

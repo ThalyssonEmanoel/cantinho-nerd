@@ -5,7 +5,9 @@ import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
 import { PageHeader } from '@/components/page-header'
 import { SaveIndicator } from '@/components/save-indicator'
+import { portraitImagePath, uploadAsset } from '@/lib/db/assets'
 import { rollFormula, type RollSummary } from '@/lib/dice'
+import { sha256Hex } from '@/lib/image/upload'
 import {
   createSheetContext,
   mergedValues,
@@ -24,8 +26,9 @@ interface SheetFillPageProps {
   sheetId: string
   /** Quem está olhando, vindo do login e da sessão: o mestre vê e edita tudo (5.7). */
   audience: SheetAudience
-  backLabel: string
-  onBack: () => void
+  /** Sem `onBack` não há botão de voltar: é o caso da ficha em janela separada (Fase 13). */
+  backLabel?: string
+  onBack?: () => void
   /**
    * Para onde vão as rolagens dos botões. Na mesa, para o chat (Fase 7); sem isto, ficam
    * num painel local, como no teste do construtor.
@@ -33,6 +36,8 @@ interface SheetFillPageProps {
   onRoll?: (request: RollRequest) => void
   /** O que ocupa a coluna da direita no lugar do painel local (o chat da mesa). */
   sidePanel?: React.ReactNode
+  /** Botões extras no cabeçalho (abrir em outra janela, por exemplo). */
+  headerActions?: React.ReactNode
 }
 
 /**
@@ -49,7 +54,8 @@ export function SheetFillPage({
   backLabel,
   onBack,
   onRoll,
-  sidePanel
+  sidePanel,
+  headerActions
 }: SheetFillPageProps): React.JSX.Element {
   const store = useSheetStore()
   const {
@@ -102,6 +108,24 @@ export function SheetFillPage({
     () => (schema === null ? null : createSheetContext(schema, values).context),
     [schema, values]
   )
+
+  /**
+   * Envia a imagem de um campo da ficha (o retrato, 5.3) e grava o caminho como valor.
+   *
+   * O arquivo vai para a pasta da mesa (`portraits/`), que é onde o RLS deixa o jogador
+   * escrever (10.2); o nome é o hash do conteúdo, então mandar a mesma foto de novo não
+   * duplica nada.
+   */
+  async function uploadFieldImage(componentId: string, image: Blob): Promise<void> {
+    const sessionId = sheet?.sessionId
+    if (sessionId === undefined || sessionId === '') {
+      throw new Error('Esta ficha não está numa mesa, então não há onde guardar a foto.')
+    }
+
+    const path = portraitImagePath(sessionId, await sha256Hex(image))
+    await uploadAsset(path, image)
+    store.changeField(componentId, path)
+  }
 
   function handleRoll(request: RollRequest): void {
     if (onRoll !== undefined) {
@@ -168,15 +192,17 @@ export function SheetFillPage({
   return (
     <div className="flex h-full min-h-0 flex-col">
       <div className="flex flex-wrap items-center gap-2 border-b px-3 py-2">
-        <Button
-          variant="ghost"
-          size="icon"
-          onClick={onBack}
-          aria-label={backLabel}
-          title={backLabel}
-        >
-          <ArrowLeft className="size-4" />
-        </Button>
+        {onBack !== undefined && (
+          <Button
+            variant="ghost"
+            size="icon"
+            onClick={onBack}
+            aria-label={backLabel ?? 'Voltar'}
+            title={backLabel ?? 'Voltar'}
+          >
+            <ArrowLeft className="size-4" />
+          </Button>
+        )}
 
         <div className="min-w-0">
           <p className="truncate text-sm font-medium">
@@ -192,15 +218,18 @@ export function SheetFillPage({
         <Badge variant="secondary">v{sheet.templateVersion}</Badge>
         <SaveIndicator state={saveState} />
 
-        {audience === 'gm' && (
-          <span
-            className="text-muted-foreground ml-auto flex items-center gap-1 text-xs"
-            title="Você vê e edita também os campos que são só do mestre."
-          >
-            <Eye className="size-3" />
-            Vendo como mestre
-          </span>
-        )}
+        <div className="ml-auto flex items-center gap-2">
+          {audience === 'gm' && (
+            <span
+              className="text-muted-foreground flex items-center gap-1 text-xs"
+              title="Você vê e edita também os campos que são só do mestre."
+            >
+              <Eye className="size-3" />
+              Vendo como mestre
+            </span>
+          )}
+          {headerActions}
+        </div>
       </div>
 
       {migration !== null && (
@@ -269,7 +298,8 @@ export function SheetFillPage({
                 audience,
                 applyConditionalVisibility: true,
                 onChange: (componentId, value) => store.changeField(componentId, value),
-                onRoll: handleRoll
+                onRoll: handleRoll,
+                uploadImage: uploadFieldImage
               }}
             />
           </div>
@@ -293,17 +323,19 @@ function LoadProblem({
   onBack
 }: {
   message: string
-  backLabel: string
-  onBack: () => void
+  backLabel?: string
+  onBack?: () => void
 }): React.JSX.Element {
   return (
     <div className="mx-auto max-w-2xl space-y-4 p-8">
       <PageHeader title="Ficha" />
       <p className="text-muted-foreground text-sm">{message}</p>
-      <Button variant="outline" onClick={onBack}>
-        <ArrowLeft className="size-4" />
-        {backLabel}
-      </Button>
+      {onBack !== undefined && (
+        <Button variant="outline" onClick={onBack}>
+          <ArrowLeft className="size-4" />
+          {backLabel ?? 'Voltar'}
+        </Button>
+      )}
     </div>
   )
 }

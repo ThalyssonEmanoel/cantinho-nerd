@@ -57,6 +57,12 @@ interface ChatState {
   loadState: 'idle' | 'loading' | 'ready' | 'error'
   /** Itens de outras pessoas que chegaram com o chat fora da tela. */
   unread: number
+  /**
+   * Contador que sobe quando alguém pede o foco do chat (o Enter, Fase 13). A aba e o
+   * campo olham só a mudança do número — assim o pedido funciona mesmo se o painel ainda
+   * não estiver montado: ele foca ao aparecer.
+   */
+  focusRequest: number
   /** Quantos painéis de chat estão à vista agora (a mesa e a ficha têm cada uma o seu). */
   watchers: number
   macros: DiceMacro[]
@@ -66,6 +72,8 @@ interface ChatState {
   reload: () => Promise<void>
   /** Um painel de chat apareceu (true) ou saiu (false) da tela. */
   watch: (visible: boolean) => void
+  /** Pede o foco do campo de mensagem (abre a aba Chat se preciso). */
+  requestFocus: () => void
   applyChange: (kind: FeedItem['kind'], change: TableChange) => void
   applyCleared: (kind: FeedItem['kind']) => void
   sendInput: (
@@ -88,6 +96,7 @@ const emptyState = {
   feed: [],
   loadState: 'idle' as const,
   unread: 0,
+  focusRequest: 0,
   macros: []
 }
 
@@ -132,6 +141,8 @@ export const useChatStore = create<ChatState>()((set, get) => {
         console.warn('Não consegui recarregar o chat:', errorMessage(error))
       }
     },
+
+    requestFocus: () => set({ focusRequest: get().focusRequest + 1 }),
 
     watch: (visible) => {
       const watchers = Math.max(0, get().watchers + (visible ? 1 : -1))

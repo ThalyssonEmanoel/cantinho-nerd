@@ -12,6 +12,7 @@ import {
   zoomByStep,
   type BoardMap,
   type BoardToken,
+  type BoardTool,
   type Camera,
   type Drawing,
   type DrawingsCleared,
@@ -54,7 +55,7 @@ import { useLiveStore } from './live-store'
  * Os desenhos (6.5) são do mapa, como os tokens: trocar de mapa troca os dois.
  */
 
-export type BoardTool = 'select' | 'pan' | 'ruler' | 'draw' | 'erase' | 'fog'
+export type { BoardTool } from '@/lib/board'
 
 /** Cor inicial do traço: vermelho, que aparece bem em quase todo mapa. */
 export const DEFAULT_DRAW_COLOR = '#ef4444'

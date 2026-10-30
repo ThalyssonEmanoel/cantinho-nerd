@@ -1,7 +1,7 @@
 import { useEffect } from 'react'
 import { Loader2, X } from 'lucide-react'
 import { Button } from '@/components/ui/button'
-import { useAssetImage } from './use-asset-image'
+import { useAssetImage } from '@/hooks/use-asset-image'
 
 interface ImageLightboxProps {
   path: string | null

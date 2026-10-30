@@ -14,6 +14,53 @@ export type Database = {
   }
   public: {
     Tables: {
+      clues: {
+        Row: {
+          body: string
+          created_at: string
+          id: string
+          image_path: string | null
+          reveal_all: boolean
+          revealed_to: string[]
+          session_id: string
+          sort_order: number
+          title: string
+          updated_at: string
+        }
+        Insert: {
+          body?: string
+          created_at?: string
+          id?: string
+          image_path?: string | null
+          reveal_all?: boolean
+          revealed_to?: string[]
+          session_id: string
+          sort_order?: number
+          title?: string
+          updated_at?: string
+        }
+        Update: {
+          body?: string
+          created_at?: string
+          id?: string
+          image_path?: string | null
+          reveal_all?: boolean
+          revealed_to?: string[]
+          session_id?: string
+          sort_order?: number
+          title?: string
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "clues_session_id_fkey"
+            columns: ["session_id"]
+            isOneToOne: false
+            referencedRelation: "sessions"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       combat_entries: {
         Row: {
           created_at: string
@@ -651,6 +698,32 @@ export type Database = {
             columns: ["user_id"]
             isOneToOne: false
             referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      session_notes: {
+        Row: {
+          body: string
+          session_id: string
+          updated_at: string
+        }
+        Insert: {
+          body?: string
+          session_id: string
+          updated_at?: string
+        }
+        Update: {
+          body?: string
+          session_id?: string
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "session_notes_session_id_fkey"
+            columns: ["session_id"]
+            isOneToOne: true
+            referencedRelation: "sessions"
             referencedColumns: ["id"]
           },
         ]

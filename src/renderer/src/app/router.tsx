@@ -57,6 +57,15 @@ export function AppRouter(): React.JSX.Element {
             <Route path="/profile" element={<ProfilePage />} />
             <Route path="/settings" element={<SettingsPage />} />
           </Route>
+
+          {/*
+            Fora do AppLayout: a janela separada da ficha (Fase 13) não tem a navegação do
+            app, só a ficha. Ela compartilha o login com a janela principal porque está na
+            mesma sessão do Electron.
+          */}
+          <Route path="/window/session/:sessionId" element={<SessionLayout bare />}>
+            <Route path="sheets/:sheetId" element={<SessionSheetPage bare />} />
+          </Route>
         </Route>
         <Route path="*" element={<NotFoundPage />} />
       </Routes>

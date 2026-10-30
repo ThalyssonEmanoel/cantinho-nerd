@@ -1,6 +1,6 @@
 import { PawPrint } from 'lucide-react'
 import { cn } from '@/lib/utils'
-import { useAssetImage } from '@/features/board/use-asset-image'
+import { useAssetImage } from '@/hooks/use-asset-image'
 
 /** A imagem da criatura num círculo, como o token dela vai ficar (ou um ícone, sem imagem). */
 export function CreatureThumb({

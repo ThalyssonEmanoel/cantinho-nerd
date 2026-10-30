@@ -91,17 +91,25 @@ function spotFor(options: PlaceOptions, size: number): Point {
   return snapToGrid(free, map.grid, size)
 }
 
-/** O jogador coloca o próprio token, ligado à ficha dele (6.3). */
+/**
+ * O jogador coloca o próprio token, ligado à ficha dele (6.3).
+ *
+ * A imagem vem do retrato da ficha (papel `portrait`, 5.6): é para isso que o papel existe,
+ * e o arquivo já está na pasta da mesa, que todos os membros leem.
+ */
 export async function placeMyToken(
-  options: PlaceOptions & { sheetId: string | null; name: string }
+  options: PlaceOptions & { sheetId: string | null; name: string; portrait?: string | null }
 ): Promise<BoardToken> {
   const point = spotFor(options, 1)
+  const portrait = options.portrait ?? null
+
   return createToken({
     sessionId: options.map.sessionId,
     mapId: options.map.id,
     kind: 'player',
     name: options.name,
     sheetId: options.sheetId,
+    ...(portrait === null || portrait === '' ? {} : { imagePath: portrait }),
     x: point.x,
     y: point.y,
     z: nextZ(options.tokens)

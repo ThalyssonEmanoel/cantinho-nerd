@@ -17,7 +17,7 @@ import {
 import { consumePendingDeepLink } from './deep-link'
 import { profileName } from './profile'
 import { openExternalSafely } from './security'
-import { getMainWindow } from './window'
+import { createSheetWindow, getMainWindow } from './window'
 
 /** Filtros vindos do renderer: só o que a janela de arquivo precisa, sem sobras. */
 function sanitizeFilters(value: unknown): FileFilter[] | undefined {
@@ -141,4 +141,10 @@ export function registerIpcHandlers(): void {
   // Tela de Configurações: tamanho e limpeza do cache. Não recebem nada do renderer.
   ipcMain.handle(IpcChannel.assetCacheSize, () => assetCacheSize())
   ipcMain.handle(IpcChannel.clearAssetCache, () => clearAssetCache())
+
+  // Ficha em janela separada (Fase 13). Os ids são conferidos no `createSheetWindow`.
+  ipcMain.handle(IpcChannel.openSheetWindow, (_event, request: unknown) => {
+    const { sessionId, sheetId } = (request ?? {}) as { sessionId?: unknown; sheetId?: unknown }
+    return createSheetWindow(sessionId, sheetId)
+  })
 }

@@ -1,5 +1,6 @@
 import {
   BookOpen,
+  CircleHelp,
   Dices,
   Loader2,
   LogOut,
@@ -17,6 +18,8 @@ import { Button } from '@/components/ui/button'
 import { UserAvatar } from '@/components/user-avatar'
 import { useAppInfo } from '@/hooks/use-app-info'
 import { useSignOut } from '@/hooks/use-sign-out'
+import { HelpOverlay } from '@/features/help/help-overlay'
+import { useHelpStore } from '@/features/help/help-store'
 import { useAuthStore } from '@/stores/auth-store'
 import { cn } from '@/lib/utils'
 
@@ -72,6 +75,16 @@ export function AppLayout(): React.JSX.Element {
           )}
           <span className="text-muted-foreground text-xs">v{info?.version ?? '…'}</span>
 
+          <Button
+            variant="ghost"
+            size="icon"
+            onClick={() => useHelpStore.getState().openHelp()}
+            aria-label="Ajuda"
+            title="Ajuda e atalhos (F1)"
+          >
+            <CircleHelp className="size-4" />
+          </Button>
+
           {profile !== null && (
             <NavLink
               to="/profile"
@@ -97,6 +110,9 @@ export function AppLayout(): React.JSX.Element {
       <main className="min-h-0 flex-1 overflow-auto">
         <Outlet />
       </main>
+
+      {/* F1 e `?` em qualquer tela do app (Fase 13). */}
+      <HelpOverlay />
     </div>
   )
 }

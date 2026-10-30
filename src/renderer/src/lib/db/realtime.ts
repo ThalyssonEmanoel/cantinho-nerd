@@ -45,6 +45,8 @@ export interface SessionChannelHandlers {
   /** Chat e rolagens (7.1, 7.2). Sussurro e rolagem secreta só chegam a quem pode ver. */
   onMessageChange: (change: TableChange) => void
   onRollChange: (change: TableChange) => void
+  /** Pistas (Fase 13). O jogador só recebe o que foi revelado para ele. */
+  onClueChange: (change: TableChange) => void
   /** Mensagens efêmeras, que não passam pelo banco (10.3). */
   onBroadcast: (event: BroadcastEvent, payload: Record<string, unknown>) => void
 }
@@ -67,6 +69,8 @@ export interface SessionChannelHandlers {
  * - `ping`: Alt+clique, um pulso no ponto para todos (6.5).
  * - `reaction`: emoji sobre um token (6.3). Nunca de token oculto.
  * - `combat-log-cleared`: o mestre limpou o log de combate (como o `feed-cleared`).
+ * - `clue-gone`: uma pista deixou de estar revelada para alguém. Mesmo motivo do
+ *   `token-gone`: o UPDATE que a esconde não chega a quem não pode mais vê-la.
  */
 export type BroadcastEvent =
   | 'token-drag'
@@ -80,6 +84,7 @@ export type BroadcastEvent =
   | 'ping'
   | 'reaction'
   | 'combat-log-cleared'
+  | 'clue-gone'
 
 const BROADCAST_EVENTS: readonly BroadcastEvent[] = [
   'token-drag',
@@ -92,7 +97,8 @@ const BROADCAST_EVENTS: readonly BroadcastEvent[] = [
   'ruler',
   'ping',
   'reaction',
-  'combat-log-cleared'
+  'combat-log-cleared',
+  'clue-gone'
 ]
 
 export interface SessionChannel {
@@ -236,6 +242,11 @@ export function openSessionChannel(
         'postgres_changes',
         { event: '*', schema: 'public', table: 'rolls', filter: `session_id=eq.${sessionId}` },
         (payload) => handlers.onRollChange(toChange(payload))
+      )
+      .on(
+        'postgres_changes',
+        { event: '*', schema: 'public', table: 'clues', filter: `session_id=eq.${sessionId}` },
+        (payload) => handlers.onClueChange(toChange(payload))
       )
 
     for (const event of BROADCAST_EVENTS) {

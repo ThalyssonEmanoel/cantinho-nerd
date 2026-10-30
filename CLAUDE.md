@@ -55,13 +55,14 @@ fases do projeto (seção 11). Leia-a antes de qualquer tarefa não trivial.
 scripts/     wrappers do npm (ambiente limpo para subir o Electron)
 supabase/    config.toml da CLI e migrations/ (uma por mudança de banco, nunca editar a aplicada)
 src/
-  main/      processo principal: janela, segurança (CSP, navegação), deep link, instância única, IPC,
-             cache em disco das imagens do Storage (asset-cache)
+  main/      processo principal: janela (principal e a da ficha em separado), segurança (CSP,
+             navegação), deep link, instância única, IPC, cache em disco das imagens (asset-cache)
   preload/   ponte mínima via contextBridge (window.api)
   shared/    lógica pura usada pelos dois lados (deep link, CSP, política de navegação)
   renderer/src/
-    app/         router (HashRouter), layout, ponte do deep link, portão de login (require-auth)
-    features/    uma pasta por área (auth, profile, sheet-builder, board, formula-guide, …)
+    app/         router (HashRouter), layout, ponte do deep link, portão de login (require-auth),
+                 limite de erro da interface (error-boundary)
+    features/    uma pasta por área (auth, profile, sheet-builder, board, clues, help, …)
     components/  componentes compartilhados (seletor de cor, avatar…); `ui/` é o shadcn
     lib/         utilidades e lógica pura
       db/        ÚNICO lugar que fala com o Supabase: cliente, auth, perfis, modelos, erros
@@ -72,6 +73,10 @@ src/
       formula/   motor de fórmulas: tokenizer, parser (Pratt), avaliador, grafo de dependências
       dice/      motor de dados: interpolação dos `{…}`, rolagem, regras de crítico, geradores
       sheet/     modelo de ficha: tipos, zod, chaves, validação, contexto de fórmulas, repositório
+      board/     tabuleiro: câmera, grade, distância, névoa, condições, desenho, atalhos de teclado
+      combat/    ordem dos turnos, iniciativa, dano/cura
+      bestiary/  tags, busca, grupos do encontro, posicionamento
+      session/   convite, senha amigável e pistas (para quem cada uma está revelada)
     test/        preparação do jsdom e ajudantes dos testes de montagem
     hooks/       hooks compartilhados
     stores/      Zustand, um store por área (app, auth)
@@ -715,4 +720,91 @@ Pendências, de propósito:
 - O `electron-updater` segue instalado e sem uso; dá para tirar do `package.json` se a
   decisão 54 ficar.
 
-**Próxima fase: 13 — Polimento.** Só começar depois do ok dele.
+**Fase 13 (Polimento) — implementada, aguardando teste.** 949 testes. **Última fase.**
+
+Falta aplicar a migração `20261030150000_notes_and_clues.sql` (junto com as das Fases 6 a
+11, se ainda não foram) e rodar `npm run db:types`. As decisões de produto estão no fim da
+especificação (itens 58 a 66). A Fase 12 segue incompleta **de propósito** (decisão 54:
+sem site, sem convite https, sem atualização automática) — pedido do Thalysson.
+
+- Migração: `session_notes` (uma por mesa, só o mestre lê) e `clues` (texto e/ou imagem,
+  reveladas para a mesa ou para uma lista de jogadores), com RLS. A política de leitura do
+  bucket `assets` foi **apertada**: a pasta `clues/` saiu da regra geral e a imagem de uma
+  pista só é legível por quem já pode ler a pista. Testada no PGlite em cima das migrações
+  4 a 11 (16 checagens).
+- `lib/board/shortcuts.ts`: a tecla → ação, puro e testado (inclusive "digitando num campo
+  não vale" e "com janela aberta não vale"). `SHORTCUTS` é a mesma lista que a ajuda mostra.
+- `lib/session/clues.ts`: para quem a pista está revelada, rótulo da lista, validação e
+  `losesAccess` (a mudança tirou o acesso de alguém?).
+- `lib/db/clues.ts`, `lib/db/notes.ts`, `lib/db/clue-rows.ts` (conversão testada).
+- `features/clues/`: store (notas com salvamento automático + pistas pelo tempo real),
+  ações, painel da aba Pistas, janela da pista e o `ClueNotifier` ("o mestre revelou uma
+  pista") na casca da sessão.
+- `features/help/`: a janela de ajuda (F1, `?` ou o botão no topo) com a tabela de teclas e
+  um resumo de como as peças se encaixam.
+- `features/board/use-board-shortcuts.ts`: **um** ouvinte de teclado para a mesa inteira.
+- `main/window.ts` + IPC `window:open-sheet`: a ficha em janela separada. A rota
+  `/window/session/:id/sheets/:id` usa `SessionLayout bare`.
+- `app/error-boundary.tsx`: erro de renderização virou tela com motivo e "Recarregar".
+- `lib/board/frame-budget.test.ts`: orçamento do que roda a cada quadro (grade de 4096 px,
+  visão e névoa com 50 tokens).
+
+Decisões e armadilhas registradas:
+
+- **Teclado num lugar só.** Antes a mesa tinha `keydown` em três componentes; agora o
+  `use-board-shortcuts` é o único (fora o Espaço da mãozinha, que precisa do `keyup`, e o
+  F1 da ajuda, que vive na casca do app justamente para valer fora da mesa).
+- **A ajuda não pode ter dois donos:** o F1 só é tratado pelo `HelpOverlay`. Quando o
+  atalho do tabuleiro também abria, F1 virava "abre e fecha ao mesmo tempo" e a janela
+  nunca fechava.
+- **Esconder uma pista avisa pelo canal, sem dizer para quem ela estava revelada**: o aviso
+  é só "reconfira as suas pistas", e cada jogador relê do banco. Dizer quem perdeu o acesso
+  contaria o segredo para a mesa.
+- **`BoardTool` mudou de casa** (do store para `lib/board/types`): os atalhos são lógica
+  pura e não podem importar de `features/`.
+- **A janela da ficha compartilha o login** porque está na mesma sessão do Electron — mas
+  só com "continuar conectado" (o padrão). Sem ele, o token está no `sessionStorage`, que é
+  por janela, e a janela nova pede login (o portão de rotas cuida disso).
+- **Dividir o bundle foi medido e descartado:** com as telas pesadas em `lazy`, só ~340 kB
+  de 5,6 MB saem do carregamento inicial (6%) — o resto é compartilhado com a mesa. Num app
+  que carrega de `file://` isso é tempo de parse, não download. Se um dia a abertura
+  incomodar, o caminho é separar a ficha e o tabuleiro, não as telas de fora.
+- O `isTypingTarget` não usa `instanceof HTMLElement`: assim os atalhos são testáveis no
+  ambiente sem DOM.
+
+Pendências, de propósito:
+
+- Os 60 fps são teste de sensação com o app aberto; o automático é o orçamento por quadro.
+- `build/icon.ico` continua faltando (o instalador usa o ícone do Electron).
+- Fora do escopo da v1 (seção 12) segue fora: celular, Linux, voz, dados 3D, névoa com
+  paredes, co-mestre, backup da sessão.
+
+**Retrato do personagem (correção depois da Fase 13) — feito, aguardando teste.** 957 testes.
+
+O campo de imagem da ficha tinha ficado como marcador na Fase 3 ("o envio entra na Fase 6")
+e a Fase 6 ligou mapas, tokens e galeria — a ficha ficou de fora. O Thalysson achou no
+teste: não dava nem para clicar. Não precisou de migração (o bucket e as políticas da Fase
+6 já previam `sessions/<id>/portraits/`, onde o **jogador** pode escrever).
+
+- `features/sheet-render/image-field.tsx`: o campo mostra a foto guardada, abre o
+  enquadramento e envia. Sem `uploadImage` nas opções (a prévia do construtor e o stat block
+  do bestiário, que não pertencem a mesa nenhuma) continua sendo só moldura, agora com dica.
+- `components/image-cropper.tsx`: o recortador do avatar virou compartilhado (título, rótulo,
+  tamanho salvo e forma do quadro viraram props). O retrato salva em 512 px, porque ele
+  também é a imagem do token.
+- `hooks/use-asset-image.ts`: o gancho saiu de `features/board/` (três áreas o usam).
+- `SheetSummaryRow.portrait` + `placeMyToken`: o token do jogador nasce com o retrato da
+  ficha — é para isso que o papel `portrait` existe (5.6).
+
+Decisões e armadilhas registradas:
+
+- **O valor do campo é o caminho no Storage** (5.3), e o nome do arquivo é o hash do
+  conteúdo: mandar a mesma foto de novo não duplica nada. A foto antiga fica no bucket (um
+  token pode estar usando o mesmo arquivo); a limpeza é a da sessão/conta.
+- **"Puxar jogadores" (Fase 10) ainda cria token sem imagem**: aquela RPC roda no banco e
+  não lê o retrato. Quando incomodar, o caminho é a RPC copiar `summary->>'portrait'`.
+- No jsdom o `blob:` nunca dispara `onload`: nos testes do campo, o gancho da imagem é
+  dublado. É o jeito de testar o campo sem testar o download.
+
+**Todas as fases da especificação estão implementadas.** O que vier agora é pedido novo:
+antes de mexer, confira a seção 12 (fora do escopo) e pergunte.

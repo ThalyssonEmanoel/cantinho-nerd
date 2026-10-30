@@ -1,5 +1,6 @@
 import { StrictMode } from 'react'
 import { createRoot } from 'react-dom/client'
+import { ErrorBoundary } from './app/error-boundary'
 import { AppRouter } from './app/router'
 import './styles/globals.css'
 
@@ -8,6 +9,9 @@ if (container === null) throw new Error('Elemento #root não encontrado no index
 
 createRoot(container).render(
   <StrictMode>
-    <AppRouter />
+    {/* Erro de renderização em qualquer tela cai aqui, e não numa janela branca. */}
+    <ErrorBoundary>
+      <AppRouter />
+    </ErrorBoundary>
   </StrictMode>
 )

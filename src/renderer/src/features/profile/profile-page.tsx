@@ -2,6 +2,7 @@ import { useCallback, useRef, useState } from 'react'
 import { Camera, Loader2, RefreshCw, Trash2 } from 'lucide-react'
 import { toast } from 'sonner'
 import { Link } from 'react-router-dom'
+import { ImageCropper } from '@/components/image-cropper'
 import { PageHeader } from '@/components/page-header'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent } from '@/components/ui/card'
@@ -26,7 +27,7 @@ import {
 } from '@/lib/db/profiles'
 import { sha256Hex, validateImageFile } from '@/lib/image/upload'
 import { useAuthStore } from '@/stores/auth-store'
-import { AvatarCropper } from './avatar-cropper'
+
 
 /** Perfil (seção 9): nome de exibição, bio e avatar com recorte circular. */
 export function ProfilePage(): React.JSX.Element {
@@ -253,7 +254,7 @@ function ProfileForm({ profile }: { profile: Profile }): React.JSX.Element {
         </form>
       </CardContent>
 
-      <AvatarCropper file={pendingFile} onCancel={cancelCrop} onConfirm={saveAvatar} />
+      <ImageCropper file={pendingFile} onCancel={cancelCrop} onConfirm={saveAvatar} />
     </Card>
   )
 }

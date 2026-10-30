@@ -10,7 +10,7 @@ import {
   type GridSettings,
   type Point
 } from '@/lib/board'
-import { useAssetImage } from './use-asset-image'
+import { useAssetImage } from '@/hooks/use-asset-image'
 
 interface TokenShapeProps {
   token: BoardToken
@@ -23,7 +23,10 @@ interface TokenShapeProps {
   draggable: boolean
   /** O mestre vê o token oculto semitransparente e sempre vê o nome de verdade (6.3). */
   isGm: boolean
-  /** Zoom da câmera: o que é medida de tela (moldura, texto) é dividido por ele. */
+  /**
+   * Zoom da câmera: o que é medida de tela (moldura, texto) é dividido por ele. Chega
+   * arredondado em duas casas, para um giro mínimo da roda não redesenhar 50 tokens.
+   */
   scale: number
   onSelect: (event: KonvaEventObject<MouseEvent>) => void
   onDragMove: (point: Point) => void
@@ -108,8 +111,9 @@ export const TokenShape = memo(function TokenShape({
         />
       )}
 
-      {/* Fundo: aparece quando não há imagem e por baixo dela enquanto carrega. */}
-      <Circle x={radius} y={radius} radius={radius} fill="#111827" />
+      {/* Fundo: aparece quando não há imagem e por baixo dela enquanto carrega. É ele
+          quem recebe o clique — as molduras por cima ficam fora da detecção. */}
+      <Circle x={radius} y={radius} radius={radius} fill="#111827" perfectDrawEnabled={false} />
 
       {crop !== null && image !== null && (
         <Group
@@ -136,6 +140,8 @@ export const TokenShape = memo(function TokenShape({
         stroke={TOKEN_KIND_COLORS[token.kind]}
         strokeWidth={frame}
         dash={token.hidden ? [frame * 3, frame * 2] : undefined}
+        listening={false}
+        perfectDrawEnabled={false}
       />
 
       {selected && (
@@ -147,6 +153,7 @@ export const TokenShape = memo(function TokenShape({
           strokeWidth={frame}
           dash={[frame * 4, frame * 3]}
           listening={false}
+          perfectDrawEnabled={false}
         />
       )}
 
@@ -155,13 +162,21 @@ export const TokenShape = memo(function TokenShape({
         const y = side + index * (barHeight + 1)
         return (
           <Group key={item.key} listening={false}>
-            <Rect y={y} width={side} height={barHeight} fill="#00000080" cornerRadius={barHeight} />
+            <Rect
+              y={y}
+              width={side}
+              height={barHeight}
+              fill="#00000080"
+              cornerRadius={barHeight}
+              perfectDrawEnabled={false}
+            />
             <Rect
               y={y}
               width={width}
               height={barHeight}
               cornerRadius={barHeight}
               fill={item.key === 'hp' ? hpColor(item.bar) : item.key === 'bar2' ? '#60a5fa' : '#c084fc'}
+              perfectDrawEnabled={false}
             />
           </Group>
         )
@@ -181,6 +196,7 @@ export const TokenShape = memo(function TokenShape({
           strokeWidth={fontSize / 6}
           fillAfterStrokeEnabled
           listening={false}
+          perfectDrawEnabled={false}
         />
       )}
     </Group>

@@ -8,7 +8,7 @@ import {
   type CropState
 } from '@/lib/image/crop'
 import { fromCropState, toCropState, type TokenCrop } from '@/lib/board'
-import { useAssetImage } from './use-asset-image'
+import { useAssetImage } from '@/hooks/use-asset-image'
 
 /** Lado do quadro de reenquadramento na tela. */
 const VIEWPORT = 176

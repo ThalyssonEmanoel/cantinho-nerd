@@ -18,7 +18,7 @@ import {
 import { MAX_TOKEN_SIDE, prepareImageForUpload, validateImageFile } from '@/lib/image/upload'
 import { useAuthStore } from '@/stores/auth-store'
 import { cn } from '@/lib/utils'
-import { useAssetImage } from './use-asset-image'
+import { useAssetImage } from '@/hooks/use-asset-image'
 
 interface GalleryPickerProps {
   open: boolean

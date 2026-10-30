@@ -35,12 +35,20 @@ export function ChatPanel(): React.JSX.Element | null {
   const [clearing, setClearing] = useState<'message' | 'roll' | null>(null)
   const scroller = useRef<HTMLDivElement>(null)
   const stickToBottom = useRef(true)
+  const messageField = useRef<HTMLInputElement>(null)
+  const focusRequest = useChatStore((state) => state.focusRequest)
 
   // O chat à vista zera as não lidas (7.2); fora da tela, elas contam.
   useEffect(() => {
     useChatStore.getState().watch(true)
     return () => useChatStore.getState().watch(false)
   }, [])
+
+  // Alguém apertou Enter fora de um campo (Fase 13): o cursor vem para cá. Roda também na
+  // montagem, que é o caso de a aba Chat ter acabado de aparecer por causa do atalho.
+  useEffect(() => {
+    messageField.current?.focus()
+  }, [focusRequest])
 
   // Chegou coisa nova: acompanha o fim, a não ser que a pessoa tenha rolado para ler o antigo.
   useEffect(() => {
@@ -199,6 +207,7 @@ export function ChatPanel(): React.JSX.Element | null {
               ))}
             </Select>
             <Input
+              ref={messageField}
               className="h-8 text-sm"
               value={text}
               maxLength={2000}

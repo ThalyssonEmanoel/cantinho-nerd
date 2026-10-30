@@ -103,6 +103,9 @@ export {
   strokeWidthFor
 } from './drawing'
 
+export type { ShortcutAction, ShortcutContext, ShortcutHelp } from './shortcuts'
+export { isTypingTarget, SHORTCUTS, shortcutFor } from './shortcuts'
+
 export type { Measurement } from './ruler'
 export { formatSquares, measure, rulerLabel, rulerPoint } from './ruler'
 

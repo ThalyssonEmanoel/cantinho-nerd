@@ -31,6 +31,8 @@ export interface SheetSummaryRow {
   name: string
   /** Barras dos papéis, para a lista mostrar a vida sem abrir a ficha. */
   bars: SheetRecord['summary']['bars']
+  /** Caminho do retrato (papel `portrait`): é a imagem padrão do token (5.6). */
+  portrait?: string | null
   updatedAt: string
   /** Sessão e dono (Fase 5). As fichas locais da Fase 3 não têm. */
   sessionId?: string
@@ -78,6 +80,7 @@ export function summarizeSheet(sheet: SheetRecord): SheetSummaryRow {
     ownerName: sheet.ownerName,
     name: sheet.summary.name ?? '',
     bars: sheet.summary.bars,
+    portrait: sheet.summary.portrait ?? null,
     updatedAt: sheet.updatedAt,
     sessionId: sheet.sessionId,
     ownerId: sheet.ownerId

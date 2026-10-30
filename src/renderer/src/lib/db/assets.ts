@@ -142,6 +142,14 @@ export function tokenImagePath(sessionId: string, hash: string): string {
   return `sessions/${sessionId}/tokens/${hash}.webp`
 }
 
+/**
+ * Retrato do personagem (5.3). Pasta separada de propósito: a política do Storage deixa o
+ * **jogador** escrever em `tokens/` e `portraits/`, e só o mestre no resto da mesa (10.2).
+ */
+export function portraitImagePath(sessionId: string, hash: string): string {
+  return `sessions/${sessionId}/portraits/${hash}.webp`
+}
+
 export function galleryImagePath(userId: string, hash: string): string {
   return `users/${userId}/gallery/${hash}.webp`
 }

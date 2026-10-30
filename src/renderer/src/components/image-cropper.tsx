@@ -14,7 +14,8 @@ import {
   type CropState,
   type Size
 } from '@/lib/image/crop'
-import { loadImageFile, renderCropToWebp } from '@/lib/image/upload'
+import { AVATAR_SIZE, loadImageFile, renderCropToWebp } from '@/lib/image/upload'
+import { cn } from '@/lib/utils'
 
 /** Lado do quadro de recorte na tela. */
 const VIEWPORT = 240
@@ -25,23 +26,39 @@ interface LoadedImage {
   size: Size
 }
 
-interface AvatarCropperProps {
+interface ImageCropperProps {
   /** Arquivo escolhido. Com arquivo, a janela abre. */
   file: File | null
   onCancel: () => void
   /** Recebe o recorte já em WebP. A janela fica esperando enquanto ele envia. */
   onConfirm: (image: Blob) => Promise<void>
+  title?: string
+  description?: string
+  confirmLabel?: string
+  /** Lado da imagem salva, em pixels. O avatar usa 256; um retrato de ficha, mais. */
+  size?: number
+  /** O quadro é redondo (avatar, token) ou quadrado (retrato de ficha retangular). */
+  shape?: 'circle' | 'rect'
 }
 
 /**
- * Recorte circular do avatar (seção 9). Arrastar move a foto dentro do círculo; a roda do
- * mouse e o controle aproximam. O que está no círculo é exatamente o que vai ser salvo.
+ * Recorte de imagem numa janela (seções 9 e 5.3). Arrastar move a foto dentro do quadro; a
+ * roda do mouse e o controle aproximam. O que está no quadro é exatamente o que vai ser
+ * salvo, já convertido para WebP.
+ *
+ * Serve ao avatar da conta e ao retrato da ficha: a conta é a mesma, muda só o tamanho
+ * salvo e a forma do quadro.
  */
-export function AvatarCropper({
+export function ImageCropper({
   file,
   onCancel,
-  onConfirm
-}: AvatarCropperProps): React.JSX.Element {
+  onConfirm,
+  title = 'Enquadrar a foto',
+  description = 'Arraste para posicionar. Use a roda do mouse ou o controle para aproximar.',
+  confirmLabel = 'Salvar foto',
+  size = AVATAR_SIZE,
+  shape = 'circle'
+}: ImageCropperProps): React.JSX.Element {
   const [loaded, setLoaded] = useState<LoadedImage | null>(null)
   const [crop, setCrop] = useState<CropState>(INITIAL_CROP)
   const [saving, setSaving] = useState(false)
@@ -87,7 +104,11 @@ export function AvatarCropper({
     if (loaded === null) return
     setSaving(true)
     try {
-      const blob = await renderCropToWebp(loaded.image, cropSourceRect(crop, loaded.size, VIEWPORT))
+      const blob = await renderCropToWebp(
+        loaded.image,
+        cropSourceRect(crop, loaded.size, VIEWPORT),
+        size
+      )
       await onConfirm(blob)
     } catch (error) {
       toast.error('Não consegui salvar a foto', {
@@ -103,8 +124,8 @@ export function AvatarCropper({
   return (
     <Dialog
       open={file !== null}
-      title="Enquadrar a foto"
-      description="Arraste para posicionar. Use a roda do mouse ou o controle para aproximar."
+      title={title}
+      description={description}
       onClose={() => {
         if (!saving) onCancel()
       }}
@@ -116,14 +137,17 @@ export function AvatarCropper({
           </Button>
           <Button disabled={loaded === null || saving} onClick={() => void handleConfirm()}>
             {saving && <Loader2 className="size-4 animate-spin" />}
-            Salvar foto
+            {confirmLabel}
           </Button>
         </>
       }
     >
       <div className="flex flex-col items-center gap-4">
         <div
-          className="bg-muted/40 relative cursor-grab touch-none overflow-hidden rounded-full ring-2 ring-white/20 active:cursor-grabbing"
+          className={cn(
+            'bg-muted/40 relative cursor-grab touch-none overflow-hidden ring-2 ring-white/20 active:cursor-grabbing',
+            shape === 'circle' ? 'rounded-full' : 'rounded-md'
+          )}
           style={{ width: VIEWPORT, height: VIEWPORT }}
           onPointerDown={(event) => {
             event.currentTarget.setPointerCapture(event.pointerId)

@@ -1,7 +1,8 @@
-import { useState } from 'react'
+import { useEffect, useState } from 'react'
 import {
   ChevronLeft,
   ChevronRight,
+  Lightbulb,
   Loader2,
   MessageSquare,
   ScrollText,
@@ -26,21 +27,41 @@ import { ChatPanel } from '@/features/chat/chat-panel'
 import { useChatStore } from '@/features/chat/chat-store'
 import { CombatPanel } from '@/features/combat/combat-panel'
 import { useCombatStore } from '@/features/combat/combat-store'
+import { CluesPanel } from '@/features/clues/clues-panel'
+import { useCluesStore } from '@/features/clues/clues-store'
 import { useSessionStore } from './session-store'
 
-type PanelTab = 'chat' | 'combat' | 'table'
+type PanelTab = 'chat' | 'combat' | 'clues' | 'table'
 
 /**
  * A mesa: o tabuleiro no centro (seção 6) e, à direita, o chat com os dados (7), o combate
- * (7.3) e a aba da mesa (mapas, fichas e quem está na sessão). O painel recolhe para o
- * tabuleiro ocupar a janela toda (6.1) — e aí as não lidas aparecem no botão de abrir.
+ * (7.3), as pistas (Fase 13) e a aba da mesa (mapas, fichas e quem está na sessão). O
+ * painel recolhe para o tabuleiro ocupar a janela toda (6.1) — e aí as não lidas aparecem
+ * no botão de abrir.
  */
 export function SessionTablePage(): React.JSX.Element {
   const role = useSessionStore((state) => state.session?.role ?? 'player')
   const unread = useChatStore((state) => state.unread)
   const fighting = useCombatStore((state) => state.state.active)
+  const unseenClues = useCluesStore((state) => state.unseen.length)
   const [panelOpen, setPanelOpen] = useState(true)
   const [tab, setTab] = useState<PanelTab>('chat')
+
+  /*
+    Enter fora de um campo leva o cursor para o chat (Fase 13). O painel pode estar
+    recolhido ou noutra aba, então o pedido abre o chat primeiro — e é uma inscrição no
+    store, não um efeito que grava estado no corpo: é o canal certo para um evento vindo
+    de fora do React.
+  */
+  useEffect(
+    () =>
+      useChatStore.subscribe((state, previous) => {
+        if (state.focusRequest === previous.focusRequest) return
+        setPanelOpen(true)
+        setTab('chat')
+      }),
+    []
+  )
 
   return (
     <div className="flex h-full min-h-0">
@@ -61,7 +82,7 @@ export function SessionTablePage(): React.JSX.Element {
 
       {panelOpen && (
         <aside className="flex w-80 shrink-0 flex-col border-l">
-          <div className="grid grid-cols-3 gap-1 border-b p-1.5" role="tablist">
+          <div className="grid grid-cols-4 gap-1 border-b p-1.5" role="tablist">
             <TabButton active={tab === 'chat'} onClick={() => setTab('chat')}>
               <MessageSquare className="size-3.5" />
               Chat
@@ -75,6 +96,13 @@ export function SessionTablePage(): React.JSX.Element {
                   className="size-2 rounded-full bg-amber-400"
                   aria-label="combate em andamento"
                 />
+              )}
+            </TabButton>
+            <TabButton active={tab === 'clues'} onClick={() => setTab('clues')}>
+              <Lightbulb className="size-3.5" />
+              Pistas
+              {unseenClues > 0 && tab !== 'clues' && (
+                <span className="bg-primary size-2 rounded-full" aria-label="pista nova" />
               )}
             </TabButton>
             <TabButton active={tab === 'table'} onClick={() => setTab('table')}>
@@ -91,6 +119,8 @@ export function SessionTablePage(): React.JSX.Element {
             <div className="min-h-0 flex-1">
               <CombatPanel />
             </div>
+          ) : tab === 'clues' ? (
+            <CluesPanel />
           ) : (
             <div className="flex min-h-0 flex-1 flex-col divide-y overflow-y-auto">
               {role === 'gm' && <MapLibrary />}
@@ -121,7 +151,7 @@ function TabButton({
       aria-selected={active}
       onClick={onClick}
       className={cn(
-        'flex items-center justify-center gap-1.5 rounded-md px-2 py-1 text-sm transition-colors',
+        'flex items-center justify-center gap-1 rounded-md px-1.5 py-1 text-xs transition-colors',
         active ? 'bg-accent text-accent-foreground' : 'text-muted-foreground hover:bg-accent/50'
       )}
     >

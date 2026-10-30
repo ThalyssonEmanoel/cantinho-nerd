@@ -47,6 +47,10 @@ const api = {
   /** Apaga o cache de imagens; devolve quantos bytes liberou. */
   clearAssetCache: (): Promise<number> => ipcRenderer.invoke(IpcChannel.clearAssetCache),
 
+  /** Abre a ficha numa janela separada, para o segundo monitor (Fase 13). */
+  openSheetWindow: (sessionId: string, sheetId: string): Promise<boolean> =>
+    ipcRenderer.invoke(IpcChannel.openSheetWindow, { sessionId, sheetId }),
+
   /** Deep link com o app já aberto. Devolve a função para remover o listener. */
   onDeepLink: (callback: (link: DeepLink) => void): (() => void) => {
     const listener = (_event: IpcRendererEvent, link: DeepLink): void => callback(link)

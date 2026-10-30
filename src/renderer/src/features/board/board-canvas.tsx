@@ -45,7 +45,7 @@ import {
 import { addFogArea } from './fog-actions'
 import { useLiveStore } from './live-store'
 import { TokenShape } from './token-shape'
-import { useAssetImage } from './use-asset-image'
+import { useAssetImage } from '@/hooks/use-asset-image'
 
 interface BoardCanvasProps {
   map: BoardMap
@@ -193,6 +193,13 @@ export function BoardCanvas({
       .filter((item) => tokenVisibleThroughFog(item.at, map.grid, map.fog, circles))
       .map((item) => item.token)
   })()
+  /*
+    O zoom chega aos tokens arredondado em duas casas: as medidas de tela deles (moldura,
+    texto, ícones) dividem pelo zoom, então sem isto um giro mínimo da roda redesenharia
+    os 50 tokens do mapa sem mudar um pixel de verdade.
+  */
+  const tokenScale = Math.round(camera.scale * 100) / 100
+
   const view = visibleRect(camera, viewport)
   const lines = gridLines(map.grid, { width: map.width, height: map.height }, view)
 
@@ -565,7 +572,7 @@ export function BoardCanvas({
                 // Com régua, lápis ou borracha na mão, o clique é da ferramenta, não do token.
                 draggable={canMove(token) && tool === 'select' && !spaceHeld}
                 isGm={role === 'gm'}
-                scale={camera.scale}
+                scale={tokenScale}
                 onSelect={(event) => {
                   if (tool !== 'select' || event.evt.altKey) return
                   if (event.evt.shiftKey) useBoardStore.getState().toggleSelected(token.id)

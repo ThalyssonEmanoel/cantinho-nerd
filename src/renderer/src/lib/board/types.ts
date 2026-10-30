@@ -60,6 +60,12 @@ export const DIAGONAL_LABELS: Record<DiagonalRule, string> = {
   real: 'Real (distância em linha reta)'
 }
 
+/**
+ * Ferramenta na mão (6.1 a 6.5). Fica aqui, e não no store da tela, porque os atalhos de
+ * teclado (`shortcuts.ts`) precisam dela e são lógica pura.
+ */
+export type BoardTool = 'select' | 'pan' | 'ruler' | 'draw' | 'erase' | 'fog'
+
 export type TokenKind = 'player' | 'monster' | 'npc' | 'object'
 
 export const TOKEN_KIND_LABELS: Record<TokenKind, string> = {

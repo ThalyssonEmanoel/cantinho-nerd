@@ -89,6 +89,7 @@ export function summaryRowFromRow(row: SheetListRow): SheetSummaryRow {
     ownerName: row.owner?.display_name ?? '',
     name: typeof summary.name === 'string' ? summary.name : '',
     bars: bars as SheetSummaryRow['bars'],
+    portrait: typeof summary.portrait === 'string' ? summary.portrait : null,
     updatedAt: row.updated_at,
     sessionId: row.session_id,
     sessionName: row.session?.name ?? '',

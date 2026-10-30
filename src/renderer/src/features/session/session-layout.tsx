@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react'
 import { ArrowLeft, Link2, Loader2, Settings, Wifi, WifiOff } from 'lucide-react'
-import { Outlet, useNavigate, useParams } from 'react-router-dom'
+import { Outlet, useLocation, useNavigate, useParams } from 'react-router-dom'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
 import { UserAvatar } from '@/components/user-avatar'
@@ -8,22 +8,44 @@ import type { ChannelStatus } from '@/lib/db/realtime'
 import { useAppStore } from '@/stores/app-store'
 import { useAuthStore } from '@/stores/auth-store'
 import { cn } from '@/lib/utils'
+import { useBoardShortcuts } from '@/features/board/use-board-shortcuts'
+import { ClueNotifier } from '@/features/clues/clue-notifier'
 import { TurnNotifier } from '@/features/combat/turn-banner'
 import { copyInvite } from './copy-invite'
 import { ManageSessionDialog } from './manage-session-dialog'
 import { useSessionStore } from './session-store'
 
+interface SessionLayoutProps {
+  /**
+   * Janela separada da ficha (Fase 13): cabeçalho enxuto, sem lobby, convite nem
+   * "Gerenciar" — e sem os avisos de "Sua vez!" e de pista nova, que a janela principal já
+   * dá (dois avisos e dois sons para a mesma coisa só atrapalham).
+   */
+  bare?: boolean
+}
+
 /**
  * Casca da sessão: abre o snapshot e o canal de tempo real, mostra quem está online e
  * deixa as telas de dentro (a mesa e as fichas) trocarem sem derrubar a conexão.
  */
-export function SessionLayout(): React.JSX.Element {
+export function SessionLayout({ bare = false }: SessionLayoutProps): React.JSX.Element {
   const { sessionId } = useParams<{ sessionId: string }>()
   const navigate = useNavigate()
   const userId = useAuthStore((state) => state.userId)
   const profile = useAuthStore((state) => state.profile)
   const { session, presence, loadState, problem, connection } = useSessionStore()
   const [managing, setManaging] = useState(false)
+  const location = useLocation()
+
+  /*
+    Atalhos de teclado da mesa (Fase 13), num ouvinte só. As teclas de ferramenta e Del
+    valem só com o tabuleiro à vista; Enter (chat) e N (turno) valem também na ficha.
+  */
+  useBoardShortcuts({
+    role: session?.role ?? 'player',
+    userId,
+    onBoard: !bare && !location.pathname.includes('/sheets/')
+  })
 
   useEffect(() => {
     if (sessionId === undefined || userId === null) return
@@ -69,15 +91,17 @@ export function SessionLayout(): React.JSX.Element {
   return (
     <div className="flex h-full min-h-0 flex-col">
       <header className="flex flex-wrap items-center gap-3 border-b px-3 py-2">
-        <Button
-          variant="ghost"
-          size="icon"
-          onClick={() => void navigate(lobby)}
-          aria-label="Voltar para o lobby"
-          title="Voltar para o lobby"
-        >
-          <ArrowLeft className="size-4" />
-        </Button>
+        {!bare && (
+          <Button
+            variant="ghost"
+            size="icon"
+            onClick={() => void navigate(lobby)}
+            aria-label="Voltar para o lobby"
+            title="Voltar para o lobby"
+          >
+            <ArrowLeft className="size-4" />
+          </Button>
+        )}
 
         <div className="min-w-0">
           <p className="truncate font-medium">{session.name}</p>
@@ -89,7 +113,10 @@ export function SessionLayout(): React.JSX.Element {
         <ConnectionBadge status={connection} />
 
         {/* Quem está online agora (presença do canal, 10.3). */}
-        <div className="flex items-center -space-x-1.5" aria-label="Quem está online">
+        <div
+          className={cn('flex items-center -space-x-1.5', bare && 'hidden')}
+          aria-label="Quem está online"
+        >
           {session.members
             .filter((member) => online.has(member.userId))
             .map((member) => (
@@ -106,7 +133,7 @@ export function SessionLayout(): React.JSX.Element {
           </span>
         </div>
 
-        {session.role === 'gm' && (
+        {session.role === 'gm' && !bare && (
           <div className="ml-auto flex items-center gap-1">
             <Button variant="outline" size="sm" onClick={() => void copyInvite(session)}>
               <Link2 className="size-4" />
@@ -119,7 +146,7 @@ export function SessionLayout(): React.JSX.Element {
           </div>
         )}
 
-        {session.role === 'player' && profile !== null && (
+        {session.role === 'player' && profile !== null && !bare && (
           <span className="text-muted-foreground ml-auto text-xs">Você: {profile.displayName}</span>
         )}
       </header>
@@ -127,10 +154,11 @@ export function SessionLayout(): React.JSX.Element {
       <div className="min-h-0 flex-1">
         <Outlet />
       </div>
-      {/* "Sua vez!" em qualquer tela da sessão, não só no tabuleiro (7.3). */}
-      <TurnNotifier />
+      {/* "Sua vez!" e "o mestre revelou uma pista" em qualquer tela da sessão (7.3, Fase 13). */}
+      {!bare && <TurnNotifier />}
+      {!bare && <ClueNotifier />}
 
-      {session.role === 'gm' && (
+      {session.role === 'gm' && !bare && (
         <ManageSessionDialog open={managing} session={session} onClose={() => setManaging(false)} />
       )}
     </div>

@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react'
+import { useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import {
   ArrowUpToLine,
@@ -39,7 +39,7 @@ import { useBoardStore } from './board-store'
 import { ConditionsDialog } from './conditions-dialog'
 import { DrawingBar } from './drawing-bar'
 import { FogBar } from './fog-bar'
-import { sendReaction, undoLastDrawing } from './drawing-actions'
+import { sendReaction } from './drawing-actions'
 import { GalleryPicker } from './gallery-picker'
 import { GridSettingsDialog } from './grid-settings-dialog'
 import { ImageLightbox } from './image-lightbox'
@@ -79,40 +79,6 @@ export function BoardView(): React.JSX.Element {
 
   const role = session?.role ?? 'player'
   const map = maps.find((item) => item.id === openMapId) ?? null
-
-  // Del apaga o que está selecionado; Esc limpa a seleção; Ctrl+Z desfaz o meu último traço.
-  useEffect(() => {
-    const onKeyDown = (event: KeyboardEvent): void => {
-      if (event.target instanceof HTMLElement) {
-        const tag = event.target.tagName
-        if (event.target.isContentEditable || ['INPUT', 'TEXTAREA', 'SELECT'].includes(tag)) return
-      }
-
-      if ((event.ctrlKey || event.metaKey) && !event.shiftKey && event.key.toLowerCase() === 'z') {
-        event.preventDefault()
-        void undoLastDrawing(userId).catch((error: unknown) => {
-          toast.error('Não consegui desfazer', { description: errorMessage(error) })
-        })
-        return
-      }
-
-      if (event.key === 'Escape') useBoardStore.getState().clearSelection()
-      if (event.key !== 'Delete') return
-
-      const state = useBoardStore.getState()
-      const mine = state.tokens.filter(
-        (token) =>
-          state.selection.includes(token.id) && (role === 'gm' || token.ownerId === userId)
-      )
-      if (mine.length === 0) return
-      void removeTokens(mine).catch((error: unknown) => {
-        toast.error('Não consegui excluir', { description: errorMessage(error) })
-      })
-    }
-
-    window.addEventListener('keydown', onKeyDown)
-    return () => window.removeEventListener('keydown', onKeyDown)
-  }, [role, userId])
 
   if (loading) {
     return (
@@ -164,6 +130,7 @@ export function BoardView(): React.JSX.Element {
         desired: point ?? viewCenter(),
         tokens,
         sheetId: mySheet?.id ?? null,
+        portrait: mySheet?.portrait ?? null,
         name: mySheet?.name === undefined || mySheet.name === '' ? displayName : mySheet.name
       })
       await useBoardStore.getState().reloadTokens()
