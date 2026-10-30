@@ -91,6 +91,11 @@ const ATTRIBUTES: readonly AttributeData[] = [
   { key: 'vigor', abbr: 'VIG', label: 'Vigor', influence: 'pontos de vida e resistência física.' }
 ]
 
+/** Pontos da criação (1.3): todo atributo começa em 0 e o jogador distribui estes. */
+const ATTRIBUTE_POINTS = 7
+/** Teto de um atributo antes da raça; passar disso só com aval do mestre. */
+const ATTRIBUTE_MAX = 5
+
 /** Opção de lista que ainda não foi escolhida: não soma nada nas fórmulas. */
 const PENDING = 'A escolher'
 
@@ -1002,14 +1007,14 @@ function attribute(
 ): AttributeComponent {
   return {
     ...base(data.key, `${data.label} (${data.abbr})`, layout, {
-      hint: 'Em cima, os pontos distribuídos. Embaixo, o valor final com a raça: é ele que entra nas rolagens.'
+      hint: 'Em cima, os pontos distribuídos. Embaixo, o modificador (pontos + raça − 1: 0 dá −1, 2 dá +1): é ele que entra nas rolagens.'
     }),
     type: 'attribute',
-    // Começa em 2 e vai até 5 antes da raça (1.3). O campo não trava o que se digita: o
+    // Começa em 0 e vai até 5 antes da raça (1.3). O campo não trava o que se digita: o
     // mestre pode passar disso, e a aba avisa.
-    min: 2,
-    max: 5,
-    defaultValue: 2,
+    min: 0,
+    max: ATTRIBUTE_MAX,
+    defaultValue: 0,
     modifierFormula
   }
 }
@@ -1260,15 +1265,18 @@ function attributesTab(): SheetTab {
 
   const warning = choose(
     [
-      ['pontos_livres < 0', q('Pontos demais: antes da raça, o total é 13 (2 em cada + 3)')],
+      [
+        'pontos_livres < 0',
+        q(`Pontos demais: são ${ATTRIBUTE_POINTS} para distribuir, antes da raça`)
+      ],
       ['pontos_livres > 0', q('Ainda há pontos para distribuir')],
       [
-        ATTRIBUTES.map((data) => `${data.key} > 5`).join(' ou '),
-        q('Atributo acima de 5 antes da raça: só com aval do mestre')
+        ATTRIBUTES.map((data) => `${data.key} > ${ATTRIBUTE_MAX}`).join(' ou '),
+        q(`Atributo acima de ${ATTRIBUTE_MAX} antes da raça: só com aval do mestre`)
       ],
       [
-        ATTRIBUTES.map((data) => `${data.key} < 2`).join(' ou '),
-        q('Atributo abaixo de 2: todos começam em 2')
+        ATTRIBUTES.map((data) => `${data.key} < 0`).join(' ou '),
+        q('Atributo negativo: os pontos começam em 0')
       ],
       ...pendingChoices,
       [`${isRace('Mutante')} e mutacao == ${q(PENDING)}`, q('Escolha a mutação no fim desta aba')]
@@ -1284,17 +1292,20 @@ function attributesTab(): SheetTab {
       rule(
         'regra_atributos',
         1,
-        'Todos começam em 2 e você distribui mais 3 pontos (máx. 5 antes da raça). Embaixo, o valor final.'
+        `Comece com 0 em tudo e distribua ${ATTRIBUTE_POINTS} pontos (máx. ${ATTRIBUTE_MAX} antes da raça). Modificador = valor + raça − 1.`
       ),
+      // O modificador (`forca.mod`) é o que entra em todas as fórmulas da ficha: rolagens,
+      // PV, PE, Defesa e valor das habilidades. Com a raça, INT 0 do Mutante vira −1 e o
+      // modificador, −2.
       ...ATTRIBUTES.map((data, index) =>
-        attribute(data, at(index * 2, 2, 2, 3), `=valor + raca_${data.abbr.toLowerCase()}`)
+        attribute(data, at(index * 2, 2, 2, 3), `=valor + raca_${data.abbr.toLowerCase()} - 1`)
       ),
       computed(
         'pontos_livres',
         'Pontos a distribuir',
         at(10, 2, 2, 3),
-        `=13 - (${ATTRIBUTES.map((data) => data.key).join(' + ')})`,
-        { hint: '2 em cada atributo + 3 pontos = 13, antes da raça.' }
+        `=${ATTRIBUTE_POINTS} - (${ATTRIBUTES.map((data) => data.key).join(' + ')})`,
+        { hint: `${ATTRIBUTE_POINTS} pontos, antes da raça. A raça soma ou tira depois.` }
       ),
       ...ATTRIBUTES.map((data, index) =>
         computed(
@@ -1915,11 +1926,12 @@ function weaponFields(slot: 1 | 2, y: number): SheetComponent[] {
       min: 0,
       defaultValue: 0
     }),
+    // A FOR exigida compara com o valor do atributo (pontos + raça), não com o modificador.
     computed(
       `arma${slot}_requisito`,
       'Requisito',
       at(8, y + 2, 4, 2),
-      `=se(arma${slot}_for_minima > forca.mod, ${q('Falta FOR para esta arma')}, ${q('Atendido')})`
+      `=se(arma${slot}_for_minima > forca + raca_for, ${q('Falta FOR para esta arma')}, ${q('Atendido')})`
     )
   ]
 }

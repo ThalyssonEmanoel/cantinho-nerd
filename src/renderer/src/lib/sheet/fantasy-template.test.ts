@@ -242,17 +242,22 @@ describe('ficha padrão de fantasia', () => {
       Feiticeiro: [12, 14]
     }
 
-    // Humano sem o +1 escolhido: VIG 2 e ESP 2.
+    // Humano sem o +1 escolhido e sem pontos: VIG 0 e ESP 0, modificador −1 nos dois.
     for (const [classe, [hp, energy]] of Object.entries(bases)) {
       const values = sheet({ raca: 'Humano', classe })
-      expect(read(values, 'vida', 'max'), classe).toBe(hp + 2 * 3)
-      expect(read(values, 'energia', 'max'), classe).toBe(energy + 2 * 2)
+      expect(read(values, 'vida', 'max'), classe).toBe(hp - 1 * 3)
+      expect(read(values, 'energia', 'max'), classe).toBe(energy - 1 * 2)
     }
 
-    // Anão Guerreiro nível 3: VIG 3 → 18 + 9 + 2 × 2 = 31; ESP 2 → 4 + 4 + 2 = 10.
+    // Anão Guerreiro nível 3: VIG 0 + 1 → mod 0 → 18 + 0 + 2 × 2 = 22;
+    // ESP 0 → mod −1 → 4 − 2 + 2 = 4.
     const dwarf = sheet({ raca: 'Anão', classe: 'Guerreiro', nivel: 3 })
-    expect(read(dwarf, 'vida', 'max')).toBe(31)
-    expect(read(dwarf, 'energia', 'max')).toBe(10)
+    expect(read(dwarf, 'vida', 'max')).toBe(22)
+    expect(read(dwarf, 'energia', 'max')).toBe(4)
+
+    // Com pontos: VIG 3 → mod +2 → 18 + 6 = 24.
+    const sturdy = sheet({ raca: 'Humano', classe: 'Guerreiro', fields: { vigor: 3 } })
+    expect(read(sturdy, 'vida', 'max')).toBe(24)
 
     // Anel Vital só conta equipado.
     const ring = sheet({ raca: 'Humano', classe: 'Mago' })
@@ -261,39 +266,75 @@ describe('ficha padrão de fantasia', () => {
       { id: 'r1', cells: { item: 'Anel Vital', equipado: true, pv: 3, pe: 0, desl: 0 } },
       { id: 'r2', cells: { item: 'Amuleto Arcano', equipado: false, pv: 0, pe: 3, desl: 0 } }
     ]
-    expect(read(ring, 'vida', 'max')).toBe(10 + 6 + 3)
-    expect(read(ring, 'energia', 'max')).toBe(16 + 4)
+    expect(read(ring, 'vida', 'max')).toBe(10 - 3 + 3)
+    expect(read(ring, 'energia', 'max')).toBe(16 - 2)
+  })
+
+  it('todo atributo começa em 0, com 7 pontos para distribuir', () => {
+    const start = sheet({ raca: 'Humano' })
+    expect(read(start, 'pontos_livres')).toBe(7)
+    expect(read(start, 'atributos_aviso')).toBe('Ainda há pontos para distribuir')
+
+    // Sem raça: 0 dá −1, 1 dá 0, e é preciso 2 para o modificador virar bônus (+1).
+    const spread = sheet({
+      fields: { forca: 0, agilidade: 1, inteligencia: 2, espirito: 3, vigor: 1 }
+    })
+    const keys = ['forca', 'agilidade', 'inteligencia', 'espirito', 'vigor']
+    expect(keys.map((key) => read(spread, key, 'mod'))).toEqual([-1, 0, 1, 2, 0])
+    expect(read(spread, 'pontos_livres')).toBe(0)
+
+    const tooMany = sheet({ fields: { forca: 5, vigor: 3 } })
+    expect(read(tooMany, 'pontos_livres')).toBe(-1)
+    expect(read(tooMany, 'atributos_aviso')).toBe(
+      'Pontos demais: são 7 para distribuir, antes da raça'
+    )
   })
 
   it('a raça modifica os atributos depois da distribuição', () => {
-    const start = sheet({ raca: 'Humano' })
-    expect(read(start, 'pontos_livres')).toBe(3)
-    expect(read(start, 'atributos_aviso')).toBe('Ainda há pontos para distribuir')
-
     const angel = sheet({ raca: 'Descendente de Anjo' })
-    expect(read(angel, 'forca', 'mod')).toBe(1)
-    expect(read(angel, 'espirito', 'mod')).toBe(3)
-    expect(read(angel, 'vigor', 'mod')).toBe(3)
+    expect(read(angel, 'forca', 'mod')).toBe(-2)
+    expect(read(angel, 'espirito', 'mod')).toBe(0)
+    expect(read(angel, 'vigor', 'mod')).toBe(0)
+
+    // Mutante: INT 0 com o −1 da raça vira −1, e o modificador vai a −2. Os pontos compensam.
+    const mutant = sheet({ raca: 'Mutante', fields: { mutante_bonus: 'FOR' } })
+    expect(read(mutant, 'inteligencia', 'mod')).toBe(-2)
+    expect(read(mutant, 'forca', 'mod')).toBe(0)
+    const studious = sheet({ raca: 'Mutante', fields: { inteligencia: 2 } })
+    expect(read(studious, 'inteligencia', 'mod')).toBe(0)
 
     const human = sheet({
       raca: 'Humano',
-      fields: { humano_bonus: 'INT', inteligencia: 5 }
+      fields: { humano_bonus: 'INT', inteligencia: 5, forca: 2 }
     })
-    expect(read(human, 'inteligencia', 'mod')).toBe(6)
+    expect(read(human, 'inteligencia', 'mod')).toBe(5)
     expect(read(human, 'pontos_livres')).toBe(0)
     expect(read(human, 'atributos_aviso')).toBe('Distribuição certa')
 
     // O +1 escolhido como Humano não vale se a raça mudar depois.
     const changed = sheet({ raca: 'Elfo', fields: { humano_bonus: 'INT' } })
-    expect(read(changed, 'inteligencia', 'mod')).toBe(2)
-    expect(read(changed, 'agilidade', 'mod')).toBe(3)
+    expect(read(changed, 'inteligencia', 'mod')).toBe(-1)
+    expect(read(changed, 'agilidade', 'mod')).toBe(0)
+  })
+
+  it('a FOR exigida pela arma olha o valor do atributo, não o modificador', () => {
+    // Mutante com +1 em FOR e 2 pontos: valor 3, modificador +2.
+    const strong = sheet({
+      raca: 'Mutante',
+      fields: { mutante_bonus: 'FOR', forca: 2, arma1_for_minima: 3 }
+    })
+    expect(read(strong, 'arma1_requisito')).toBe('Atendido')
+
+    const weak = sheet({ fields: { forca: 2, arma1_for_minima: 3 } })
+    expect(read(weak, 'arma1_requisito')).toBe('Falta FOR para esta arma')
   })
 
   it('a Defesa soma a única armadura, o escudo e o ajuste temporário', () => {
     const values = sheet({
       fields: { armadura_tipo: 'Pesada', escudo_bonus: 1, defesa_ajuste: -2 }
     })
-    expect(read(values, 'defesa')).toBe(10 + 2 + 3 + 1 - 2)
+    // AGI 0 → modificador −1.
+    expect(read(values, 'defesa')).toBe(10 - 1 + 3 + 1 - 2)
     expect(read(values, 'armadura_penalidade')).toBe(
       '−2 em AGI nos testes de mobilidade e furtividade'
     )
@@ -301,7 +342,7 @@ describe('ficha padrão de fantasia', () => {
     const custom = sheet({
       fields: { armadura_tipo: 'Personalizada', armadura_bonus_personalizado: 4 }
     })
-    expect(read(custom, 'defesa')).toBe(10 + 2 + 4)
+    expect(read(custom, 'defesa')).toBe(10 - 1 + 4)
   })
 
   it('o Anão anda 1 a menos, nunca abaixo de 1, e as Botas do Vento somam', () => {
@@ -327,12 +368,13 @@ describe('ficha padrão de fantasia', () => {
     expect(read(warrior, 'hab_guerreiro', 'golpe_brutal', 'valor')).toBe(5 + 3 + 3)
     expect(read(warrior, 'hab_guerreiro', 'guarda_de_ferro', 'valor')).toBe('—')
 
-    // Toque Sagrado é cura: o ajuste de dano físico não entra.
+    // Toque Sagrado é cura: o ajuste de dano físico não entra. ESP 0 → modificador −1.
     const cleric = sheet({ classe: 'Clérigo', fields: { dano_fisico_ajuste: 3 } })
-    expect(read(cleric, 'hab_clerigo', 'toque_sagrado', 'valor')).toBe(4 + 2)
+    expect(read(cleric, 'hab_clerigo', 'toque_sagrado', 'valor')).toBe(4 - 1)
 
+    // INT 4 → modificador +3.
     const mage = sheet({ classe: 'Mago', fields: { inteligencia: 4 } })
-    expect(read(mage, 'hab_mago', 'meteoro_menor', 'valor')).toBe(6 + 4)
+    expect(read(mage, 'hab_mago', 'meteoro_menor', 'valor')).toBe(6 + 3)
   })
 
   it('mostra habilidades bloqueadas, escolhidas e sem PE', () => {
@@ -393,7 +435,8 @@ describe('ficha padrão de fantasia', () => {
       fields: { instabilidade: 1, instabilidade_voluntaria: 2, controle_para: 'Ruína Caótica' }
     })
     expect(read(values, 'dificuldade_controle')).toBe(14 + 4)
-    expect(read(values, 'bonus_controle')).toBe(2 - 1)
+    // ESP 0 → modificador −1, e a Instabilidade tira mais 1.
+    expect(read(values, 'bonus_controle')).toBe(-1 - 1)
     expect(read(values, 'dano_voluntario')).toBe(4)
     expect(read(values, 'instabilidade_efeito')).toBe('−1 no próximo teste de controle')
   })
@@ -405,7 +448,8 @@ describe('ficha padrão de fantasia', () => {
     values[life.id] = { current: 0 }
     expect(read(values, 'estado')).toBe('Incapacitado: o mestre decide o que acontece')
 
-    values[life.id] = { current: 5 }
+    // Vida máxima 15 (18 − 3 do VIG 0): abaixo de 25% é menos de 3,75.
+    values[life.id] = { current: 3 }
     expect(read(values, 'estado')).toBe('Gravemente ferido (abaixo de 25%)')
   })
 

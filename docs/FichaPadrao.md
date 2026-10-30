@@ -42,9 +42,11 @@ Utilize estas fórmulas como padrão inicial do sistema:
 - **Ataque mágico:** resultado de 1d20 + atributo mágico + bônus de foco mágico.
 - **Dano final:** dano-base da habilidade ou arma + modificadores aplicáveis, menos a redução de dano do alvo, respeitando o mínimo de zero.
 
-Para evitar números excessivos, os atributos iniciais devem normalmente ficar entre 1 e 5. O mestre pode editar os valores.
+Para evitar números excessivos, os atributos iniciais devem normalmente ficar entre 0 e 5. O mestre pode editar os valores.
 
-Ao criar um personagem, cada atributo começa em 2. O jogador recebe 3 pontos adicionais para distribuir, respeitando o limite inicial de 5. A raça pode modificar os atributos depois dessa distribuição.
+Ao criar um personagem, cada atributo começa em 0. O jogador recebe 7 pontos para distribuir, respeitando o limite inicial de 5. A raça pode modificar os atributos depois dessa distribuição.
+
+Cada atributo tem um **modificador** igual ao valor do atributo (já com a raça) menos 1: 0 dá -1, 1 dá 0, 2 dá +1, 3 dá +2, e assim por diante. Um atributo que a raça leva a -1 tem modificador -2. É o modificador que entra nas fórmulas acima (VIG × 3, ESP × 2, Defesa, Iniciativa, ataques, testes e valores das habilidades). Requisitos de equipamento, como a FOR exigida por uma arma, comparam com o valor do atributo.
 
 Se uma habilidade disser que ignora defesa, redução de dano ou resistência, aplique somente o efeito explicitamente indicado na descrição.
 

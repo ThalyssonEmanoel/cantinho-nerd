@@ -591,6 +591,9 @@ regra: edite o gerador e rode `npx vitest run fantasy-template -u`.
   na tabela. A coluna "Situação" não pode olhar os limites da raça: a validação veria ciclo.
 - Linhas fixas de tabela são copiadas para a ficha quando ela nasce: corrigir uma habilidade
   no modelo não muda fichas já criadas (o construtor nem edita célula de linha fixa).
+- **Atributos (pedido de 30/10/2026):** começam em 0, 7 pontos para distribuir, e o número de
+  baixo é o modificador = pontos + raça − 1 (0 → −1, 2 → +1). Todas as fórmulas usam o
+  `.mod`; só a "FOR exigida" da arma compara com o valor (`forca + raca_for`).
 
 **Fase 10 (Ferramentas do mestre) — aprovada; o Thalysson liberou a Fase 11.** 824 testes.
 
