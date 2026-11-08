@@ -571,3 +571,51 @@ Decidido na Fase 13 (30/10/2026), para confirmar no teste:
 66. **Os 60 fps continuam sendo teste de sensação** com o app aberto. O que entrou em teste
     automático é o orçamento do que roda a cada quadro em JavaScript: as linhas da grade de
     um mapa de 4096 px, a visão e a névoa com 50 tokens.
+
+Decidido ao adaptar a planilha "Ficha do Geralt Wolf Vengerberg" (05/11/2026), a pedido do
+Thalysson ("adapte 100%" e "atualize o código se necessário"), para confirmar no teste:
+
+67. **A planilha virou um modelo de ficha**, com as 12 abas dela, importado pelo botão Importar
+    da biblioteca. O app continua sem conhecer o sistema: o que é regra está no modelo. **A mesa
+    usa o `docs/fichas/ficha-padrao-da-mesa.json`**, que nasce em branco, porque cada mesa tem
+    um modelo só para todo mundo. O `ficha-do-geralt.json` é o mesmo modelo, nascendo preenchido.
+68. **Peças novas do construtor, porque a planilha precisava e não havia como fazer sem elas.**
+    Todas genéricas, nenhuma exige migração de banco:
+    - `juntar(a, b, …)` e `ehnumero(x)` nas fórmulas (`"D"&Prof.*2` e `ISNUMBER`).
+    - **Texto padrão** em texto curto e longo: a ficha nasce com ele e depois é do jogador.
+    - **Parágrafo** no título: texto corrido do modelo, para as regras dos comentários.
+    - **Imagem fixa**, componente novo: embutida no modelo (só PNG, JPEG e WebP) ou repetindo
+      uma imagem da própria ficha em outra aba (`=retrato`).
+    - **Coluna oculta** e **dica de coluna** nas tabelas, e **linha inicial**: a ficha nasce
+      com ela, mas o jogador pode remover e reordenar.
+    - **Barra que acompanha o máximo**: quando o máximo muda, o atual muda a mesma diferença, e
+      o dano levado fica igual. É opcional e vale só para a barra marcada: nas outras continua
+      a regra de sempre, em que subir o máximo não cura ninguém.
+69. **Coluna de botão não repete o nome no cabeçalho**, e **tabela que só o mestre edita aparece
+    como texto** para o jogador, em vez de caixas apagadas.
+70. **Linhas em branco viraram "Adicionar"**, e blocos de linhas soltas viraram texto longo. O
+    limite de 14 magias por círculo ou 28 itens no inventário era falta de espaço na planilha.
+71. **A vida atual é a barra.** Na planilha, "dano recebido: normal" é digitado e a vida sai da
+    conta; aqui é o contrário, porque é na barra que o token e o combate escrevem. O dano
+    normal virou a conta inversa. A barra acompanha o máximo, então a conta da planilha
+    (máxima − dano) continua valendo: preencher a ficha nova ou subir de nível sobe a vida
+    atual junto, e dano na vida máxima tira dos dois. Ki, mana e as vidas das criaturas não
+    acompanham, porque nelas a planilha também pede o atual digitado.
+72. **O que a ficha ganhou por estar numa mesa:** botão de rolar em perícias, salvaguardas,
+    testes de atributo, ataques, dados de vida, pulso e runas; **iniciativa** (`1d20 + DEX`), que a
+    planilha não tem e sem a qual o combate rolaria 1d20 puro; e o teste de morte.
+73. **Crítico:** ataques de arma usam a coluna Margem (o "20 2x" da planilha virou Margem 20 e
+    Mult. 2x); as outras rolagens de ataque, 20 natural e falha no 1. Perícias e salvaguardas
+    não têm crítico: a planilha não fala disso.
+74. **O dano de uma arma é uma notação de dados que rola** ("1d12"), e o resto do que estava
+    escrito vai em Tipo ("p/ 1d8 r"). Só a primeira alternativa rola no botão.
+75. **O que estava preenchido foi separado em duas partes.** Do personagem (só no modelo do
+    Geralt): o nome, a classe Combatente, as duas armas, a nota de maestria e o ofício Guia com
+    a doutrina Piloto. Do sistema (nos dois): a runa Ataque Elemental e o ataque do familiar,
+    o tamanho Miúdo, "Lidar com Animais" no servo e os "???" dos recursos limitados. Quem decide
+    a dúvida entre um e outro é o Thalysson, no teste.
+76. **Correções em relação à planilha:** as salvaguardas do companheiro somam a proficiência (a
+    fórmula apontava para o inventário, e a caixa não fazia nada) e os rótulos copiados por
+    engano ("Nome do familiar" no Mecha, "Custo do mecha" no Servo) ganharam o nome certo.
+77. **Atributos do familiar têm o campo Aumento:** a planilha valida "≥ base" nessas células,
+    o que permite digitar por cima da fórmula e a apaga. Aqui, soma por cima dela.

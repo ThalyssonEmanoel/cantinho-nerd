@@ -352,6 +352,16 @@ export const FUNCTION_EXAMPLES: FormulaExample[] = [
     formula: '=se(vida < 5, "Morrendo", "De pé")',
     expected: 'De pé',
     note: 'se(condição, valor se sim, valor se não).'
+  },
+  {
+    formula: '=juntar("D", nivel * 2)',
+    expected: 'D6',
+    note: 'Emenda texto com número: dá para mostrar um dado que cresce com o nível.'
+  },
+  {
+    formula: '=ehnumero(classe)',
+    expected: false,
+    note: 'Texto que não é número. Com um limite opcional: se(ehnumero(x), x, 9999).'
   }
 ]
 

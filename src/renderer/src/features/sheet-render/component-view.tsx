@@ -15,9 +15,13 @@ import { Select } from '@/components/ui/select'
 import { Textarea } from '@/components/ui/textarea'
 import { cn } from '@/lib/utils'
 import { FieldFrame } from './field-frame'
+import { FigureView } from './figure-view'
 import { ImageField } from './image-field'
 import { TableView } from './table-view'
 import { canEdit, type SheetRenderOptions } from './types'
+
+/** A partir daqui o campo calculado é um texto, não um número em destaque. */
+const LONG_COMPUTED_TEXT = 30
 
 interface ComponentViewProps {
   component: SheetComponent
@@ -46,6 +50,19 @@ export function ComponentView({
 
   switch (component.type) {
     case 'heading':
+      if (component.level === 'paragraph') {
+        return (
+          <FieldFrame component={component} showPermissions={showPermissions}>
+            <p
+              className="h-full overflow-auto text-sm leading-snug whitespace-pre-wrap"
+              style={component.accent === undefined ? undefined : { color: component.accent }}
+            >
+              {component.text}
+            </p>
+          </FieldFrame>
+        )
+      }
+
       return (
         <div className="flex h-full items-end">
           <span
@@ -186,7 +203,8 @@ export function ComponentView({
       const max = readFormulaValue(context, [component.key, 'max'])
       const maxNumber = Math.max(0, safeNumber(max.value, 0))
       const current = isResourceValue(raw) ? raw.current : 0
-      const percent = maxNumber === 0 ? 0 : Math.min(100, (current / maxNumber) * 100)
+      // Sem o piso, um atual negativo vira `width: -20%`: o navegador ignora e a barra fica cheia.
+      const percent = maxNumber === 0 ? 0 : Math.max(0, Math.min(100, (current / maxNumber) * 100))
 
       const setCurrent = (value: number): void => {
         const clamped = Math.max(0, Math.min(maxNumber === 0 ? value : maxNumber, value))
@@ -286,20 +304,33 @@ export function ComponentView({
 
     case 'computed': {
       const { value, error } = readFormulaValue(context, [component.key])
+      const shown =
+        error === undefined ? formatComputedValue(value ?? 0, component.format) : '#ERRO'
       return (
         <FieldFrame component={component} showPermissions={showPermissions}>
           <div
             className={cn(
-              'bg-muted/30 flex h-9 items-center justify-center rounded-md border text-base font-semibold',
+              // `min-h` e não `h`: um texto longo quebra a linha e a caixa acompanha.
+              'bg-muted/30 flex min-h-9 items-center justify-center rounded-md border px-2 text-center',
+              shown.length > LONG_COMPUTED_TEXT
+                ? 'py-1 text-sm leading-snug font-medium'
+                : 'text-base font-semibold',
               error !== undefined && 'text-destructive'
             )}
             title={error?.message ?? component.hint}
           >
-            {error === undefined ? formatComputedValue(value ?? 0, component.format) : '#ERRO'}
+            {shown}
           </div>
         </FieldFrame>
       )
     }
+
+    case 'figure':
+      return (
+        <FieldFrame component={component} showPermissions={showPermissions}>
+          <FigureView component={component} context={context} />
+        </FieldFrame>
+      )
 
     case 'rollButton':
       return (

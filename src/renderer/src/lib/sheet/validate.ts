@@ -253,6 +253,20 @@ function checkComponentShape(
         })
       }
     }
+
+    if (component.type === 'figure') {
+      const hasSource = (component.sourceFormula ?? '').trim() !== ''
+      if (component.src === undefined && !hasSource) {
+        issues.push({
+          severity: 'warning',
+          code: 'figure-empty',
+          message: `A imagem fixa "${name}" ainda não tem imagem.`,
+          componentId: component.id,
+          tabId,
+          field: 'src'
+        })
+      }
+    }
   }
 }
 
@@ -367,7 +381,7 @@ function describeReferenceProblem(
 
   const target = components.find((component) => component.key === head)
   if (target === undefined) return `o campo "${head}" não existe.`
-  if (isDecorative(target)) return `"${head}" é só um título e não tem valor.`
+  if (isDecorative(target)) return `"${head}" é só decoração e não tem valor.`
   if (target.type === 'rollButton') return `"${head}" é um botão de rolagem e não tem valor.`
 
   if (rest.length === 0) return null
@@ -394,7 +408,8 @@ function describeTableReferenceProblem(
   table: Extract<SheetComponent, { type: 'table' }>
 ): string | null {
   const columnKeys = table.columns.map((column) => column.key)
-  const rowKeys = table.rows.map((row) => row.key)
+  // A linha inicial é do jogador e pode sair da ficha: fórmula nenhuma pode contar com ela.
+  const rowKeys = table.rows.filter((row) => row.starter !== true).map((row) => row.key)
 
   if (rest.length === 1) {
     const [name] = rest

@@ -122,6 +122,16 @@ function renderScaledToWebp(image: CanvasImageSource, size: Size): Promise<Blob>
   })
 }
 
+/** O arquivo como data URL: é assim que uma imagem fixa fica embutida no modelo de ficha. */
+export function blobToDataUrl(blob: Blob): Promise<string> {
+  return new Promise((resolve, reject) => {
+    const reader = new FileReader()
+    reader.onload = () => resolve(String(reader.result))
+    reader.onerror = () => reject(new Error('Não consegui ler essa imagem.'))
+    reader.readAsDataURL(blob)
+  })
+}
+
 /**
  * Prepara a imagem escolhida para o Storage (10.2): converte para WebP, limita o maior
  * lado e devolve o hash do conteúdo, que é o nome do arquivo.

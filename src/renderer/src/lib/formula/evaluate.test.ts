@@ -172,6 +172,38 @@ describe('funções', () => {
     expect(valueOf('=count(pericias)')).toBe(2)
   })
 
+  it('juntar emenda textos e números, para montar coisas como "D8" ou "100ft"', () => {
+    expect(valueOf('=juntar("D", nivel * 2)')).toBe('D6')
+    expect(valueOf('=concat(100 + 10 * nivel, "ft")')).toBe('130ft')
+    expect(valueOf('=juntar(classe)')).toBe('Ocultista')
+    expect(valueOf('=juntar("1d4 ", se(forca.mod < 0, "", "+"), forca.mod)')).toBe('1d4 +2')
+    expect(valueOf('=juntar(vazio, "x")')).toBe('x')
+  })
+
+  it('juntar sem nada para juntar é erro, e campo inexistente continua sendo erro', () => {
+    expect(errorOf('=juntar()').code).toBe('arity')
+    expect(errorOf('=juntar("a", xyz)').code).toBe('unknown-reference')
+  })
+
+  it('ehnumero separa número de texto, como o ISNUMBER das planilhas', () => {
+    expect(valueOf('=ehnumero(3)')).toBe(true)
+    expect(valueOf('=ehnumero(forca)')).toBe(true)
+    // Texto digitado que é número vale: o campo de texto é o único que pode ficar vazio.
+    expect(valueOf('=ehnumero(anotacao)')).toBe(true)
+    expect(valueOf('=isnumber(vazio)')).toBe(false)
+    expect(valueOf('=ehnumero(classe)')).toBe(false)
+    // Caixa de seleção vale 1 nas contas, mas não é um número que alguém digitou.
+    expect(valueOf('=ehnumero(treinado)')).toBe(false)
+    expect(errorOf('=ehnumero(1, 2)').code).toBe('arity')
+  })
+
+  it('ehnumero deixa usar um limite que pode estar vazio sem dar #ERRO', () => {
+    const limite = '=min(se(ehnumero(limite), limite, 9999), 3)'
+    expect(valueOf(limite, createObjectContext({ limite: '' }))).toBe(3)
+    expect(valueOf(limite, createObjectContext({ limite: 'sem limite' }))).toBe(3)
+    expect(valueOf(limite, createObjectContext({ limite: '2' }))).toBe(2)
+  })
+
   it('reclama de função desconhecida e de número errado de argumentos', () => {
     expect(errorOf('=raiz(4)').code).toBe('unknown-function')
     expect(errorOf('=se(1, 2)').code).toBe('arity')

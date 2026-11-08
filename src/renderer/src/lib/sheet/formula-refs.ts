@@ -53,6 +53,9 @@ function componentSlots(tab: SheetTab, component: SheetComponent): FormulaSlot[]
   push('visibleWhen', component.visibleWhen, 'expression', 'condição de visibilidade')
 
   switch (component.type) {
+    case 'figure':
+      push('sourceFormula', component.sourceFormula, 'expression', 'imagem')
+      break
     case 'attribute':
       // `valor` é o próprio valor do atributo (ex.: `piso((valor - 10) / 2)`).
       push('modifierFormula', component.modifierFormula, 'expression', 'modificador', ['valor'])
@@ -216,6 +219,11 @@ export function mapComponentFormulas(
   }
 
   switch (next.type) {
+    case 'figure':
+      if (next.sourceFormula !== undefined) {
+        next.sourceFormula = transform(next.sourceFormula, 'expression')
+      }
+      break
     case 'attribute':
       if (next.modifierFormula !== undefined) {
         next.modifierFormula = transform(next.modifierFormula, 'expression')

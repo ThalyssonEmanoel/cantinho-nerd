@@ -261,7 +261,7 @@ export function SheetFillPage({
         )}
       >
         <div className="flex min-h-0 flex-col">
-          <div className="flex items-center gap-1 border-b px-3 py-2">
+          <div className="flex flex-wrap items-center gap-1 border-b px-3 py-2">
             {schema.tabs.map((tab) => (
               <button
                 key={tab.id}

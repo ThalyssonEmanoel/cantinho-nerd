@@ -33,7 +33,8 @@ const DEFAULT_LAYOUT: Record<ComponentType, { w: number; h: number }> = {
   markers: { w: 4, h: 2 },
   computed: { w: 3, h: 2 },
   rollButton: { w: 3, h: 2 },
-  table: { w: 12, h: 7 }
+  table: { w: 12, h: 7 },
+  figure: { w: 6, h: 6 }
 }
 
 export function defaultSizeFor(type: ComponentType): { w: number; h: number } {
@@ -92,6 +93,8 @@ export function createComponent(
       return { ...base, type, shape: 'circle' }
     case 'heading':
       return { ...base, type, text: 'Seção', level: 'section' }
+    case 'figure':
+      return { ...base, type, fit: 'contain' }
     case 'attribute':
       return { ...base, type, defaultValue: 10, min: 0, modifierFormula: 'piso((valor - 10) / 2)' }
     case 'resource':

@@ -27,6 +27,7 @@ export type ComponentType =
   | 'computed'
   | 'rollButton'
   | 'table'
+  | 'figure'
 
 /** Quem edita o campo. */
 export type EditPermission = 'player' | 'gm'
@@ -78,12 +79,16 @@ export interface TextComponent extends ComponentBase {
   type: 'text'
   placeholder?: string
   maxLength?: number
+  /** Texto com que a ficha nasce. É do jogador depois disso: versão nova do modelo não mexe. */
+  defaultValue?: string
 }
 
 export interface TextareaComponent extends ComponentBase {
   type: 'textarea'
   placeholder?: string
   maxLength?: number
+  /** Texto com que a ficha nasce. É do jogador depois disso: versão nova do modelo não mexe. */
+  defaultValue?: string
 }
 
 export interface NumberComponent extends ComponentBase {
@@ -114,7 +119,22 @@ export interface ImageComponent extends ComponentBase {
 export interface HeadingComponent extends ComponentBase {
   type: 'heading'
   text: string
-  level: 'title' | 'section'
+  /** `paragraph` é texto corrido, com quebra de linha: a regra que o mestre quer à vista. */
+  level: 'title' | 'section' | 'paragraph'
+}
+
+/**
+ * Imagem que a ficha só mostra: não guarda valor e o jogador não troca.
+ *
+ * `src` vem embutida no modelo (um diagrama de regra, por exemplo), então uma versão nova
+ * chega a todas as fichas. `sourceFormula` repete uma imagem da própria ficha em outra aba
+ * (`=retrato`); quando ela não dá em nada, vale a `src`, se houver.
+ */
+export interface FigureComponent extends ComponentBase {
+  type: 'figure'
+  src?: string
+  sourceFormula?: string
+  fit: 'contain' | 'cover'
 }
 
 export interface AttributeComponent extends ComponentBase {
@@ -134,6 +154,11 @@ export interface ResourceComponent extends ComponentBase {
   maxFormula?: string
   color?: string
   showButtons: boolean
+  /**
+   * Quando o máximo muda, o atual muda a mesma diferença, e o dano levado fica igual. Sem isto,
+   * o atual é um valor à parte, e subir de nível não cura ninguém (ver `following-bars`).
+   */
+  followsMax?: boolean
 }
 
 export interface MarkersComponent extends ComponentBase {
@@ -164,6 +189,8 @@ export interface TableColumn {
   /** Nome usado nas fórmulas da própria linha e em `tabela.linha.coluna`. */
   key: string
   label: string
+  /** Aparece ao passar o mouse no cabeçalho, como a dica de um campo. */
+  hint?: string
   kind: TableColumnKind
   /** Peso da coluna na largura da tabela. */
   width?: number
@@ -173,6 +200,11 @@ export interface TableColumn {
   format?: NumberFormat
   critical?: CriticalRule
   criticalFailureOnOne?: boolean
+  /**
+   * Não aparece na tabela, mas as fórmulas da linha enxergam. É como uma coluna calculada
+   * descobre em que linha está: `atrib = "FOR"` na linha Força das salvaguardas.
+   */
+  hidden?: boolean
 }
 
 export interface TableRowTemplate {
@@ -182,6 +214,12 @@ export interface TableRowTemplate {
   label: string
   /** Valores que o mestre já deixa preenchidos, por chave de coluna. */
   cells?: Record<string, string | number | boolean>
+  /**
+   * Linha inicial: a ficha nasce com ela preenchida, mas a linha é do jogador, que pode
+   * remover e reordenar como as que ele mesmo adicionou. Por isso as fórmulas não a acham
+   * pela chave — ela pode não existir mais.
+   */
+  starter?: boolean
 }
 
 export interface TableComponent extends ComponentBase {
@@ -209,6 +247,7 @@ export type SheetComponent =
   | ComputedComponent
   | RollButtonComponent
   | TableComponent
+  | FigureComponent
 
 export interface SheetTab {
   id: string
@@ -265,7 +304,8 @@ export const COMPONENT_LABELS: Record<ComponentType, string> = {
   markers: 'Marcadores',
   computed: 'Campo calculado',
   rollButton: 'Botão de rolagem',
-  table: 'Tabela / lista'
+  table: 'Tabela / lista',
+  figure: 'Imagem fixa'
 }
 
 export const ROLE_LABELS: Record<ComponentRole, string> = {
@@ -295,7 +335,7 @@ export const ROLE_ALLOWED_TYPES: Record<ComponentRole, readonly ComponentType[]>
 }
 
 /** Componentes sem valor próprio: não guardam nada na ficha e não entram em fórmulas. */
-export const DECORATIVE_TYPES: readonly ComponentType[] = ['heading']
+export const DECORATIVE_TYPES: readonly ComponentType[] = ['heading', 'figure']
 
 export function isDecorative(component: SheetComponent): boolean {
   return DECORATIVE_TYPES.includes(component.type)

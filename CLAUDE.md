@@ -72,7 +72,8 @@ src/
       chat/      bandeja de dados, comandos /r e /w, links, linha do tempo do chat, som
       formula/   motor de fórmulas: tokenizer, parser (Pratt), avaliador, grafo de dependências
       dice/      motor de dados: interpolação dos `{…}`, rolagem, regras de crítico, geradores
-      sheet/     modelo de ficha: tipos, zod, chaves, validação, contexto de fórmulas, repositório
+      sheet/     modelo de ficha: tipos, zod, chaves, validação, contexto de fórmulas, repositório,
+                 e as fichas prontas de docs/fichas/, escritas em código (template-kit)
       board/     tabuleiro: câmera, grade, distância, névoa, condições, desenho, atalhos de teclado
       combat/    ordem dos turnos, iniciativa, dano/cura
       bestiary/  tags, busca, grupos do encontro, posicionamento
@@ -811,3 +812,60 @@ Decisões e armadilhas registradas:
 
 **Todas as fases da especificação estão implementadas.** O que vier agora é pedido novo:
 antes de mexer, confira a seção 12 (fora do escopo) e pergunte.
+
+**Ficha do Geralt (planilha para modelo, pedido fora das fases) — feita, aguardando teste.**
+
+`docs/fichas/Ficha do Geralt Wolf Vengerberg.xlsx` (12 abas, 199 células com fórmula) virou dois
+arquivos que se importam na biblioteca, saídos do mesmo gerador:
+
+- `docs/fichas/ficha-padrao-da-mesa.json`: **é este que a mesa usa.** Nasce em branco, porque
+  cada sessão tem um modelo só para todo mundo (`character_template_id`).
+- `docs/fichas/ficha-do-geralt.json`: o mesmo modelo, nascendo com o que é do personagem (nome,
+  classe, armas, nota de maestria, ofício). Um teste garante que os dois só diferem nisso.
+
+O gerador é `lib/sheet/geralt-template.ts`, e cada fórmula cita a célula de origem. Mudou uma
+regra: edite o gerador e rode `npx vitest run geralt-template -u`. As decisões estão no fim da
+especificação (itens 67 a 77). Não há migração nova.
+
+**O `.exe` antigo não abre este modelo:** o app valida o esquema ao ler do banco, e a versão
+anterior não conhece o tipo `figure`. Publicar este modelo pede instalador novo para a mesa toda.
+
+- `lib/sheet/template-kit.ts`: as peças de montar modelo em código. Saíram da ficha de fantasia,
+  e o snapshot dela provou que o JSON gerado não mudou um byte.
+- Fórmulas: `juntar` e `ehnumero`. Modelo: texto padrão, parágrafo (`level: 'paragraph'`), imagem
+  fixa (`figure`, `features/sheet-render/figure-view.tsx`), coluna oculta e com dica, linha inicial
+  (`starter`) e barra que acompanha o máximo (`followsMax`, `lib/sheet/following-bars.ts`). Tudo
+  com campo no painel do construtor, para ninguém precisar editar JSON.
+- `geralt-template.test.ts` confere de dois jeitos: a ficha nova dá os números guardados no
+  arquivo, célula a célula; e as fórmulas originais, transcritas no teste, batem com o modelo
+  em vários valores. O `.dom.test` monta as 12 abas procurando `#ERRO`.
+
+Decisões e armadilhas registradas:
+
+- **O zod descarta campo que não conhece, sem avisar.** Propriedade nova que não entrar em
+  `schema.ts` some na importação. O `model-extras.test.ts` faz o ciclo de ida e volta para isso.
+- **A planilha guarda o dano; a barra guarda o atual.** Sem `followsMax`, a ficha nova ficava em
+  2/44 depois de preenchida, com 42 de um dano que ninguém levou. A primeira versão só ligava o
+  "dano na vida máxima" à barra, e o bug apareceu ao olhar a ficha em branco: nenhum teste via.
+- **`followsMax` não tem piso em zero, de propósito.** Trocar o nível de 12 para 13 passa pelo
+  "1" enquanto se digita; com piso, esse instante apagaria o dano e a pessoa terminaria curada.
+  Por isso a barra aceita atual negativo, e o `percent` da barra ganhou piso: `width: -20%` é
+  inválido, o navegador ignora, e a barra aparecia cheia.
+- **`ROUNDDOWN` corta para o zero e `piso` não**: −0,5 vira 0 na planilha. Por isso o
+  `roundDown` do gerador, que muda a vida quando o modificador é negativo e dividido.
+- **"1/4" e "1/2" na tabela do familiar viraram data na exportação** (45017 e 44958, com formato
+  `d/m`). A fórmula `L23 > 4` só roda do nível 4 para cima, onde o ND já é número.
+- **O número em coluna estreita perde o segundo algarismo** para a setinha do `type="number"`,
+  que reserva espaço mesmo invisível: por isso as setas saíram das células de tabela.
+- **`fillResourceCurrents` enche a barra ao nascer**: a vida do familiar começa em 9, e a planilha
+  tem 0 em "vida atual". É a regra do app para toda barra, e não foi mudada.
+- A planilha exporta o `P26` como `IFERROR(__xludf.DUMMYFUNCTION(...))`: a fórmula de verdade está
+  no texto do `DUMMYFUNCTION`, e o que aparece no Excel é só o valor guardado (2).
+
+Pendências, de propósito:
+
+- O teste com o app de verdade fica com o Thalysson: entrar pede login no Supabase. A ficha foi
+  conferida com os componentes reais, a CSP real e o CSS real num harness fora do projeto.
+- Ficaram de fora o logo e o ícone decorativos (a "Imagem fixa" permite pôr), o campo "Link da
+  imagem" (aqui é envio de foto), as três células sem rótulo da linha 42 do Familiar e o cinza
+  condicional em "Classe 2".

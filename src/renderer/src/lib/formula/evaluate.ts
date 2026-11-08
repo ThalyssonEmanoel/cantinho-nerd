@@ -159,6 +159,8 @@ const CONDITIONAL_NAMES = new Set(['se', 'if'])
 const SUM_NAMES = new Set(['soma', 'sum'])
 const COUNT_NAMES = new Set(['contar', 'count'])
 const MIN_MAX_NAMES = new Set(['min', 'max'])
+const JOIN_NAMES = new Set(['juntar', 'concat'])
+const IS_NUMBER_NAMES = new Set(['ehnumero', 'isnumber'])
 
 /** Usado pela validação do construtor (Fase 2) para sugerir nomes. */
 export const FUNCTION_NAMES: readonly string[] = [
@@ -166,7 +168,9 @@ export const FUNCTION_NAMES: readonly string[] = [
   ...CONDITIONAL_NAMES,
   ...SUM_NAMES,
   ...COUNT_NAMES,
-  ...MIN_MAX_NAMES
+  ...MIN_MAX_NAMES,
+  ...JOIN_NAMES,
+  ...IS_NUMBER_NAMES
 ]
 
 function callFunction(
@@ -209,6 +213,19 @@ function callFunction(
   if (COUNT_NAMES.has(name)) {
     requireArity(name, args, 1, position)
     return countArgument(args[0] as FormulaNode, context, position)
+  }
+
+  if (JOIN_NAMES.has(name)) {
+    if (args.length === 0) {
+      fail('arity', `A função ${name} precisa de pelo menos um valor.`, position)
+    }
+    // `+` só soma números: sem isto, "D" + 8 viraria erro e não haveria como montar um texto.
+    return args.map((arg) => toText(evaluateNode(arg, context, depth + 1))).join('')
+  }
+
+  if (IS_NUMBER_NAMES.has(name)) {
+    requireArity(name, args, 1, position)
+    return isNumberValue(evaluateNode(args[0] as FormulaNode, context, depth + 1))
   }
 
   fail('unknown-function', `Não conheço a função "${node.name}".`, position)
@@ -301,6 +318,14 @@ export function toText(value: FormulaValue): string {
 function isNumericValue(value: FormulaValue): boolean {
   if (typeof value === 'number' || typeof value === 'boolean') return true
   return NUMERIC_TEXT.test(value.trim())
+}
+
+/**
+ * O `ehnumero`. Difere do de cima no booleano: na igualdade, caixa marcada vale 1; aqui a
+ * pergunta é "alguém digitou um número?", e caixa de seleção não é isso.
+ */
+function isNumberValue(value: FormulaValue): boolean {
+  return typeof value !== 'boolean' && isNumericValue(value)
 }
 
 /**

@@ -3,7 +3,9 @@ import { ColorPicker } from '@/components/color-picker'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Select } from '@/components/ui/select'
+import { Textarea } from '@/components/ui/textarea'
 import { newId, safeNumber, type NumberFormat, type SheetComponent } from '@/lib/sheet'
+import { FigureProperties } from './figure-properties'
 import { PropertyField, PropertyGroup } from './property-field'
 import { TableProperties } from './table-properties'
 
@@ -44,6 +46,19 @@ export function TypeProperties({
               min={1}
               value={component.maxLength ?? ''}
               onChange={(event) => onChange({ maxLength: optionalNumber(event.target.value) })}
+            />
+          </PropertyField>
+          <PropertyField
+            label="Texto padrão"
+            hint="A ficha nasce com este texto. Depois ele é do jogador."
+          >
+            <Textarea
+              value={component.defaultValue ?? ''}
+              onChange={(event) =>
+                onChange({
+                  defaultValue: event.target.value === '' ? undefined : event.target.value
+                })
+              }
             />
           </PropertyField>
         </PropertyGroup>
@@ -232,29 +247,47 @@ export function TypeProperties({
             </Select>
           </PropertyField>
           <p className="text-muted-foreground text-xs">
-            O envio da imagem em si entra na Fase 6, junto com o Storage.
+            Cada ficha envia a sua. Para uma imagem que vem pronta no modelo, use a Imagem fixa.
           </p>
         </PropertyGroup>
       )
+
+    case 'figure':
+      return <FigureProperties component={component} onChange={onChange} />
 
     case 'heading':
       return (
         <PropertyGroup title="Título">
           <PropertyField label="Texto">
-            <Input
-              value={component.text}
-              onChange={(event) => onChange({ text: event.target.value })}
-            />
+            {component.level === 'paragraph' ? (
+              <Textarea
+                className="min-h-32"
+                value={component.text}
+                onChange={(event) => onChange({ text: event.target.value })}
+              />
+            ) : (
+              <Input
+                value={component.text}
+                onChange={(event) => onChange({ text: event.target.value })}
+              />
+            )}
           </PropertyField>
-          <PropertyField label="Tamanho">
+          <PropertyField
+            label="Tamanho"
+            hint="Parágrafo é texto corrido e o jogador não edita: serve para regras."
+          >
             <Select
               value={component.level}
-              onChange={(event) =>
-                onChange({ level: event.target.value === 'title' ? 'title' : 'section' })
-              }
+              onChange={(event) => {
+                const level = event.target.value
+                onChange({
+                  level: level === 'title' || level === 'paragraph' ? level : 'section'
+                })
+              }}
             >
               <option value="section">Seção</option>
               <option value="title">Título</option>
+              <option value="paragraph">Parágrafo</option>
             </Select>
           </PropertyField>
         </PropertyGroup>
@@ -317,6 +350,22 @@ export function TypeProperties({
               placeholder="=10 + constituicao.mod * nivel"
               onChange={(event) => onChange({ maxFormula: event.target.value })}
             />
+          </PropertyField>
+          <PropertyField
+            label="O atual acompanha o máximo"
+            hint="Quando o máximo muda, o atual muda a mesma diferença: subir de nível cura o que subiu. Serve para sistemas que contam o dano recebido."
+          >
+            <label className="flex items-center gap-2 text-sm">
+              <input
+                type="checkbox"
+                className="accent-primary size-4"
+                checked={component.followsMax === true}
+                onChange={(event) =>
+                  onChange({ followsMax: event.target.checked ? true : undefined })
+                }
+              />
+              Acompanhar
+            </label>
           </PropertyField>
           <PropertyField label="Cor">
             <ColorPicker

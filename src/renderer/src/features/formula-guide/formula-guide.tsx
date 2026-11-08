@@ -232,7 +232,17 @@ export function FormulaGuide({ compact = false }: FormulaGuideProps): React.JSX.
                 'sum',
                 'Soma valores, ou uma coluna inteira da tabela'
               ],
-              [<Code key="f">contar(tabela)</Code>, 'count', 'Quantas linhas a tabela tem']
+              [<Code key="f">contar(tabela)</Code>, 'count', 'Quantas linhas a tabela tem'],
+              [
+                <Code key="f">juntar(a, b, …)</Code>,
+                'concat',
+                'Emenda textos e números num texto só (o + só soma números)'
+              ],
+              [
+                <Code key="f">ehnumero(x)</Code>,
+                'isnumber',
+                'Verdadeiro se for número; serve para campo de texto que pode ficar vazio'
+              ]
             ]}
           />
           <Examples examples={FUNCTION_EXAMPLES} />

@@ -51,6 +51,7 @@ export function defaultValueFor(component: SheetComponent): SheetValue | undefin
   switch (component.type) {
     case 'text':
     case 'textarea':
+      return component.defaultValue ?? ''
     case 'image':
       return ''
     case 'number':
@@ -68,11 +69,12 @@ export function defaultValueFor(component: SheetComponent): SheetValue | undefin
     case 'markers':
       return 0
     case 'table':
-      return component.rows.map((row) => ({
-        id: row.id,
-        key: row.key,
-        cells: buildRowCells(component.columns, row.cells)
-      }))
+      return component.rows.map((row) => {
+        const cells = buildRowCells(component.columns, row.cells)
+        // Sem a chave, a linha inicial é igual às que o jogador adiciona: pode sair e mudar
+        // de lugar (é a chave que faz de uma linha "fixa", ver `RowCells`).
+        return row.starter === true ? { id: row.id, cells } : { id: row.id, key: row.key, cells }
+      })
     default:
       // Título e campo calculado não guardam valor; o botão de rolagem também não.
       return undefined

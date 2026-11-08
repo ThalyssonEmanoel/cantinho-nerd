@@ -3,6 +3,7 @@ import {
   CheckSquare,
   CircleDot,
   Dices,
+  Frame,
   Hash,
   Heading,
   Image as ImageIcon,
@@ -29,7 +30,8 @@ const ICONS: Record<ComponentType, LucideIcon> = {
   markers: CircleDot,
   computed: Sigma,
   rollButton: Dices,
-  table: Table
+  table: Table,
+  figure: Frame
 }
 
 /** Ordem da paleta: o que se usa mais fica em cima. */
@@ -46,6 +48,7 @@ const ORDER: ComponentType[] = [
   'rollButton',
   'table',
   'image',
+  'figure',
   'heading'
 ]
 

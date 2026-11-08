@@ -1,32 +1,36 @@
 import { slugifyKey } from './keys'
 import { TEMPLATE_FILE_FORMAT, type TemplateFile } from './schema'
+import {
+  at,
+  checkbox,
+  choose,
+  column,
+  computed,
+  heading,
+  hiddenColumn,
+  image,
+  markers,
+  number,
+  q,
+  resource,
+  roll,
+  select,
+  selectOptions,
+  table,
+  text,
+  textarea,
+  type Branch,
+  type Options
+} from './template-kit'
 import type {
   AttributeComponent,
-  CheckboxComponent,
-  ComponentBase,
-  ComponentRole,
   ComputedComponent,
-  EditPermission,
   GridPosition,
-  HeadingComponent,
-  ImageComponent,
-  MarkersComponent,
-  NumberComponent,
-  NumberFormat,
-  ResourceComponent,
-  RollButtonComponent,
-  SelectComponent,
-  SelectOption,
   SheetComponent,
   SheetSchema,
   SheetTab,
   TableColumn,
-  TableColumnKind,
-  TableComponent,
-  TableRowTemplate,
-  TextareaComponent,
-  TextComponent,
-  ViewPermission
+  TableComponent
 } from './types'
 
 /**
@@ -36,8 +40,7 @@ import type {
  * que o mestre importa na biblioteca. Para mudar uma regra, edite aqui e rode
  * `npx vitest run fantasy-template -u` para regravar o JSON.
  *
- * O construtor não tem parágrafo nem lista que dependa de outra, então duas técnicas
- * aparecem o tempo todo:
+ * O construtor não tem lista que dependa de outra, então duas técnicas aparecem o tempo todo:
  * - **Texto que muda com a raça ou a classe** é um campo calculado que devolve texto
  *   (`se(classe == "Mago", "…", …)`). Ele mora no modelo, então uma versão nova chega a
  *   todas as fichas — o texto das linhas fixas de tabela, ao contrário, é copiado para a
@@ -765,22 +768,6 @@ const CLASSES: readonly ClassData[] = [
 // Fórmulas
 // ---------------------------------------------------------------------------
 
-/** Texto entre aspas para a fórmula. A linguagem não tem como escapar aspas dentro dele. */
-function q(text: string): string {
-  if (text.includes('"')) throw new Error(`Texto de fórmula com aspas: ${text}`)
-  return `"${text}"`
-}
-
-type Branch = readonly [condition: string, value: string]
-
-/** `se(a, x, se(b, y, z))`: o primeiro ramo verdadeiro ganha. */
-function choose(branches: readonly Branch[], fallback: string): string {
-  return branches.reduceRight<string>(
-    (rest, [condition, value]) => `se(${condition}, ${value}, ${rest})`,
-    fallback
-  )
-}
-
 const isClass = (label: string): string => `classe == ${q(label)}`
 const isRace = (label: string): string => `raca == ${q(label)}`
 
@@ -886,119 +873,8 @@ function chosenCountFormula(level: 1 | 2 | 3): string {
 // Peças do construtor
 // ---------------------------------------------------------------------------
 
-interface Options {
-  hint?: string
-  editableBy?: EditPermission
-  visibleTo?: ViewPermission
-  when?: string
-  role?: ComponentRole
-  accent?: string
-}
-
 const WARNING_COLOR = '#f59e0b'
 const GM_EDITS: Options = { editableBy: 'gm' }
-
-function at(x: number, y: number, w: number, h: number): GridPosition {
-  return { x, y, w, h }
-}
-
-function base(key: string, label: string, layout: GridPosition, options: Options): ComponentBase {
-  const component: ComponentBase = {
-    id: `c_${key}`,
-    key,
-    label,
-    editableBy: options.editableBy ?? 'player',
-    visibleTo: options.visibleTo ?? 'all',
-    layout
-  }
-  if (options.hint !== undefined) component.hint = options.hint
-  if (options.when !== undefined) component.visibleWhen = options.when
-  if (options.role !== undefined) component.role = options.role
-  if (options.accent !== undefined) component.accent = options.accent
-  return component
-}
-
-type OptionSpec = string | readonly [label: string, value: number]
-
-function selectOptions(specs: readonly OptionSpec[]): SelectOption[] {
-  return specs.map((spec) => {
-    const [label, value] = typeof spec === 'string' ? [spec, undefined] : spec
-    const option: SelectOption = { id: `o_${slugifyKey(label)}`, label }
-    if (value !== undefined) option.value = value
-    return option
-  })
-}
-
-function heading(
-  key: string,
-  text: string,
-  layout: GridPosition,
-  options: Options = {}
-): HeadingComponent {
-  return {
-    ...base(key, text, layout, { editableBy: 'gm', ...options }),
-    type: 'heading',
-    text,
-    level: 'section'
-  }
-}
-
-function text(
-  key: string,
-  label: string,
-  layout: GridPosition,
-  placeholder?: string,
-  options: Options = {}
-): TextComponent {
-  const component: TextComponent = { ...base(key, label, layout, options), type: 'text' }
-  if (placeholder !== undefined) component.placeholder = placeholder
-  return component
-}
-
-function textarea(
-  key: string,
-  label: string,
-  layout: GridPosition,
-  placeholder?: string,
-  options: Options = {}
-): TextareaComponent {
-  const component: TextareaComponent = { ...base(key, label, layout, options), type: 'textarea' }
-  if (placeholder !== undefined) component.placeholder = placeholder
-  return component
-}
-
-function number(
-  key: string,
-  label: string,
-  layout: GridPosition,
-  limits: { min?: number; max?: number; defaultValue: number },
-  options: Options = {}
-): NumberComponent {
-  return { ...base(key, label, layout, options), type: 'number', ...limits }
-}
-
-function checkbox(
-  key: string,
-  label: string,
-  layout: GridPosition,
-  options: Options = {}
-): CheckboxComponent {
-  return { ...base(key, label, layout, options), type: 'checkbox', defaultValue: false }
-}
-
-function select(
-  key: string,
-  label: string,
-  layout: GridPosition,
-  specs: readonly OptionSpec[],
-  options: Options = {}
-): SelectComponent {
-  return { ...base(key, label, layout, options), type: 'select', options: selectOptions(specs) }
-}
-
-function image(key: string, label: string, layout: GridPosition, options: Options): ImageComponent {
-  return { ...base(key, label, layout, options), type: 'image', shape: 'circle' }
-}
 
 function attribute(
   data: AttributeData,
@@ -1006,9 +882,13 @@ function attribute(
   modifierFormula: string
 ): AttributeComponent {
   return {
-    ...base(data.key, `${data.label} (${data.abbr})`, layout, {
-      hint: 'Em cima, os pontos distribuídos. Embaixo, o modificador (pontos + raça − 1: 0 dá −1, 2 dá +1): é ele que entra nas rolagens.'
-    }),
+    id: `c_${data.key}`,
+    key: data.key,
+    label: `${data.label} (${data.abbr})`,
+    editableBy: 'player',
+    visibleTo: 'all',
+    layout,
+    hint: 'Em cima, os pontos distribuídos. Embaixo, o modificador (pontos + raça − 1: 0 dá −1, 2 dá +1): é ele que entra nas rolagens.',
     type: 'attribute',
     // Começa em 0 e vai até 5 antes da raça (1.3). O campo não trava o que se digita: o
     // mestre pode passar disso, e a aba avisa.
@@ -1019,52 +899,10 @@ function attribute(
   }
 }
 
-function resource(
-  key: string,
-  label: string,
-  layout: GridPosition,
-  maxFormula: string,
-  color: string,
-  options: Options
-): ResourceComponent {
-  return {
-    ...base(key, label, layout, options),
-    type: 'resource',
-    maxFormula,
-    color,
-    showButtons: true
-  }
-}
-
-function markers(
-  key: string,
-  label: string,
-  layout: GridPosition,
-  count: number,
-  options: Options
-): MarkersComponent {
-  return { ...base(key, label, layout, options), type: 'markers', count }
-}
-
-function computed(
-  key: string,
-  label: string,
-  layout: GridPosition,
-  formula: string,
-  options: Options = {},
-  format: NumberFormat = 'integer'
-): ComputedComponent {
-  return {
-    ...base(key, label, layout, { editableBy: 'gm', ...options }),
-    type: 'computed',
-    formula,
-    format
-  }
-}
-
 /**
- * Linha de regra: campo calculado sem rótulo que devolve um texto fixo. É o único jeito de
- * ter texto corrido legível na ficha (o título corta numa linha só e em letras miúdas).
+ * Linha de regra: campo calculado sem rótulo que devolve um texto fixo, numa linha só. Esta
+ * ficha é de antes do parágrafo do título (`paragraph` no template-kit), e trocar agora
+ * mudaria a cara dela sem ganho nenhum.
  */
 function rule(key: string, y: number, ruleText: string, when?: string): ComputedComponent {
   return computed(key, '', at(0, y, 12, 1), `=${q(ruleText)}`, when === undefined ? {} : { when })
@@ -1079,54 +917,6 @@ function rules(
   return texts.map((ruleText, index) =>
     rule(`${prefix}_${index + 1}`, startY + index, ruleText, when)
   )
-}
-
-function roll(
-  key: string,
-  label: string,
-  layout: GridPosition,
-  formula: string,
-  options: Options = {}
-): RollButtonComponent {
-  return {
-    ...base(key, label, layout, options),
-    type: 'rollButton',
-    formula,
-    // As regras não falam de crítico: marcar 20 natural faria parecer que existe um.
-    critical: { kind: 'none' },
-    criticalFailureOnOne: false
-  }
-}
-
-function table(
-  key: string,
-  label: string,
-  layout: GridPosition,
-  columns: TableColumn[],
-  rows: TableRowTemplate[],
-  shape: { playerCanAddRows: boolean; showRowLabels: boolean },
-  options: Options = {}
-): TableComponent {
-  return { ...base(key, label, layout, options), type: 'table', columns, rows, ...shape }
-}
-
-function column(
-  key: string,
-  label: string,
-  kind: TableColumnKind,
-  width: number,
-  extra: Partial<TableColumn> = {}
-): TableColumn {
-  return { id: `col_${key}`, key, label, kind, width, ...extra }
-}
-
-/**
- * Coluna calculada de largura zero: na tabela ela some (o texto dela é cortado em nada), e
- * serve para os contadores somarem com `soma(tabela.coluna)`. A linguagem não tem soma
- * condicional, então "quantas de nível 2 estão marcadas" precisa de uma coluna de 0 e 1.
- */
-function hiddenColumn(key: string, formula: string): TableColumn {
-  return column(key, `${key} (oculta)`, 'computed', 0, { formula })
 }
 
 // ---------------------------------------------------------------------------

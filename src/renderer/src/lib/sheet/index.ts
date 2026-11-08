@@ -62,6 +62,7 @@ export {
 export type { ImportResult, TemplateFile } from './schema'
 export {
   exportTemplateJson,
+  MAX_FIGURE_SRC_LENGTH,
   MAX_IMPORT_BYTES,
   parseSheetRecord,
   parseSheetSchema,
@@ -72,6 +73,9 @@ export {
   templateFileValidator,
   templateKindLabel
 } from './schema'
+
+export type { FollowingBarChange } from './following-bars'
+export { followingBarChanges } from './following-bars'
 
 export type { SheetAudience } from './permissions'
 export {

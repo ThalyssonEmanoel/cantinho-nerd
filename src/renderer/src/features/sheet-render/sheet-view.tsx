@@ -3,8 +3,10 @@ import { evaluateFormula, toBoolean } from '@/lib/formula'
 import {
   GRID_COLUMNS,
   GRID_ROW_HEIGHT,
+  followingBarChanges,
   type SheetComponent,
   type SheetSchema,
+  type SheetValue,
   type SheetValues
 } from '@/lib/sheet'
 import { ComponentView } from './component-view'
@@ -39,6 +41,21 @@ export function SheetView({
 
   const visible = tab.components.filter((component) => isVisible(component, context, options))
 
+  // A barra que acompanha o máximo (`followsMax`) muda junto com o campo editado: quem escuta
+  // `onChange` recebe os dois, cada um no seu patch de sempre, sem precisar saber dessa regra.
+  const { onChange } = options
+  const fieldOptions: SheetRenderOptions =
+    onChange === undefined
+      ? options
+      : {
+          ...options,
+          onChange: (componentId: string, value: SheetValue) => {
+            const bars = followingBarChanges(schema, values, componentId, value, options.audience)
+            onChange(componentId, value)
+            for (const bar of bars) onChange(bar.id, bar.value)
+          }
+        }
+
   return (
     <div
       className="grid gap-2 p-4"
@@ -59,7 +76,7 @@ export function SheetView({
             component={component}
             context={context}
             values={values}
-            options={options}
+            options={fieldOptions}
           />
         </div>
       ))}

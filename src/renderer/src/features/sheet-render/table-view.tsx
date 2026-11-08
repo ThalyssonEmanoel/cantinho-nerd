@@ -135,9 +135,10 @@ export function TableView({
       >
         {reorderable && <span />}
         {component.showRowLabels && <span>Nome</span>}
-        {component.columns.map((column) => (
-          <span key={column.id} className="truncate" title={column.label}>
-            {column.label}
+        {visibleColumns(component).map((column) => (
+          <span key={column.id} className="truncate" title={column.hint ?? column.label}>
+            {/* O botão já traz o nome em cada linha: no cabeçalho, seria só repetição. */}
+            {column.kind === 'rollButton' ? null : column.label}
           </span>
         ))}
         {component.playerCanAddRows && <span />}
@@ -179,8 +180,13 @@ export function TableView({
   )
 }
 
+/** As colunas que aparecem. A oculta só existe para as fórmulas da linha (ver `TableColumn`). */
+function visibleColumns(component: TableComponent): TableColumn[] {
+  return component.columns.filter((column) => column.hidden !== true)
+}
+
 function buildGridTemplate(component: TableComponent, reorderable: boolean): string {
-  const columns = component.columns.map((column) =>
+  const columns = visibleColumns(component).map((column) =>
     column.width === undefined ? '1fr' : `${column.width}fr`
   )
   if (component.showRowLabels) columns.unshift('1.4fr')
@@ -262,7 +268,7 @@ function RowCells({
         </span>
       )}
 
-      {component.columns.map((column) => (
+      {visibleColumns(component).map((column) => (
         <CellView
           key={column.id}
           column={column}
@@ -295,13 +301,16 @@ function RowCells({
   )
 }
 
-function rollLabel(
-  component: TableComponent,
-  row: TableRowValue,
-  column: TableColumn
-): string {
+function rollLabel(component: TableComponent, row: TableRowValue, column: TableColumn): string {
   const rowLabel = component.rows.find((item) => item.key === row.key)?.label
   if (rowLabel !== undefined && rowLabel !== '') return rowLabel
+
+  // Sem rótulo (a arma que o jogador digitou), o nome da linha é a primeira coluna de texto:
+  // "Lança Longa: Dano" diz muito mais no chat do que "Armas: Dano".
+  const nameColumn = visibleColumns(component).find((item) => item.kind === 'text')
+  const name = nameColumn === undefined ? '' : row.cells[nameColumn.key]
+  if (typeof name === 'string' && name.trim() !== '') return `${name}: ${column.label}`
+
   return `${component.label}: ${column.label}`
 }
 
@@ -327,22 +336,36 @@ function CellView({
   onChange
 }: CellViewProps): React.JSX.Element {
   const raw = row.cells[column.key]
+  // Tabela que só o mestre edita é referência para quem a lê: caixa apagada em cada célula
+  // atrapalha a leitura. No construtor continua caixa, porque ali ela mostra o campo.
+  const plain = !editable && options.readOnly !== true
 
   switch (column.kind) {
     case 'text':
+      if (plain) {
+        return (
+          <span className="truncate text-sm" title={typeof raw === 'string' ? raw : undefined}>
+            {typeof raw === 'string' ? raw : ''}
+          </span>
+        )
+      }
       return (
         <Input
-          className="h-7 text-sm"
+          className="h-7 px-2 text-sm"
           value={typeof raw === 'string' ? raw : ''}
+          // A célula é de uma linha só: passar o mouse mostra o texto que não coube.
+          title={typeof raw === 'string' && raw !== '' ? raw : undefined}
           disabled={!editable}
           onChange={(event) => onChange(event.target.value)}
         />
       )
 
     case 'number':
+      if (plain) return <span className="truncate text-sm">{safeNumber(raw)}</span>
       return (
         <Input
-          className="h-7 text-sm"
+          // Sem as setinhas: numa coluna estreita, elas tomam o lugar do segundo algarismo.
+          className="h-7 [appearance:textfield] px-2 text-sm [&::-webkit-inner-spin-button]:appearance-none"
           type="number"
           value={safeNumber(raw)}
           disabled={!editable}

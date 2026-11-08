@@ -196,6 +196,32 @@ export function TableProperties({ component, onChange }: TablePropertiesProps): 
                   }
                 />
               )}
+
+              <Input
+                className="h-7 text-xs"
+                value={column.hint ?? ''}
+                placeholder="Dica ao passar o mouse no cabeçalho"
+                onChange={(event) =>
+                  updateColumn(index, {
+                    hint: event.target.value === '' ? undefined : event.target.value
+                  })
+                }
+              />
+
+              <label
+                className="flex items-center gap-2 text-xs"
+                title="Não aparece na tabela, mas as fórmulas da linha enxergam. Serve para uma coluna calculada saber em que linha está."
+              >
+                <input
+                  type="checkbox"
+                  className="accent-primary size-3.5"
+                  checked={column.hidden === true}
+                  onChange={(event) =>
+                    updateColumn(index, { hidden: event.target.checked ? true : undefined })
+                  }
+                />
+                Oculta
+              </label>
             </div>
           ))}
         </div>
@@ -209,12 +235,23 @@ export function TableProperties({ component, onChange }: TablePropertiesProps): 
       <PropertyGroup title="Linhas fixas">
         <p className="text-muted-foreground text-xs">
           Use para perícias e listas que o mestre define. Deixe vazio quando o jogador é quem
-          preenche, como no inventário.
+          preenche, como no inventário. Com a caixa marcada, a linha é só o começo da lista: o
+          jogador pode remover e reordenar.
         </p>
 
         <div className="space-y-2">
           {component.rows.map((row, index) => (
             <div key={row.id} className="flex items-center gap-1">
+              <input
+                type="checkbox"
+                className="accent-primary size-3.5 shrink-0"
+                aria-label="Linha inicial, que o jogador pode remover"
+                title="Linha inicial: a ficha nasce com ela, mas o jogador pode remover e reordenar."
+                checked={row.starter === true}
+                onChange={(event) =>
+                  updateRow(index, { starter: event.target.checked ? true : undefined })
+                }
+              />
               <Input
                 className="h-7 text-sm"
                 value={row.label}

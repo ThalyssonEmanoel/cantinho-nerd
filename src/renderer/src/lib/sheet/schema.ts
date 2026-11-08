@@ -14,6 +14,16 @@ export const TEMPLATE_FILE_FORMAT = 'cantinho-nerd/sheet-template'
 /** Limite de tamanho do arquivo importado: um modelo honesto não passa nem perto disso. */
 export const MAX_IMPORT_BYTES = 2 * 1024 * 1024
 
+/**
+ * Teto de uma imagem embutida no modelo (como data URL, então já em base64). O banco aceita
+ * 2 MB por modelo, e o modelo inteiro vai para cada ficha aberta: imagem aqui é diagrama de
+ * regra, não foto em alta resolução.
+ */
+export const MAX_FIGURE_SRC_LENGTH = 1024 * 1024
+
+/** Só imagem de bitmap: SVG traz código junto, e um modelo pode vir de outra pessoa. */
+const FIGURE_DATA_URL = /^data:image\/(?:png|jpeg|webp);base64,[A-Za-z0-9+/]+={0,2}$/
+
 const gridPosition = z.object({
   x: z.number().int().min(0).max(48),
   y: z.number().int().min(0).max(999),
@@ -58,20 +68,23 @@ const tableColumn = z.object({
   id: identifier,
   key: z.string().max(64),
   label,
+  hint: z.string().max(400).optional(),
   kind: z.enum(['text', 'number', 'checkbox', 'select', 'computed', 'rollButton']),
   width: z.number().min(0).max(100).optional(),
   options: z.array(selectOption).max(200).optional(),
   formula: formula.optional(),
   format: numberFormat.optional(),
   critical: criticalRule.optional(),
-  criticalFailureOnOne: z.boolean().optional()
+  criticalFailureOnOne: z.boolean().optional(),
+  hidden: z.boolean().optional()
 })
 
 const tableRow = z.object({
   id: identifier,
   key: z.string().max(64),
   label,
-  cells: z.record(z.string(), z.union([z.string(), z.number(), z.boolean()])).optional()
+  cells: z.record(z.string(), z.union([z.string(), z.number(), z.boolean()])).optional(),
+  starter: z.boolean().optional()
 })
 
 const sheetComponent = z.discriminatedUnion('type', [
@@ -79,13 +92,15 @@ const sheetComponent = z.discriminatedUnion('type', [
     ...componentBase,
     type: z.literal('text'),
     placeholder: z.string().max(120).optional(),
-    maxLength: z.number().int().min(1).max(10000).optional()
+    maxLength: z.number().int().min(1).max(10000).optional(),
+    defaultValue: z.string().max(10000).optional()
   }),
   z.object({
     ...componentBase,
     type: z.literal('textarea'),
     placeholder: z.string().max(120).optional(),
-    maxLength: z.number().int().min(1).max(100000).optional()
+    maxLength: z.number().int().min(1).max(100000).optional(),
+    defaultValue: z.string().max(100000).optional()
   }),
   z.object({
     ...componentBase,
@@ -106,8 +121,16 @@ const sheetComponent = z.discriminatedUnion('type', [
   z.object({
     ...componentBase,
     type: z.literal('heading'),
-    text: z.string().max(200),
-    level: z.enum(['title', 'section'])
+    // O parágrafo é texto corrido; título e seção cortam numa linha só de qualquer jeito.
+    text: z.string().max(4000),
+    level: z.enum(['title', 'section', 'paragraph'])
+  }),
+  z.object({
+    ...componentBase,
+    type: z.literal('figure'),
+    src: z.string().max(MAX_FIGURE_SRC_LENGTH).regex(FIGURE_DATA_URL).optional(),
+    sourceFormula: formula.optional(),
+    fit: z.enum(['contain', 'cover'])
   }),
   z.object({
     ...componentBase,
@@ -123,7 +146,8 @@ const sheetComponent = z.discriminatedUnion('type', [
     maxValue: z.number().optional(),
     maxFormula: formula.optional(),
     color: z.string().max(40).optional(),
-    showButtons: z.boolean()
+    showButtons: z.boolean(),
+    followsMax: z.boolean().optional()
   }),
   z.object({
     ...componentBase,
