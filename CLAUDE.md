@@ -892,7 +892,10 @@ Atualização automática:
 
 - `.github/workflows/release.yml`: tag `v*` → confere a tag com o `package.json`, `npm ci`, cria o
   `.env` com os segredos `VITE_SUPABASE_URL`/`VITE_SUPABASE_ANON_KEY` do repositório (falha se
-  faltarem), `npm test`, `npm run build` e `electron-builder --win --publish always`.
+  faltarem), `npm test`, `npm run build`, `electron-builder --win --publish never` e o
+  `gh release create` com o `.exe`, o `.blockmap` e o `latest.yml`. **Não voltar ao
+  `--publish always`:** na 0.3.0 o envio paralelo do electron-builder tentou criar a release duas
+  vezes e terminou "com sucesso" tendo subido só o `.blockmap`.
 - `electron-builder.yml`: `publish` no GitHub com `releaseType: release` (rascunho não aparece
   para o app). Grava o `app-update.yml` no instalador; o build gera `latest.yml` e `.blockmap`.
 - `src/main/update-controller.ts` (sem Electron, testado com dublê) e `src/main/updater.ts` (liga o

@@ -65,7 +65,35 @@ jobs:
       - name: Compilar
         run: npm run build
 
-      - name: Gerar o instalador e publicar a release
+      # O electron-builder só gera os arquivos. Publicar por ele (`--publish always`) falhou na
+      # 0.3.0: ele envia os arquivos em paralelo, cada envio tentou criar a release, e o
+      # processo terminou "com sucesso" tendo subido só o .blockmap — sem o .exe e sem o
+      # latest.yml. O `latest.yml` sai do build mesmo sem publicar.
+      - name: Gerar o instalador
+        run: npx electron-builder --win --publish never
+
+      # O `gh` (já instalado no runner) cria a release como rascunho, sobe os três arquivos e
+      # só então publica: nenhum app chega a ver uma release pela metade. Se um arquivo
+      # faltar, falha antes de criar qualquer coisa.
+      - name: Publicar a release
+        shell: bash
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-        run: npx electron-builder --win --publish always
+        run: |
+          version="$(node -p "require('./package.json').version")"
+          files=(
+            "dist/Cantinho-Nerd-${version}-setup.exe"
+            "dist/Cantinho-Nerd-${version}-setup.exe.blockmap"
+            "dist/latest.yml"
+          )
+          for file in "${files[@]}"; do
+            if [ ! -f "$file" ]; then
+              echo "::error::O build não gerou $file."
+              exit 1
+            fi
+          done
+          gh release create "v${version}" "${files[@]}" \
+            --title "${version}" \
+            --notes "Cantinho Nerd ${version}. Quem já tem o app instalado recebe esta versão sozinho." \
+            --verify-tag \
+            --latest
