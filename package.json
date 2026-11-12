@@ -1,6 +1,6 @@
 {
   "name": "cantinho-nerd",
-  "version": "0.3.1",
+  "version": "0.3.2",
   "description": "Mesa virtual de RPG com fichas modulares",
   "main": "./out/main/index.js",
   "author": "Thalysson Emanoel",
