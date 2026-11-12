@@ -487,11 +487,25 @@ export const useBoardStore = create<BoardState>()((set, get) => {
 
       const row = change.row as unknown as MapRow
       if (typeof row.id !== 'string') return
-      const fromDb = mapFromRow(row)
+      const parsed = mapFromRow(row)
       const maps = get().maps
-      const index = maps.findIndex((item) => item.id === fromDb.id)
+      const index = maps.findIndex((item) => item.id === parsed.id)
+      const local = maps[index]
+      /*
+        Coluna grande que não mudou (a névoa passa fácil dos 2 KB) não vai no registro de
+        alterações do Postgres, então o evento chega sem ela: mudar só a grade ou a ordem dos
+        mapas "desligaria" a névoa na tela do jogador. O que não veio fica como estava.
+      */
+      const fromDb =
+        local === undefined
+          ? parsed
+          : {
+              ...parsed,
+              grid: 'grid' in row ? parsed.grid : local.grid,
+              fog: 'fog' in row ? parsed.fog : local.fog
+            }
       // Com gravação de névoa em voo, a da tela é mais nova que a do eco.
-      const map = keepFogInFlight(fromDb, maps[index])
+      const map = keepFogInFlight(fromDb, local)
 
       set({
         maps:

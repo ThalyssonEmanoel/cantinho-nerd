@@ -74,6 +74,11 @@ export interface SessionChannelHandlers {
  * - `combat-log-cleared`: o mestre limpou o log de combate (como o `feed-cleared`).
  * - `clue-gone`: uma pista deixou de estar revelada para alguém. Mesmo motivo do
  *   `token-gone`: o UPDATE que a esconde não chega a quem não pode mais vê-la.
+ * - `map-changed`: o mestre mudou a névoa ou a grade de um mapa. O UPDATE da tabela `maps`
+ *   também traz isso, mas, no teste com a mesa, ligar e desligar a névoa só aparecia para o
+ *   jogador depois de sair e voltar. Com o aviso, quem tem o mapa relê ele do banco.
+ * - `session-changed`: o mestre mudou as configurações da mesa (visão dos jogadores, escala).
+ *   Mesma garantia, para o UPDATE de `sessions`: cada um relê a sessão.
  */
 export type BroadcastEvent =
   | 'token-drag'
@@ -88,6 +93,8 @@ export type BroadcastEvent =
   | 'reaction'
   | 'combat-log-cleared'
   | 'clue-gone'
+  | 'map-changed'
+  | 'session-changed'
 
 const BROADCAST_EVENTS: readonly BroadcastEvent[] = [
   'token-drag',
@@ -101,7 +108,9 @@ const BROADCAST_EVENTS: readonly BroadcastEvent[] = [
   'ping',
   'reaction',
   'combat-log-cleared',
-  'clue-gone'
+  'clue-gone',
+  'map-changed',
+  'session-changed'
 ]
 
 /**

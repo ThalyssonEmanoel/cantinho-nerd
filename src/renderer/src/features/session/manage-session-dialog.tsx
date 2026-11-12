@@ -13,7 +13,6 @@ import {
   removeMember,
   renameSession,
   setSessionConditions,
-  setSessionDefaultVision,
   setSessionDiceRules,
   setSessionPassword,
   setSessionTemplate,
@@ -28,6 +27,7 @@ import {
 import type { SheetTemplateSummary } from '@/lib/sheet'
 import type { DiceRules } from '@/lib/chat/tray'
 import { templateRepository } from '@/features/sheet-templates/repository'
+import { saveDefaultVision } from '@/features/board/fog-actions'
 import { ConditionsSettings } from './conditions-settings'
 import { copyInvite } from './copy-invite'
 import { useSessionStore } from './session-store'
@@ -318,7 +318,7 @@ export function ManageSessionDialog({
                 className="w-24"
                 aria-label="Visão padrão em metros"
               />
-              <span className="text-muted-foreground text-sm">metros de visão padrão</span>
+              <span className="text-muted-foreground text-sm">metros de visão dos jogadores</span>
               <Button
                 variant="outline"
                 className="ml-auto"
@@ -329,8 +329,8 @@ export function ManageSessionDialog({
                 }
                 onClick={() =>
                   void run(
-                    () => setSessionDefaultVision(session.id, Number(vision.replace(',', '.'))),
-                    'Visão padrão salva'
+                    () => saveDefaultVision(session.id, Number(vision.replace(',', '.'))),
+                    'Visão dos jogadores salva'
                   )
                 }
               >
@@ -339,8 +339,8 @@ export function ManageSessionDialog({
             </div>
             <p className="text-muted-foreground text-xs">
               Quanto cada token de jogador revela da névoa em volta dele quando nem a ficha
-              (papel Visão) nem o token dizem. A névoa se liga por mapa, na ferramenta Névoa do
-              tabuleiro.
+              (papel Visão) nem o token dizem. Com 0, os jogadores só veem o que você revelar. A
+              névoa se liga por mapa, na ferramenta Névoa do tabuleiro, que também tem este ajuste.
             </p>
           </Section>
 

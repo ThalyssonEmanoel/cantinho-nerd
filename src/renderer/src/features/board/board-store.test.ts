@@ -322,6 +322,47 @@ describe('tokens pelo tempo real', () => {
   })
 })
 
+describe('mapa pelo tempo real', () => {
+  const coberta = { enabled: true, shapes: [] }
+  const mapRow = (extra: Record<string, unknown>): Record<string, unknown> => ({
+    id: 'mapa-1',
+    session_id: 'mesa',
+    name: 'Taverna',
+    image_path: taverna.imagePath,
+    width: 1000,
+    height: 800,
+    sort_order: 0,
+    ...extra
+  })
+
+  beforeEach(async () => {
+    await store().open({
+      sessionId: 'mesa',
+      role: 'player',
+      activeMapId: 'mapa-1',
+      scale: { metersPerSquare: 1.5, diagonal: 'simple' }
+    })
+    useBoardStore.setState({ maps: [{ ...taverna, fog: coberta }] })
+  })
+
+  it('a névoa que chega no UPDATE vale na hora', () => {
+    store().applyMapChange({
+      event: 'UPDATE',
+      row: mapRow({ grid: {}, fog: { enabled: false, shapes: [] } }),
+      old: {}
+    })
+    expect(store().maps[0]?.fog.enabled).toBe(false)
+  })
+
+  it('UPDATE sem a coluna da névoa (grande e sem mudança, o Postgres não manda) não a apaga', () => {
+    // O mestre só renomeou o mapa; a névoa não veio no evento.
+    store().applyMapChange({ event: 'UPDATE', row: mapRow({ name: 'Taverna nova' }), old: {} })
+    expect(store().maps[0]?.name).toBe('Taverna nova')
+    expect(store().maps[0]?.fog).toEqual(coberta)
+    expect(store().maps[0]?.grid).toEqual(taverna.grid)
+  })
+})
+
 describe('arrastar e soltar', () => {
   beforeEach(async () => {
     db.listTokens.mockResolvedValueOnce([token({ id: 't1', x: 0, y: 0 })])

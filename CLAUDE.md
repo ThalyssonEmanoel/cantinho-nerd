@@ -948,3 +948,30 @@ Pendências, de propósito:
   Thalysson não respondeu e com a atualização automática ela fica rara.
 - A atualização de ponta a ponta só dá para ver depois da segunda release (0.3.0 → 0.3.1): a
   primeira é instalada à mão.
+
+Depois disso: a 0.3.0 saiu incompleta (o `--publish always` subiu só o `.blockmap`; ver o
+workflow) e a **0.3.1** foi a primeira release completa, instalada à mão pelos amigos.
+
+**Névoa: visão 0 e aviso pelo canal (pedido de 12/11/2026) — feito, aguardando teste.**
+Decisões 86 a 88. Não há migração nova. É a versão que vai testar a atualização automática
+(0.3.1 → 0.3.2).
+
+- `DEFAULT_VISION_M` agora é 0 (`lib/board/fog.ts`): com a névoa ligada, o jogador só vê o
+  revelado. Mesa com valor gravado em Gerenciar continua com ele.
+- `fog-bar.tsx`: campo "Visão dos jogadores" (grava ao sair do campo/Enter, `saveDefaultVision` em
+  `fog-actions.ts`, que o Gerenciar também usa). O texto da barra diz o que os jogadores veem.
+- Dois avisos novos no canal: `map-changed` (depois de cada gravação da névoa e da grade; quem
+  tem aquele mapa chama `reloadMaps`) e `session-changed` (visão e escala; cada um relê a mesa).
+- `applyMapChange`: coluna que não veio no evento (`fog`, `grid`) fica como estava.
+
+Decisões e armadilhas registradas:
+
+- **Não achei por que o UPDATE de `maps` não chegava ao jogador.** O caminho no app está certo
+  (o UPDATE, quando chega, é aplicado e redesenha; testado), os privilégios e o RLS das
+  migrações também. Sem acesso ao banco não dá para observar o Realtime; o aviso pelo canal é a
+  mesma garantia que já existia para token oculto e pista. Se um dia der para olhar o banco,
+  conferir `select * from pg_publication_tables where pubname = 'supabase_realtime'` (a `maps`
+  tem de estar lá) e se o UPDATE de `maps` chega com o tamanho atual da névoa.
+- **Coluna grande sem mudança não vem no evento do Postgres** (TOAST): sem a `fog` no evento,
+  o `mapFromRow` dava névoa desligada. Vale para qualquer tabela com jsonb grande.
+- Dois testes do canvas contavam com os 9 m de visão; agora passam a visão explícita.

@@ -11,6 +11,8 @@ import {
 } from '@/lib/board'
 import { FriendlyError } from '@/lib/db/errors'
 import { updateMapFog } from '@/lib/db/maps'
+import { setSessionDefaultVision } from '@/lib/db/sessions'
+import { useSessionStore } from '@/features/session/session-store'
 import { beginFogWrite, endFogWrite, useBoardStore } from './board-store'
 
 /**
@@ -44,6 +46,8 @@ export function saveFog(map: BoardMap, next: FogState): Promise<void> {
   const write = queue.then(async () => {
     try {
       await updateMapFog(map.id, next)
+      // Só depois de gravada: quem recebe o aviso relê a névoa do banco (`map-changed`).
+      useSessionStore.getState().broadcast('map-changed', { mapId: map.id })
     } catch (error) {
       // Recusou: a tela volta para o que estava antes desta gravação.
       useBoardStore.getState().setMapFogLocally(map.id, previous)
@@ -79,4 +83,14 @@ export function revealWholeMap(map: BoardMap): Promise<void> {
 
 export function coverWholeMap(map: BoardMap): Promise<void> {
   return saveFog(map, coverAll(fogOf(map)))
+}
+
+/**
+ * Até onde os jogadores enxergam na névoa, em metros (6.4) — vale para todo token de jogador
+ * que não tenha visão própria. Grava na mesa, atualiza a tela do mestre e avisa os jogadores.
+ */
+export async function saveDefaultVision(sessionId: string, meters: number): Promise<void> {
+  await setSessionDefaultVision(sessionId, meters)
+  await useSessionStore.getState().reload()
+  useSessionStore.getState().broadcast('session-changed', {})
 }

@@ -176,6 +176,18 @@ export const useSessionStore = create<SessionState>()((set, get) => {
       void useCluesStore.getState().reload()
     }
 
+    /*
+      A névoa ou a grade de um mapa mudou (6.2, 6.4), ou as configurações da mesa (visão dos
+      jogadores, escala). O UPDATE do banco também chega pelo tempo real, mas ligar e desligar
+      a névoa só aparecia para o jogador depois de sair e voltar para a mesa: com o aviso, cada
+      um relê do banco. Mapa que esta tela não tem (o jogador só lê o ativo) não interessa.
+    */
+    if (event === 'map-changed' && typeof payload.mapId === 'string') {
+      const mapId = payload.mapId
+      if (board.maps.some((map) => map.id === mapId)) void board.reloadMaps()
+    }
+    if (event === 'session-changed') void get().reload()
+
     handleLiveBroadcast(event, payload)
   }
 

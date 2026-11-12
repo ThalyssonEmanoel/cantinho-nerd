@@ -291,7 +291,7 @@ Ao salvar, o cliente calcula os campos e grava junto `computed` (cache dos calcu
 ### 10.3 Tempo real
 - Um canal **privado** por sessão (`session:{id}`), autorizado por política que exige ser membro.
 - `postgres_changes` (filtrado por sessão e respeitando o RLS) para tokens, mapas, sessão, desenhos, rolagens, mensagens, combate, fichas e membros. Eventos DELETE chegam só com o id — e por isso **não passam pelo filtro de sessão** nas tabelas cuja chave é só o `id`: elas têm uma assinatura de DELETE sem filtro, e cada tela ignora o id que não conhece (decisão 84).
-- Broadcast (efêmero, não salvo): arrasto de token (~20/s, nunca de token oculto), traço em andamento, régua, ping, reações, foco de câmera.
+- Broadcast (efêmero, não salvo): arrasto de token (~20/s, nunca de token oculto), traço em andamento, régua, ping, reações, foco de câmera — e os avisos "mapa mudou" e "mesa mudou", que fazem cada um reler a névoa e as configurações da mesa do banco depois que o mestre grava (decisão 87).
 - Presença: quem está online, mostrado no topo da sessão.
 - Ao entrar, carregar um snapshot completo e depois aplicar os eventos. Ao reconectar, mostrar "Reconectando…" e recarregar o snapshot.
 
@@ -523,6 +523,7 @@ Decidido na Fase 11 (30/10/2026), para confirmar no teste:
     jogadores revela por cima de tudo**, até de área coberta.
 49. **Visão**: o papel Visão da ficha; sem ele, o valor do token; sem os dois, o padrão da
     mesa (9 m, em "Gerenciar"). Conta a partir da borda do token, com a borda esfumada.
+    *Revista em 12/11/2026: o padrão da mesa agora é 0, ajustável na barra da névoa (decisão 86).*
 50. **A visão é do grupo**: cada token de jogador revela o mapa para todos os jogadores.
 51. **Para o jogador, não aparecem** monstros, NPCs e objetos com o centro no escuro (nem
     as reações em cima deles). Token de jogador sempre aparece. Desenhos ficam por baixo da
@@ -662,3 +663,22 @@ Thalysson, para confirmar no teste:
     a `maps` — o tempo real não trazia o mapa novo. Agora, a cada troca, o app relê a lista de
     mapas (e mostra "Abrindo o mapa…" enquanto isso). Um mapa que a tela ainda não tinha visto
     abre **inteiro à vista**, como o primeiro da sessão; antes, abria em 100% a partir do canto.
+
+Decidido em 12/11/2026 (névoa), a pedido do Thalysson, para confirmar no teste:
+
+86. **A visão dos jogadores começa em 0** ("quero que seja nulo e o mestre possa ajustar a
+    distância"): com a névoa ligada, o jogador só enxerga o que o mestre revelar. Os 9 m de
+    antes deixavam uma área grande demais à vista. O mestre ajusta a distância **na própria
+    barra da névoa** ("Visão dos jogadores", em metros; grava ao sair do campo ou com Enter),
+    e o mesmo campo continua em Gerenciar. Vale para todo token de jogador sem visão própria;
+    um token pode ter a sua (botão direito → Editar → Visão), e a ficha pode dar pelo papel
+    Visão. Mesa que já tinha um valor gravado em Gerenciar continua com ele.
+87. **Ligar, desligar e mexer na névoa chega na hora para os jogadores** (bug achado no teste:
+    só aparecia saindo e voltando para a mesa). Depois de cada gravação da névoa ou da grade, o
+    mestre manda pelo canal da mesa um aviso "mapa mudou", e quem tem aquele mapa o relê do
+    banco; depois de mudar a visão dos jogadores ou a escala, um aviso "mesa mudou", e cada um
+    relê a mesa. O evento do banco continua valendo; o aviso garante, como já era com tokens
+    ocultos, pistas e desenhos apagados de uma vez.
+88. **Evento do banco sem a névoa não apaga a névoa:** o Postgres não manda no evento uma
+    coluna grande que não mudou, então renomear ou reordenar mapas, ou mexer só na grade, fazia
+    a névoa "sumir" na tela do jogador. Agora o que não veio no evento fica como estava.

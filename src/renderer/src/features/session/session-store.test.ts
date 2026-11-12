@@ -1,4 +1,5 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
+import { DEFAULT_GRID, type BoardMap } from '@/lib/board'
 import type { SessionChannelHandlers } from '@/lib/db/realtime'
 import type { SessionDetail } from '@/lib/db/sessions'
 
@@ -387,5 +388,49 @@ describe('combate (7.3)', () => {
     handlers().onStatus('reconnecting')
     handlers().onStatus('live')
     await vi.waitFor(() => expect(mocks.fetchCombat).toHaveBeenCalledWith('s1'))
+  })
+})
+
+/*
+  Ligar e desligar a névoa só aparecia para o jogador depois de sair e voltar para a mesa.
+  O mestre agora avisa pelo canal depois de gravar, e cada um relê do banco.
+*/
+describe('avisos de mapa e de mesa mudados', () => {
+  const cripta = (enabled: boolean): BoardMap => ({
+    id: 'm1',
+    sessionId: 's1',
+    name: 'Cripta',
+    imagePath: 'x',
+    width: 1000,
+    height: 800,
+    grid: { ...DEFAULT_GRID, size: 50 },
+    fog: { enabled, shapes: [] },
+    sortOrder: 0
+  })
+
+  it('"map-changed" de um mapa desta tela: relê os mapas e a névoa nova aparece', async () => {
+    await store().open('s1', viewer)
+    useBoardStore.setState({ maps: [cripta(false)], openMapId: 'm1', activeMapId: 'm1' })
+    mocks.listMaps.mockClear()
+    mocks.listMaps.mockResolvedValueOnce([cripta(true)] as never)
+
+    handlers().onBroadcast('map-changed', { mapId: 'm1' })
+    await vi.waitFor(() => expect(useBoardStore.getState().maps[0]?.fog.enabled).toBe(true))
+    expect(mocks.listMaps).toHaveBeenCalledTimes(1)
+  })
+
+  it('mapa que esta tela não tem (o jogador só lê o ativo) não faz nada', async () => {
+    await store().open('s1', viewer)
+    mocks.listMaps.mockClear()
+    handlers().onBroadcast('map-changed', { mapId: 'outro-mapa' })
+    handlers().onBroadcast('map-changed', { mapId: 42 })
+    expect(mocks.listMaps).not.toHaveBeenCalled()
+  })
+
+  it('"session-changed": relê a mesa, e a visão nova dos jogadores vale', async () => {
+    await store().open('s1', viewer)
+    mocks.fetchSession.mockResolvedValueOnce({ ...session('player'), defaultVisionM: 3 })
+    handlers().onBroadcast('session-changed', {})
+    await vi.waitFor(() => expect(store().session?.defaultVisionM).toBe(3))
   })
 })

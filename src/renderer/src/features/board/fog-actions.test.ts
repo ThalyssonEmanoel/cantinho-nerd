@@ -11,9 +11,19 @@ const db = vi.hoisted(() => ({
   listMaps: vi.fn(async () => [])
 }))
 
+const session = vi.hoisted(() => ({
+  broadcast: vi.fn(),
+  reload: vi.fn(async () => {}),
+  setSessionDefaultVision: vi.fn(async (_id: string, _meters: number) => {})
+}))
+
 vi.mock('@/lib/db/maps', () => db)
 vi.mock('@/lib/db/tokens', () => ({ listTokens: vi.fn(async () => []), moveToken: vi.fn() }))
 vi.mock('@/lib/db/drawings', () => ({ listDrawings: () => Promise.resolve([]) }))
+vi.mock('@/lib/db/sessions', () => ({ setSessionDefaultVision: session.setSessionDefaultVision }))
+vi.mock('@/features/session/session-store', () => ({
+  useSessionStore: { getState: () => ({ broadcast: session.broadcast, reload: session.reload }) }
+}))
 
 const actions = await import('./fog-actions')
 const { useBoardStore } = await import('./board-store')
@@ -135,5 +145,36 @@ describe('gravar a névoa', () => {
     }
     await expect(actions.saveFog(map, huge)).rejects.toThrow('detalhada demais')
     expect(db.updateMapFog).not.toHaveBeenCalled()
+  })
+})
+
+/*
+  Ligar e desligar a névoa só aparecia para o jogador depois de sair e voltar para a mesa.
+  Agora cada gravação avisa pelo canal, e quem recebe relê o mapa do banco.
+*/
+describe('avisar os jogadores', () => {
+  it('gravou: avisa pelo canal qual mapa mudou', async () => {
+    await actions.setFogEnabled(map, false)
+    expect(session.broadcast).toHaveBeenCalledWith('map-changed', { mapId: 'm1' })
+  })
+
+  it('o aviso sai só depois de o banco gravar, e não sai se ele recusar', async () => {
+    const first = deferred()
+    db.updateMapFog.mockReturnValueOnce(first.promise)
+    const saving = actions.revealWholeMap(map)
+
+    await Promise.resolve()
+    // O jogador releria a névoa velha: o aviso espera a gravação.
+    expect(session.broadcast).not.toHaveBeenCalled()
+    first.reject(new Error('caiu'))
+    await expect(saving).rejects.toThrow('caiu')
+    expect(session.broadcast).not.toHaveBeenCalled()
+  })
+
+  it('visão dos jogadores: grava na mesa, atualiza a tela do mestre e avisa', async () => {
+    await actions.saveDefaultVision('s1', 4.5)
+    expect(session.setSessionDefaultVision).toHaveBeenCalledWith('s1', 4.5)
+    expect(session.reload).toHaveBeenCalled()
+    expect(session.broadcast).toHaveBeenCalledWith('session-changed', {})
   })
 })

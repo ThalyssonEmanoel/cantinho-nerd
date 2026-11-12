@@ -31,8 +31,12 @@ export interface FogState {
 
 export const EMPTY_FOG: FogState = { enabled: false, shapes: [] }
 
-/** Visão padrão da mesa, quando nem a ficha nem o token dizem (6.4). */
-export const DEFAULT_VISION_M = 9
+/**
+ * Visão padrão da mesa, quando nem a ficha nem o token dizem (6.4). Zero: com a névoa ligada,
+ * o jogador só vê o que o mestre revelar, até o mestre dar uma distância (decisão 86). Era 9 m,
+ * e no teste com a mesa a área revelada em volta de cada jogador ficou grande demais.
+ */
+export const DEFAULT_VISION_M = 0
 
 /** Teto de áreas num mapa: a coluna do banco aceita 256 KB. */
 export const MAX_FOG_SHAPES = 400

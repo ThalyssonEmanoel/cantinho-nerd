@@ -219,7 +219,7 @@ export function TokenEditorDialog({
                 <Input
                   id="token-visao"
                   inputMode="decimal"
-                  placeholder="da ficha"
+                  placeholder="a da mesa"
                   value={vision}
                   onChange={(event) => setVision(event.target.value)}
                 />

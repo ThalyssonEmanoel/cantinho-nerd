@@ -60,7 +60,7 @@ export function GridSettingsDialog({
       await updateMapGrid(map.id, grid)
       await setSessionScale(map.sessionId, nextScale)
 
-      // Local na hora; os outros recebem pelo tempo real.
+      // Local na hora; os outros recebem pelo tempo real e, garantido, pelos avisos do canal.
       useBoardStore.setState({
         maps: useBoardStore.getState().maps.map((item) =>
           item.id === map.id ? { ...item, grid } : item
@@ -68,6 +68,8 @@ export function GridSettingsDialog({
         scale: nextScale
       })
       await useSessionStore.getState().reload()
+      useSessionStore.getState().broadcast('map-changed', { mapId: map.id })
+      useSessionStore.getState().broadcast('session-changed', {})
       onClose()
     } catch (error) {
       toast.error('Não consegui salvar a grade', { description: errorMessage(error) })

@@ -116,7 +116,9 @@ function prepareStore(tokens: BoardToken[] = []): void {
 async function render(
   role: 'gm' | 'player' = 'gm',
   userId = 'mestre',
-  board: BoardMap = map
+  board: BoardMap = map,
+  /** Visão dos jogadores da mesa, em metros; sem ela, vale o padrão (0). */
+  defaultVisionM?: number
 ): Promise<void> {
   root = createRoot(container)
   await act(async () => {
@@ -125,6 +127,7 @@ async function render(
         map={board}
         role={role}
         userId={userId}
+        defaultVisionM={defaultVisionM}
         onOpenToken={() => {}}
         onTokenMenu={() => {}}
         onBoardMenu={() => {}}
@@ -494,7 +497,7 @@ describe('névoa de guerra (6.4)', () => {
 
   it('o jogador não vê o monstro no escuro, mas vê o que a visão dele alcança', async () => {
     prepareFoggy([hero, near, far])
-    await render('player', 'ana', foggy)
+    await render('player', 'ana', foggy, 9)
 
     expect(stage().getLayers().some((layer) => layer.name() === 'nevoa')).toBe(true)
     expect(texts()).toContain('Lia')
@@ -502,9 +505,19 @@ describe('névoa de guerra (6.4)', () => {
     expect(texts()).not.toContain('Goblin longe')
   })
 
+  it('com a visão padrão (0), o jogador só vê o próprio token e o revelado (decisão 86)', async () => {
+    prepareFoggy([hero, near, far])
+    await render('player', 'ana', foggy)
+
+    expect(texts()).toContain('Lia')
+    // Nem o goblin colado nele: com visão 0, só o que o mestre revelar.
+    expect(texts()).not.toContain('Goblin perto')
+    expect(texts()).not.toContain('Goblin longe')
+  })
+
   it('a névoa acompanha o arrasto: o monstro aparece quando a visão chega nele', async () => {
     prepareFoggy([hero, far])
-    await render('player', 'ana', foggy)
+    await render('player', 'ana', foggy, 9)
     expect(texts()).not.toContain('Goblin longe')
 
     act(() => useBoardStore.getState().dragTo('lia', { x: 750, y: 600 }))
