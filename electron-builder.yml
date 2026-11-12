@@ -39,5 +39,18 @@ protocols:
     schemes:
       - rpgmesa
 
-# A publicação no GitHub Releases (e o electron-updater) entram na Fase 12.
-publish: null
+# Atualização automática (decisão 78). O GitHub Actions (.github/workflows/release.yml) gera
+# o instalador e publica numa release do GitHub; este bloco também grava no instalador o
+# `app-update.yml`, que diz ao app instalado onde procurar a versão nova (o `latest.yml` da
+# release mais recente). O repositório é público: o app não leva token nenhum.
+#
+# `releaseType: release` publica a release direto, sem rascunho. Rascunho não aparece para o
+# app, e a versão ficaria parada esperando alguém clicar em "Publish" no site.
+#
+# O `npm run build:win` local continua sem publicar nada: fora do CI, o electron-builder só
+# publica com `--publish`.
+publish:
+  provider: github
+  owner: ThalyssonEmanoel
+  repo: cantinho-nerd
+  releaseType: release

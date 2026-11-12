@@ -80,11 +80,13 @@ export function BoardView(): React.JSX.Element {
   const role = session?.role ?? 'player'
   const map = maps.find((item) => item.id === openMapId) ?? null
 
-  if (loading) {
+  // Também quando o mestre acaba de ativar outro mapa: o jogador já sabe qual é (veio com a
+  // sessão), mas ainda está lendo o mapa em si.
+  if (loading || (map === null && openMapId !== null)) {
     return (
       <div className="text-muted-foreground flex size-full items-center justify-center gap-2 text-sm">
         <Loader2 className="size-4 animate-spin" />
-        Abrindo o tabuleiro…
+        {loading ? 'Abrindo o tabuleiro…' : 'Abrindo o mapa…'}
       </div>
     )
   }

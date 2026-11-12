@@ -95,8 +95,10 @@ function row(partial: Partial<TokenRow> & { id: string }): TokenRow {
 const store = (): ReturnType<typeof useBoardStore.getState> => useBoardStore.getState()
 
 beforeEach(() => {
-  db.listMaps.mockResolvedValue([taverna, cripta])
-  db.listTokens.mockResolvedValue([])
+  // `mockReset` também joga fora as respostas "uma vez" que um teste que falhou deixou sem
+  // usar — sem isso, a falha de um teste derrubava os seguintes.
+  db.listMaps.mockReset().mockResolvedValue([taverna, cripta])
+  db.listTokens.mockReset().mockResolvedValue([])
   db.moveToken.mockResolvedValue(undefined)
   store().close()
 })
@@ -175,6 +177,85 @@ describe('mapa ativo mudou', () => {
   })
 })
 
+/*
+  O caso de verdade: o RLS de `maps` só entrega ao jogador o mapa ativo. Os testes acima dão
+  a ele a biblioteca inteira, e foi assim que o bug passou — o mestre trocava de mapa e o
+  jogador ficava sem o mapa novo até sair e voltar para a mesa.
+*/
+describe('o jogador só recebe o mapa ativo (RLS)', () => {
+  const ids = (): string[] => store().maps.map((map) => map.id)
+
+  beforeEach(async () => {
+    db.listMaps.mockResolvedValueOnce([taverna])
+    await store().open({
+      sessionId: 'mesa',
+      role: 'player',
+      activeMapId: 'mapa-1',
+      scale: { metersPerSquare: 1.5, diagonal: 'simple' }
+    })
+    store().setViewport({ width: 500, height: 500 })
+  })
+
+  it('o mestre ativa outro mapa: a lista é relida e o mapa novo aparece', async () => {
+    db.listMaps.mockResolvedValueOnce([cripta])
+    store().syncSession('mapa-2', store().scale)
+
+    expect(store().openMapId).toBe('mapa-2')
+    await vi.waitFor(() => expect(ids()).toEqual(['mapa-2']))
+    expect(db.listTokens).toHaveBeenLastCalledWith('mapa-2')
+  })
+
+  it('o mapa novo começa inteiro à vista, como o primeiro (6.1)', async () => {
+    db.listMaps.mockResolvedValueOnce([cripta])
+    store().syncSession('mapa-2', store().scale)
+    await vi.waitFor(() => expect(store().cameras['mapa-2']).toBeDefined())
+
+    const camera = store().cameras['mapa-2']
+    expect((camera?.scale ?? 0) * cripta.width).toBeLessThanOrEqual(500)
+    expect(camera?.scale).not.toBe(1)
+  })
+
+  it('se a leitura falhar, tenta de novo no próximo aviso da sessão', async () => {
+    const warn = vi.spyOn(console, 'warn').mockImplementation(() => {})
+    db.listMaps.mockRejectedValueOnce(new Error('sem rede'))
+    store().syncSession('mapa-2', store().scale)
+    await vi.waitFor(() => expect(warn).toHaveBeenCalled())
+    expect(ids()).toEqual(['mapa-1'])
+
+    // Outro aviso da sessão, com o mesmo mapa ativo: o mapa continua faltando, então relê.
+    db.listMaps.mockResolvedValueOnce([cripta])
+    store().syncSession('mapa-2', store().scale)
+    await vi.waitFor(() => expect(ids()).toEqual(['mapa-2']))
+    warn.mockRestore()
+  })
+
+  it('a resposta atrasada de uma troca anterior não vale', async () => {
+    let answerFirst: (maps: BoardMap[]) => void = () => {}
+    db.listMaps.mockImplementationOnce(
+      () =>
+        new Promise<BoardMap[]>((resolve) => {
+          answerFirst = resolve
+        })
+    )
+    store().syncSession('mapa-2', store().scale)
+
+    // O mestre voltou para a Taverna antes de a primeira leitura terminar.
+    db.listMaps.mockResolvedValueOnce([taverna])
+    store().syncSession('mapa-1', store().scale)
+    await vi.waitFor(() => expect(db.listMaps).toHaveBeenCalledTimes(3))
+
+    answerFirst([cripta])
+    await new Promise((resolve) => setTimeout(resolve, 0))
+    expect(ids()).toEqual(['mapa-1'])
+    expect(store().openMapId).toBe('mapa-1')
+  })
+
+  it('sem troca de mapa, um aviso da sessão não relê a lista', () => {
+    store().syncSession('mapa-1', { metersPerSquare: 3, diagonal: 'real' })
+    expect(db.listMaps).toHaveBeenCalledTimes(1)
+  })
+})
+
 describe('tokens pelo tempo real', () => {
   beforeEach(async () => {
     await store().open({
@@ -200,6 +281,19 @@ describe('tokens pelo tempo real', () => {
     // O DELETE chega só com o id.
     store().applyTokenChange({ event: 'DELETE', row: {}, old: { id: 't1' } })
     expect(store().tokens).toEqual([])
+  })
+
+  it('DELETE de outra mesa (a assinatura é sem filtro) não mexe na tela', () => {
+    store().applyTokenChange({ event: 'INSERT', row: row({ id: 't1' }) as never, old: {} })
+    const tokens = store().tokens
+    const maps = store().maps
+
+    store().applyTokenChange({ event: 'DELETE', row: {}, old: { id: 'de-outra-mesa' } })
+    store().applyMapChange({ event: 'DELETE', row: {}, old: { id: 'mapa-de-outra-mesa' } })
+
+    // A mesma lista, não uma cópia: nada redesenha por causa de uma mesa alheia.
+    expect(store().tokens).toBe(tokens)
+    expect(store().maps).toBe(maps)
   })
 
   it('token de outro mapa não entra nesta tela', () => {

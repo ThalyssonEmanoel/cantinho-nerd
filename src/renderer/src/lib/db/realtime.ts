@@ -22,7 +22,10 @@ export type ChannelStatus = 'connecting' | 'live' | 'reconnecting'
 
 export interface TableChange {
   event: 'INSERT' | 'UPDATE' | 'DELETE'
-  /** Linha nova (INSERT/UPDATE). Em DELETE chega só o id, em `old`. */
+  /**
+   * Linha nova (INSERT/UPDATE). Em DELETE chega só o id, em `old` — e, nas tabelas de
+   * `DELETE_BY_ID_TABLES`, de qualquer mesa: quem trata precisa ignorar o id que não conhece.
+   */
   row: Record<string, unknown>
   old: Record<string, unknown>
 }
@@ -100,6 +103,26 @@ const BROADCAST_EVENTS: readonly BroadcastEvent[] = [
   'combat-log-cleared',
   'clue-gone'
 ]
+
+/**
+ * Tabelas cuja chave primária é só o `id`: o DELETE delas precisa da assinatura sem filtro
+ * (ver `openSessionChannel`).
+ *
+ * Ficam de fora as que têm `session_id` na chave (`session_members`, `combat_state`), cujo
+ * DELETE já casa com o filtro, as que se esvaziam por aviso no canal (`messages`, `rolls`,
+ * `combat_log`: limpar o chat apagaria centenas de linhas, e cada uma viraria um evento para
+ * todos os conectados) e a `sheet_gm_data`, que só some junto com a ficha.
+ */
+export const DELETE_BY_ID_TABLES = [
+  'maps',
+  'tokens',
+  'drawings',
+  'sheets',
+  'combat_entries',
+  'clues'
+] as const
+
+export type DeleteByIdTable = (typeof DELETE_BY_ID_TABLES)[number]
 
 export interface SessionChannel {
   close: () => void
@@ -248,6 +271,31 @@ export function openSessionChannel(
         { event: '*', schema: 'public', table: 'clues', filter: `session_id=eq.${sessionId}` },
         (payload) => handlers.onClueChange(toChange(payload))
       )
+
+    /*
+      Exclusões chegam por uma assinatura à parte, **sem filtro**. Numa linha apagada, o
+      Realtime só conhece as colunas da chave primária (a "identidade de réplica" padrão do
+      Postgres), e o filtro `session_id=eq.…` olha uma coluna que não veio: o DELETE era
+      descartado para todo mundo. Era por isso que um token apagado (ou um desenho, uma pista)
+      só sumia da tela de quem saísse e voltasse para a mesa.
+
+      Sem filtro, chega o id de toda exclusão dessas tabelas, de qualquer mesa. Não vaza nada:
+      o Realtime não aplica o RLS em DELETE justamente porque manda só a chave — um UUID solto.
+      Cada store ignora o id que não conhece.
+    */
+    const deleteHandlers: Record<DeleteByIdTable, (change: TableChange) => void> = {
+      maps: handlers.onMapChange,
+      tokens: handlers.onTokenChange,
+      drawings: handlers.onDrawingChange,
+      sheets: handlers.onSheetChange,
+      combat_entries: handlers.onCombatEntryChange,
+      clues: handlers.onClueChange
+    }
+    for (const table of DELETE_BY_ID_TABLES) {
+      channel.on('postgres_changes', { event: 'DELETE', schema: 'public', table }, (payload) =>
+        deleteHandlers[table](toChange(payload))
+      )
+    }
 
     for (const event of BROADCAST_EVENTS) {
       channel.on('broadcast', { event }, (message) => {

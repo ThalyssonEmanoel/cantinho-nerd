@@ -122,6 +122,11 @@ export const useSessionStore = create<SessionState>()((set, get) => {
       const remote = remoteChangeFromSheetRow(change.row)
       if (remote !== null) useSheetStore.getState().applyRemote(remote)
     }
+    // O DELETE chega de qualquer mesa (assinatura sem filtro) e também das fichas-instância
+    // dos monstros, que não estão na lista: só relê se a ficha apagada era uma destas.
+    if (change.event === 'DELETE' && !get().sheets.some((sheet) => sheet.id === change.old.id)) {
+      return
+    }
     scheduleSheetsRefresh()
   }
 
@@ -250,6 +255,8 @@ export const useSessionStore = create<SessionState>()((set, get) => {
             if (connection === 'live' && wasLive) {
               void get().reload()
               void useChatStore.getState().reload()
+              // Os mapas também: um mapa ativado ou apagado no meio-tempo não chegou.
+              void useBoardStore.getState().reloadMaps()
               void useBoardStore.getState().reloadTokens()
               void useBoardStore.getState().reloadDrawings()
               void useCombatStore.getState().reload()

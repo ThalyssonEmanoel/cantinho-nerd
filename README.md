@@ -21,9 +21,11 @@ revela e cobre áreas, a visão dos jogadores abre o escuro em volta deles enqua
 monstros no escuro não aparecem para eles. Há também a tela de **Configurações** (sons, cache
 de imagens, versão, sair) e a exclusão das sessões e da conta.
 
-O app é distribuído só pelo instalador (`npm run build:win`), mandado direto para os
-amigos: não há site nem atualização automática. Versão nova = instalar o `.exe` novo por
-cima; contas e mesas ficam no Supabase. O plano completo está em [docs/ESPECIFICACAO.md](docs/ESPECIFICACAO.md).
+O app é distribuído pelas [releases do GitHub](https://github.com/ThalyssonEmanoel/cantinho-nerd/releases)
+e **se atualiza sozinho**: ao abrir (e a cada 4 horas) ele procura versão nova, baixa em
+segundo plano e instala quando a pessoa fechar o app, ou na hora, se ela escolher "Reiniciar
+agora". Contas e mesas ficam no Supabase e não se perdem. O plano completo está em
+[docs/ESPECIFICACAO.md](docs/ESPECIFICACAO.md).
 
 ## Rodar em desenvolvimento
 
@@ -84,7 +86,27 @@ npm run build:win
 ```
 
 O instalador NSIS sai em `dist/`. Ele instala por usuário (não pede senha de administrador)
-e registra o protocolo `rpgmesa://`, usado pelos links de convite.
+e registra o protocolo `rpgmesa://`, usado pelos links de convite. Esse build local é para
+testar: a versão que os jogadores recebem sai do GitHub Actions (abaixo).
+
+## Publicar uma versão nova
+
+Quem publica é o GitHub Actions ([.github/workflows/release.yml](.github/workflows/release.yml)),
+quando chega ao GitHub uma tag `v<versão>`. Commit e push comuns não publicam nada.
+
+Uma vez só, no GitHub: **Settings → Secrets and variables → Actions → New repository secret**,
+crie `VITE_SUPABASE_URL` e `VITE_SUPABASE_ANON_KEY` com os mesmos valores do seu `.env`.
+
+A cada versão, com tudo já commitado:
+
+```bash
+npm version patch        # 0.3.0 → 0.3.1 (use "minor" para 0.3.0 → 0.4.0); cria o commit e a tag
+git push --follow-tags   # manda o commit e a tag; o GitHub Actions começa sozinho
+```
+
+Em uns 10 minutos a release aparece com o instalador, e os apps instalados se atualizam
+sozinhos. Se a publicação falhar (teste quebrado, tag diferente do `package.json`, segredo
+faltando), nada é publicado e ninguém é afetado: a aba **Actions** do GitHub mostra o motivo.
 
 ## Scripts
 
@@ -95,7 +117,8 @@ e registra o protocolo `rpgmesa://`, usado pelos links de convite.
 | `npm run lint`      | ESLint                                     |
 | `npm run typecheck` | TypeScript (processo principal + renderer) |
 | `npm test`          | Vitest                                     |
-| `npm run build:win` | instalador para Windows                    |
+| `npm run build:win` | instalador para Windows (teste local)      |
+| `npm version patch` | sobe a versão e cria a tag de publicação   |
 | `npm run db:push`   | aplica as migrações no Supabase            |
 | `npm run db:types`  | regenera os tipos do banco                 |
 

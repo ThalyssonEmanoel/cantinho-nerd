@@ -1,0 +1,71 @@
+# Publica uma versão nova do app (Fase 12, decisão 78).
+#
+# Roda quando chega ao GitHub uma tag `v<versão>` (ex.: v0.2.0), que é o que o
+# `npm version patch|minor` cria. Commit e push comuns não publicam nada: assim nenhuma
+# alteração pela metade chega sozinha no PC dos jogadores.
+#
+# O que sai daqui: uma release do GitHub com o instalador, o `.blockmap` (para o app baixar só
+# o que mudou) e o `latest.yml`, que é o que os apps instalados leem para saber que há versão
+# nova. Se qualquer passo falhar, nada é publicado e ninguém é atualizado.
+name: Publicar versão
+
+on:
+  push:
+    tags:
+      - 'v*'
+
+# Criar a release e anexar os arquivos. O token é o do próprio GitHub Actions, que vale só
+# para esta execução: não há senha nem token pessoal guardado em lugar nenhum.
+permissions:
+  contents: write
+
+jobs:
+  release:
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v7
+
+      - uses: actions/setup-node@v7
+        with:
+          node-version: 24
+          cache: npm
+
+      - name: Conferir a tag com a versão do package.json
+        shell: bash
+        run: |
+          expected="v$(node -p "require('./package.json').version")"
+          if [ "$expected" != "$GITHUB_REF_NAME" ]; then
+            echo "::error::A tag $GITHUB_REF_NAME não bate com a versão do package.json ($expected). Use 'npm version patch' (ou minor), que muda os dois juntos."
+            exit 1
+          fi
+
+      - name: Instalar as dependências
+        run: npm ci
+
+      # O app vai sozinho para o PC de todo mundo: sem as variáveis do Supabase, ele abriria
+      # sem conseguir entrar. Melhor a publicação falhar aqui.
+      - name: Criar o .env a partir dos segredos do repositório
+        shell: bash
+        env:
+          VITE_SUPABASE_URL: ${{ secrets.VITE_SUPABASE_URL }}
+          VITE_SUPABASE_ANON_KEY: ${{ secrets.VITE_SUPABASE_ANON_KEY }}
+        run: |
+          if [ -z "$VITE_SUPABASE_URL" ] || [ -z "$VITE_SUPABASE_ANON_KEY" ]; then
+            echo "::error::Cadastre os segredos VITE_SUPABASE_URL e VITE_SUPABASE_ANON_KEY em Settings > Secrets and variables > Actions."
+            exit 1
+          fi
+          printf 'VITE_SUPABASE_URL=%s\nVITE_SUPABASE_ANON_KEY=%s\n' "$VITE_SUPABASE_URL" "$VITE_SUPABASE_ANON_KEY" > .env
+
+      - name: Testes
+        run: npm test
+
+      # Passos separados de propósito: num `run` de várias linhas, o PowerShell do Windows
+      # segue para a linha de baixo mesmo se a de cima falhar, e um build quebrado seria
+      # empacotado e publicado. `npm run build` já roda o typecheck antes.
+      - name: Compilar
+        run: npm run build
+
+      - name: Gerar o instalador e publicar a release
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: npx electron-builder --win --publish always

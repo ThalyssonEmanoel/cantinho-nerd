@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react'
-import { Bell, Eraser, HardDrive, Info, Loader2, LogOut, Play, Trash2, UserX } from 'lucide-react'
+import { Bell, Eraser, HardDrive, Loader2, LogOut, Play, Trash2, UserX } from 'lucide-react'
 import { toast } from 'sonner'
 import { PageHeader } from '@/components/page-header'
 import { Button } from '@/components/ui/button'
@@ -14,12 +14,13 @@ import { deleteMyAccount, deleteMySessions } from '@/lib/db/account'
 import { errorMessage } from '@/lib/db/errors'
 import { useAppStore } from '@/stores/app-store'
 import { useAuthStore } from '@/stores/auth-store'
+import { UpdateSection } from '@/features/updates/update-section'
 
 type Danger = 'sessions' | 'account'
 
 /**
- * Configurações (Fase 12): sons, cache de imagens, versão, sair e — no fim, separado — as
- * duas exclusões da seção 9, cada uma confirmada digitando o nome de usuário.
+ * Configurações (Fase 12): sons, cache de imagens, versão e atualização, sair e — no fim,
+ * separado — as duas exclusões da seção 9, cada uma confirmada digitando o nome de usuário.
  */
 export function SettingsPage(): React.JSX.Element {
   const info = useAppInfo()
@@ -112,24 +113,7 @@ export function SettingsPage(): React.JSX.Element {
         </CardContent>
       </Card>
 
-      <Card>
-        <CardContent className="space-y-2">
-          <h2 className="flex items-center gap-2 font-medium">
-            <Info className="text-muted-foreground size-4" />
-            Versão
-          </h2>
-          <p className="text-sm">
-            Cantinho Nerd {info === null ? '' : `versão ${info.version}`}
-            {info !== null && info.profile !== 'default' && (
-              <span className="text-muted-foreground"> · perfil {info.profile}</span>
-            )}
-          </p>
-          <p className="text-muted-foreground text-sm">
-            O app não se atualiza sozinho. Quando chegar um instalador novo, é só instalar por
-            cima: contas, mesas e fichas ficam no servidor e não se perdem.
-          </p>
-        </CardContent>
-      </Card>
+      <UpdateSection info={info} />
 
       <Card>
         <CardContent className="flex flex-wrap items-center gap-3">

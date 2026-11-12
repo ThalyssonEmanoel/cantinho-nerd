@@ -183,6 +183,17 @@ export function endFogWrite(mapId: string): void {
   else fogWrites.set(mapId, left)
 }
 
+/** O mapa vindo do banco, mas com a névoa da tela se houver gravação dela em voo. */
+function keepFogInFlight(fromDb: BoardMap, local: BoardMap | undefined): BoardMap {
+  return local !== undefined && fogWrites.has(fromDb.id) ? { ...fromDb, fog: local.fog } : fromDb
+}
+
+/**
+ * Número da última leitura da lista de mapas. Duas trocas de mapa seguidas disparam duas
+ * leituras, e a resposta da primeira pode chegar depois: só a mais nova vale.
+ */
+let mapsRequest = 0
+
 const emptyState = {
   sessionId: null,
   role: 'player' as SessionRole,
@@ -211,6 +222,23 @@ export const useBoardStore = create<BoardState>()((set, get) => {
   function cameraOf(mapId: string | null): Camera {
     if (mapId === null) return IDENTITY_CAMERA
     return get().cameras[mapId] ?? IDENTITY_CAMERA
+  }
+
+  /**
+   * Mapa que esta tela ainda não tinha visto começa inteiro à vista, como o primeiro (6.1).
+   * Antes só a primeira medida da janela fazia isso, e o mapa que o mestre ativava no meio da
+   * sessão abria em 100% a partir do canto. Mapa que já tem câmera fica onde estava.
+   */
+  function fitIfUnseen(): void {
+    const map = openMap()
+    const { viewport, cameras } = get()
+    if (map === null || viewport.width === 0 || cameras[map.id] !== undefined) return
+    set({
+      cameras: {
+        ...cameras,
+        [map.id]: fitToViewport({ width: map.width, height: map.height }, viewport)
+      }
+    })
   }
 
   function writeCamera(camera: Camera): void {
@@ -257,6 +285,7 @@ export const useBoardStore = create<BoardState>()((set, get) => {
     if (get().openMapId === mapId) return
     set({ openMapId: mapId, selection: [], dragging: {}, tokens: [], drawings: [] })
     clearGhostTimers()
+    fitIfUnseen()
     void loadTokens(mapId)
     void loadDrawings(mapId)
   }
@@ -277,6 +306,7 @@ export const useBoardStore = create<BoardState>()((set, get) => {
       set({ ...emptyState, sessionId, role, activeMapId, scale, loading: true })
 
       try {
+        mapsRequest += 1
         const maps = await listMaps(sessionId)
         if (get().sessionId !== sessionId) return
 
@@ -299,8 +329,18 @@ export const useBoardStore = create<BoardState>()((set, get) => {
     },
 
     syncSession: (activeMapId, scale) => {
-      const { role, openMapId, activeMapId: previous } = get()
+      const { role, openMapId, activeMapId: previous, maps } = get()
       set({ activeMapId, scale })
+
+      /*
+        O jogador só pode ler o mapa ativo (RLS de `maps`). Quando o mestre ativa outro, nada
+        muda na tabela `maps` — muda a `sessions` —, então o tempo real não traz o mapa novo:
+        ele ficava sem o que desenhar até sair e voltar para a mesa. Por isso a lista é relida
+        a cada troca, e também enquanto o mapa ativo não estiver nela (uma leitura que falhou
+        tenta de novo no próximo aviso da sessão).
+      */
+      const missing = activeMapId !== null && !maps.some((map) => map.id === activeMapId)
+      if (activeMapId !== previous || missing) void get().reloadMaps()
 
       // O jogador acompanha o mapa ativo. O mestre só é levado se estava vendo o antigo
       // — se ele estava preparando outro, continua onde estava (6.1).
@@ -311,9 +351,14 @@ export const useBoardStore = create<BoardState>()((set, get) => {
     reloadMaps: async () => {
       const { sessionId } = get()
       if (sessionId === null) return
+      mapsRequest += 1
+      const request = mapsRequest
       try {
-        const maps = await listMaps(sessionId)
-        if (get().sessionId === sessionId) set({ maps })
+        const fromDb = await listMaps(sessionId)
+        if (get().sessionId !== sessionId || request !== mapsRequest) return
+        const local = new Map(get().maps.map((map) => [map.id, map]))
+        set({ maps: fromDb.map((map) => keepFogInFlight(map, local.get(map.id))) })
+        fitIfUnseen()
       } catch (error) {
         console.warn('Não consegui recarregar os mapas:', errorMessage(error))
       }
@@ -330,22 +375,9 @@ export const useBoardStore = create<BoardState>()((set, get) => {
     openMap: (mapId) => switchTo(mapId),
 
     setViewport: (viewport) => {
-      const had = get().viewport.width > 0
       set({ viewport })
-
       // Primeira medida da janela: já começa com o mapa inteiro à vista.
-      const { openMapId } = get()
-      if (!had && openMapId !== null && get().cameras[openMapId] === undefined) {
-        const map = openMap()
-        if (map !== null) {
-          set({
-            cameras: {
-              ...get().cameras,
-              [openMapId]: fitToViewport({ width: map.width, height: map.height }, viewport)
-            }
-          })
-        }
-      }
+      fitIfUnseen()
     },
 
     setTool: (tool) => set({ tool }),
@@ -444,8 +476,11 @@ export const useBoardStore = create<BoardState>()((set, get) => {
 
     applyMapChange: (change) => {
       if (change.event === 'DELETE') {
+        // O DELETE chega de qualquer mesa (assinatura sem filtro): só o que é desta tela.
         const id = String(change.old.id ?? '')
-        set({ maps: get().maps.filter((map) => map.id !== id) })
+        if (get().maps.some((map) => map.id === id)) {
+          set({ maps: get().maps.filter((map) => map.id !== id) })
+        }
         if (get().openMapId === id) switchTo(get().activeMapId)
         return
       }
@@ -456,9 +491,7 @@ export const useBoardStore = create<BoardState>()((set, get) => {
       const maps = get().maps
       const index = maps.findIndex((item) => item.id === fromDb.id)
       // Com gravação de névoa em voo, a da tela é mais nova que a do eco.
-      const local = maps[index]
-      const map =
-        local !== undefined && fogWrites.has(fromDb.id) ? { ...fromDb, fog: local.fog } : fromDb
+      const map = keepFogInFlight(fromDb, maps[index])
 
       set({
         maps:
@@ -466,11 +499,12 @@ export const useBoardStore = create<BoardState>()((set, get) => {
             ? [...maps, map].sort((a, b) => a.sortOrder - b.sortOrder)
             : maps.map((item) => (item.id === map.id ? map : item))
       })
+      fitIfUnseen()
     },
 
     applyTokenChange: (change) => {
       if (change.event === 'DELETE') {
-        // O DELETE chega só com o id (10.3).
+        // O DELETE chega só com o id (10.3), e de qualquer mesa: id desconhecido não faz nada.
         get().removeTokenLocally(String(change.old.id ?? ''))
         return
       }
@@ -513,6 +547,11 @@ export const useBoardStore = create<BoardState>()((set, get) => {
         clearTimeout(timer)
         ghostTimers.delete(id)
       }
+      // Exclusões de outras mesas também chegam aqui: sem nada a tirar, a tela não redesenha.
+      const { tokens, selection, dragging } = get()
+      const known =
+        tokens.some((token) => token.id === id) || selection.includes(id) || id in dragging
+      if (!known) return
       set({
         tokens: get().tokens.filter((token) => token.id !== id),
         selection: get().selection.filter((item) => item !== id),

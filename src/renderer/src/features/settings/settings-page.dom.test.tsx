@@ -2,6 +2,7 @@ import { act } from 'react'
 import { createRoot, type Root } from 'react-dom/client'
 import { MemoryRouter, Route, Routes } from 'react-router-dom'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
+import type { UpdateStatus } from '@shared/update'
 import { buttonByText, byLabel, click, typeInto } from '@/test/dom-helpers'
 
 /**
@@ -41,6 +42,11 @@ beforeEach(() => {
   } as never)
   window.api.assetCacheSize = vi.fn(async () => 12 * 1024 * 1024)
   window.api.clearAssetCache = vi.fn(async () => 12 * 1024 * 1024)
+  // A ponte é a mesma em todos os testes: cada um começa com a atualização desligada.
+  window.api.getUpdateStatus = vi.fn(async (): Promise<UpdateStatus> => ({ state: 'disabled' }))
+  window.api.checkForUpdate = vi.fn(async (): Promise<UpdateStatus> => ({ state: 'none' }))
+  window.api.installUpdate = vi.fn(async () => false)
+  window.api.onUpdateStatus = vi.fn(() => () => {})
   container = document.createElement('div')
   document.body.append(container)
   root = createRoot(container)
@@ -93,10 +99,44 @@ describe('Configurações', () => {
     expect(toast.success).toHaveBeenCalledWith('Cache limpo: 12,0 MB liberados', expect.anything())
   })
 
-  it('mostra a versão e explica como atualizar', async () => {
+  it('mostra a versão; em desenvolvimento, a atualização fica desligada', async () => {
     await render()
     expect(container.textContent).toContain('versão 0.0.0-test')
-    expect(container.textContent).toContain('instalar por cima')
+    expect(container.textContent).toContain('só o app instalado se atualiza sozinho')
+    expect(container.textContent).not.toContain('Procurar atualização')
+  })
+
+  it('procura atualização pelo botão', async () => {
+    window.api.getUpdateStatus = vi.fn(async () => ({ state: 'none' as const }))
+    await render()
+    expect(container.textContent).toContain('Você está na versão mais nova.')
+
+    await act(async () => buttonByText(container, 'Procurar atualização').click())
+    expect(window.api.checkForUpdate).toHaveBeenCalled()
+  })
+
+  it('o andamento chega pelo aviso do processo principal', async () => {
+    let push: (status: UpdateStatus) => void = () => {}
+    window.api.onUpdateStatus = vi.fn((callback: (status: UpdateStatus) => void) => {
+      push = callback
+      return () => {}
+    })
+    await render()
+
+    act(() => push({ state: 'downloading', version: '0.3.0', percent: 50 }))
+    expect(container.textContent).toContain('Baixando a versão 0.3.0… 50%')
+    // Baixando, não dá para pedir outra procura.
+    expect(buttonByText(container, 'Procurar atualização').disabled).toBe(true)
+  })
+
+  it('com a versão baixada, oferece reiniciar', async () => {
+    window.api.getUpdateStatus = vi.fn(async () => ({ state: 'ready' as const, version: '0.3.0' }))
+    window.api.installUpdate = vi.fn(async () => true)
+    await render()
+    expect(container.textContent).toContain('A versão 0.3.0 já foi baixada')
+
+    await act(async () => buttonByText(container, 'Reiniciar e atualizar').click())
+    expect(window.api.installUpdate).toHaveBeenCalled()
   })
 
   it('excluir as sessões só libera com o nome de usuário digitado', async () => {

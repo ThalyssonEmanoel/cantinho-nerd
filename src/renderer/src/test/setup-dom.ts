@@ -43,7 +43,12 @@ if (!('api' in globalThis)) {
       openTextFile: async () => ({ status: 'canceled' as const }),
       assetCacheSize: async () => 0,
       clearAssetCache: async () => 0,
-      onDeepLink: () => () => {}
+      onDeepLink: () => () => {},
+      // Como no `npm run dev`: fora do app instalado, a atualização fica desligada.
+      getUpdateStatus: async () => ({ state: 'disabled' as const }),
+      checkForUpdate: async () => ({ state: 'disabled' as const }),
+      installUpdate: async () => false,
+      onUpdateStatus: () => () => {}
     },
     writable: true
   })

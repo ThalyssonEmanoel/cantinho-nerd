@@ -5,6 +5,7 @@ import type {
   SaveTextFileRequest,
   TextFileResult
 } from '../shared/ipc'
+import type { UpdateStatus } from '../shared/update'
 
 export interface CantinhoApi {
   getAppInfo: () => Promise<AppInfo>
@@ -18,6 +19,10 @@ export interface CantinhoApi {
   clearAssetCache: () => Promise<number>
   openSheetWindow: (sessionId: string, sheetId: string) => Promise<boolean>
   onDeepLink: (callback: (link: DeepLink) => void) => () => void
+  getUpdateStatus: () => Promise<UpdateStatus>
+  checkForUpdate: () => Promise<UpdateStatus>
+  installUpdate: () => Promise<boolean>
+  onUpdateStatus: (callback: (status: UpdateStatus) => void) => () => void
 }
 
 declare global {

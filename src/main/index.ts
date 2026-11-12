@@ -5,6 +5,7 @@ import { handleArgv, handleOpenUrl, registerDeepLinkProtocol, rememberDeepLink }
 import { registerIpcHandlers } from './ipc'
 import { applyDataProfile, isSecondaryProfile } from './profile'
 import { applySessionPolicies } from './security'
+import { startAutoUpdates } from './updater'
 import { createMainWindow, focusMainWindow, getDevOrigin } from './window'
 
 const APP_USER_MODEL_ID = 'app.rpgmesa.cantinhonerd'
@@ -49,6 +50,8 @@ function start(): void {
     app.on('browser-window-created', (_event, window) => optimizer.watchWindowShortcuts(window))
 
     createMainWindow()
+    // Depois da janela: a primeira procura espera alguns segundos de qualquer jeito.
+    startAutoUpdates()
 
     app.on('activate', () => {
       if (BrowserWindow.getAllWindows().length === 0) createMainWindow()

@@ -290,7 +290,7 @@ Ao salvar, o cliente calcula os campos e grava junto `computed` (cache dos calcu
 
 ### 10.3 Tempo real
 - Um canal **privado** por sessão (`session:{id}`), autorizado por política que exige ser membro.
-- `postgres_changes` (filtrado por sessão e respeitando o RLS) para tokens, mapas, sessão, desenhos, rolagens, mensagens, combate, fichas e membros. Eventos DELETE chegam só com o id.
+- `postgres_changes` (filtrado por sessão e respeitando o RLS) para tokens, mapas, sessão, desenhos, rolagens, mensagens, combate, fichas e membros. Eventos DELETE chegam só com o id — e por isso **não passam pelo filtro de sessão** nas tabelas cuja chave é só o `id`: elas têm uma assinatura de DELETE sem filtro, e cada tela ignora o id que não conhece (decisão 84).
 - Broadcast (efêmero, não salvo): arrasto de token (~20/s, nunca de token oculto), traço em andamento, régua, ping, reações, foco de câmera.
 - Presença: quem está online, mostrado no topo da sessão.
 - Ao entrar, carregar um snapshot completo e depois aplicar os eventos. Ao reconectar, mostrar "Reconectando…" e recarregar o snapshot.
@@ -373,7 +373,7 @@ Cada fase termina com algo que eu consigo abrir e testar.
 **Fase 12 — Distribuição e conta**
 - [ ] Site no GitHub Pages: página de download do último release, com instruções para o aviso "O Windows protegeu o computador" (Mais informações → Executar assim mesmo), e a página `/join?id=` que abre o app ou mostra o download e o ID.
 - [ ] O convite passa a usar o link https.
-- [ ] GitHub Actions: uma tag `v*` gera o instalador e publica no GitHub Releases; atualização automática com o aviso "Nova versão: reiniciar".
+- [X] GitHub Actions: uma tag `v*` gera o instalador e publica no GitHub Releases; atualização automática com o aviso "Nova versão: reiniciar" (feito em 12/11/2026, decisões 78 a 83).
 - [X] Excluir todas as minhas sessões e excluir conta (seção 9); tela de Configurações (sons, limpar cache, versão, verificar atualização, sair).
 
 **Fase 13 — Polimento**
@@ -536,6 +536,8 @@ Decidido na Fase 12 (30/10/2026):
     WhatsApp. Ficam de fora o GitHub Pages, o convite por link https e o GitHub Actions com
     o `electron-updater`. Por isso **"verificar atualização" virou um texto** na tela de
     Configurações: instalar o `.exe` novo por cima, e contas e mesas continuam no servidor.
+    *Revista em 12/11/2026: a atualização automática voltou (decisão 78). O site e o convite
+    por link https continuam de fora.*
 55. **As exclusões ficam em Configurações** (não no Perfil), numa área separada no fim. A
     confirmação é **digitando o nome de usuário** (o de entrar), sem diferença de maiúscula.
 56. **Excluir as sessões**: a ficha de quem sai de uma mesa fica com o mestre dela, como
@@ -577,7 +579,7 @@ Thalysson ("adapte 100%" e "atualize o código se necessário"), para confirmar 
 
 67. **A planilha virou um modelo de ficha**, com as 12 abas dela, importado pelo botão Importar
     da biblioteca. O app continua sem conhecer o sistema: o que é regra está no modelo. **A mesa
-    usa o `docs/fichas/ficha-padrao-da-mesa.json`**, que nasce em branco, porque cada mesa tem
+    usa o `docs/fichas/ficha-padrao-runaarcana.json`** (antes `ficha-padrao-da-mesa.json`), que nasce em branco, porque cada mesa tem
     um modelo só para todo mundo. O `ficha-do-geralt.json` é o mesmo modelo, nascendo preenchido.
 68. **Peças novas do construtor, porque a planilha precisava e não havia como fazer sem elas.**
     Todas genéricas, nenhuma exige migração de banco:
@@ -619,3 +621,44 @@ Thalysson ("adapte 100%" e "atualize o código se necessário"), para confirmar 
     engano ("Nome do familiar" no Mecha, "Custo do mecha" no Servo) ganharam o nome certo.
 77. **Atributos do familiar têm o campo Aumento:** a planilha valida "≥ base" nessas células,
     o que permite digitar por cima da fórmula e a apaga. Aqui, soma por cima dela.
+
+Decidido em 12/11/2026 (atualização automática e correção do tempo real), a pedido do
+Thalysson, para confirmar no teste:
+
+78. **Atualização automática pelo GitHub Releases** ("o app atualiza sozinho sempre que uma
+    nova versão for enviada para o meu GitHub"). Uma tag `v<versão>` enviada ao GitHub dispara
+    o GitHub Actions, que roda os testes, gera o instalador e publica uma release com o
+    `latest.yml`; é esse arquivo que o app instalado lê. O repositório é público, então o app
+    não leva token nenhum. **Commit e push comuns não publicam nada**: só a tag, para nenhuma
+    alteração pela metade chegar sozinha no PC dos jogadores.
+79. **Quando procura:** 10 segundos depois de abrir e a cada 4 horas. Só o app instalado
+    procura; no `npm run dev` a tela diz que a atualização está desligada.
+80. **Baixa sozinho, em segundo plano, e pergunta antes de reiniciar:** o aviso "Nova versão X
+    pronta" fica na tela até a pessoa decidir, com "Reiniciar agora" e "Depois". Com "Depois"
+    (ou sem resposta), a versão entra quando o app for fechado. **O app nunca reinicia
+    sozinho**, para não derrubar ninguém da mesa no meio da sessão. O aviso aparece em
+    qualquer tela, inclusive na de entrada, mas não na janela separada da ficha.
+81. **A instalação da atualização é silenciosa:** sem as telas do instalador, na mesma pasta,
+    e com "Reiniciar agora" o app abre de novo sozinho. O aviso "O Windows protegeu o
+    computador" só aparece na primeira instalação, que é feita à mão.
+82. **Configurações → "Versão e atualizações"**: a versão, o estado (procurando, baixando com
+    a porcentagem, pronta, em dia, ou o motivo do erro em português), o botão "Procurar
+    atualização" e, com a versão baixada, "Reiniciar e atualizar". Erro numa procura
+    automática (sem internet, por exemplo) não vira aviso: só aparece ali.
+83. **A primeira versão com atualização é instalada à mão uma última vez**, porque quem tem a
+    versão de hoje não tem o atualizador. A release que está no GitHub entrega a 0.2.0, então
+    a primeira publicada pelo GitHub Actions é a **0.3.0**. A publicação falha, e não sai
+    nada, se a tag não bater com o `package.json`, se faltarem no GitHub os segredos do
+    Supabase (o app sairia sem conseguir entrar) ou se algum teste falhar.
+84. **Exclusões em tempo real** (bug achado pelo Thalysson: token apagado, desenho apagado e
+    troca de mapa só apareciam para os outros depois de sair e voltar para a mesa). Numa linha
+    apagada, o Realtime do Supabase só conhece a chave primária, e o filtro por sessão nunca
+    casava: o DELETE não chegava a ninguém. Agora tokens, desenhos, mapas, fichas,
+    participantes do combate e pistas têm uma assinatura de DELETE **sem filtro**: chega o id
+    de toda exclusão dessas tabelas, de qualquer mesa (só um UUID, sem conteúdo: o Realtime
+    não aplica o RLS em DELETE justamente por mandar só a chave), e cada tela ignora o id que
+    não conhece. Não precisou de migração.
+85. **Troca de mapa:** o jogador só pode ler o mapa ativo, e ativar outro muda a `sessions`, não
+    a `maps` — o tempo real não trazia o mapa novo. Agora, a cada troca, o app relê a lista de
+    mapas (e mostra "Abrindo o mapa…" enquanto isso). Um mapa que a tela ainda não tinha visto
+    abre **inteiro à vista**, como o primeiro da sessão; antes, abria em 100% a partir do canto.

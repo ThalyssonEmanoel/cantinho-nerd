@@ -48,15 +48,18 @@ fases do projeto (seção 11). Leia-a antes de qualquer tarefa não trivial.
 | `npm run db:link`   | liga a CLI ao projeto (pede a senha do banco; uma vez por máquina)              |
 | `npm run db:push`   | aplica no banco as migrações de `supabase/migrations/` que faltam               |
 | `npm run db:types`  | regenera `lib/db/database.types.ts` a partir do banco real                      |
+| `npm version patch` | sobe a versão e cria a tag; `git push --follow-tags` publica (GitHub Actions)   |
 
 ## Arquitetura
 
 ```
 scripts/     wrappers do npm (ambiente limpo para subir o Electron)
 supabase/    config.toml da CLI e migrations/ (uma por mudança de banco, nunca editar a aplicada)
+.github/     workflows/release.yml: uma tag `v*` publica a versão no GitHub Releases
 src/
   main/      processo principal: janela (principal e a da ficha em separado), segurança (CSP,
-             navegação), deep link, instância única, IPC, cache em disco das imagens (asset-cache)
+             navegação), deep link, instância única, IPC, cache em disco das imagens (asset-cache),
+             atualização automática (updater + update-controller)
   preload/   ponte mínima via contextBridge (window.api)
   shared/    lógica pura usada pelos dois lados (deep link, CSP, política de navegação)
   renderer/src/
@@ -126,6 +129,12 @@ Decisões que não são óbvias:
   virar caminho em disco.
 - **Imagem da galeria é copiada para a pasta da sessão** ao virar token: o jogador lê os
   arquivos da mesa, mas não a galeria do mestre (evita spoiler, seção 8).
+- **DELETE do tempo real vem por assinatura sem filtro** nas tabelas cuja chave é só o `id`
+  (`DELETE_BY_ID_TABLES` em `lib/db/realtime.ts`): numa linha apagada o Realtime só conhece a
+  chave, e o filtro `session_id=eq.…` nunca casava. Chega o id de qualquer mesa, e quem trata
+  ignora o id que não conhece. Tabela nova com exclusão que os outros precisam ver entra lá.
+- **Só uma tag `v*` publica versão** (`.github/workflows/release.yml`); commit e push não. O app
+  instalado procura o `latest.yml` da release mais nova do GitHub (decisões 78 a 83).
 
 ## Ambiente desta máquina
 
@@ -721,8 +730,8 @@ Decisões e armadilhas registradas:
 Pendências, de propósito:
 
 - `build/icon.ico` continua faltando (o instalador usa o ícone do Electron).
-- O `electron-updater` segue instalado e sem uso; dá para tirar do `package.json` se a
-  decisão 54 ficar.
+- ~~O `electron-updater` segue instalado e sem uso.~~ Em 12/11/2026 a atualização automática
+  voltou: ver "Atualização automática + correção do tempo real", no fim.
 
 **Fase 13 (Polimento) — implementada, aguardando teste.** 949 testes. **Última fase.**
 
@@ -818,7 +827,8 @@ antes de mexer, confira a seção 12 (fora do escopo) e pergunte.
 `docs/fichas/Ficha do Geralt Wolf Vengerberg.xlsx` (12 abas, 199 células com fórmula) virou dois
 arquivos que se importam na biblioteca, saídos do mesmo gerador:
 
-- `docs/fichas/ficha-padrao-da-mesa.json`: **é este que a mesa usa.** Nasce em branco, porque
+- `docs/fichas/ficha-padrao-runaarcana.json` (o Thalysson renomeou; era `ficha-padrao-da-mesa.json`,
+  e o teste segue o nome novo): **é este que a mesa usa.** Nasce em branco, porque
   cada sessão tem um modelo só para todo mundo (`character_template_id`).
 - `docs/fichas/ficha-do-geralt.json`: o mesmo modelo, nascendo com o que é do personagem (nome,
   classe, armas, nota de maestria, ofício). Um teste garante que os dois só diferem nisso.
@@ -869,3 +879,69 @@ Pendências, de propósito:
 - Ficaram de fora o logo e o ícone decorativos (a "Imagem fixa" permite pôr), o campo "Link da
   imagem" (aqui é envio de foto), as três células sem rótulo da linha 42 do Familiar e o cinza
   condicional em "Classe 2".
+
+**Atualização automática + correção do tempo real (pedido de 12/11/2026) — feito, aguardando
+teste.** 1321 testes. Decisões 78 a 85 no fim da especificação. Não há migração nova.
+
+O Thalysson pediu as duas coisas juntas: o app se atualizar sozinho a partir do GitHub (desfaz
+a parte da decisão 54 que tirava o `electron-updater`; site e convite https continuam de fora) e
+o bug "apagar token, apagar desenho e trocar de mapa só aparecem para os outros saindo e voltando
+para a mesa".
+
+Atualização automática:
+
+- `.github/workflows/release.yml`: tag `v*` → confere a tag com o `package.json`, `npm ci`, cria o
+  `.env` com os segredos `VITE_SUPABASE_URL`/`VITE_SUPABASE_ANON_KEY` do repositório (falha se
+  faltarem), `npm test`, `npm run build` e `electron-builder --win --publish always`.
+- `electron-builder.yml`: `publish` no GitHub com `releaseType: release` (rascunho não aparece
+  para o app). Grava o `app-update.yml` no instalador; o build gera `latest.yml` e `.blockmap`.
+- `src/main/update-controller.ts` (sem Electron, testado com dublê) e `src/main/updater.ts` (liga o
+  `autoUpdater`, três canais de IPC e o aviso `update:changed` para as janelas). Só com
+  `app.isPackaged`; em dev o estado é `disabled`.
+- `src/shared/update.ts`: o estado, as frases da tela e os erros do updater em português.
+- `features/updates/`: `useUpdateStatus`, o `UpdateNotifier` ("Nova versão pronta", na raiz do
+  router, fora da janela da ficha) e a `UpdateSection` das Configurações.
+- Publicar: commit, `npm version patch` (ou `minor`), `git push --follow-tags`. A primeira versão
+  com atualizador é a **0.3.0** e vai à mão uma última vez: já existe no GitHub uma release feita à
+  mão (tag `0.1.0`, nome "Cantinho Nerd 0.2.0", com o `.exe` da 0.2.0) — os amigos estão na 0.2.0.
+
+Correção do tempo real:
+
+- `lib/db/realtime.ts`: `DELETE_BY_ID_TABLES` (mapas, tokens, desenhos, fichas, participantes do
+  combate e pistas) com assinatura de DELETE sem filtro. Os stores ignoram id desconhecido sem
+  mexer no estado (nada redesenha por causa de outra mesa).
+- `board-store.ts`: `syncSession` relê os mapas quando o ativo muda, ou enquanto ele faltar na
+  lista; `reloadMaps` numerado (resposta atrasada não vale) e sem apagar a névoa em voo;
+  `fitIfUnseen` (mapa que a tela não viu abre inteiro à vista). Reconectar relê os mapas também.
+- `board-view.tsx`: "Abrindo o mapa…" enquanto o mapa ativo novo é lido.
+
+Decisões e armadilhas registradas:
+
+- **DELETE com filtro nunca chega** quando a coluna do filtro não está na chave primária (o
+  Realtime só tem a "identidade de réplica" da linha apagada). `session_members` e `combat_state`
+  funcionavam porque têm `session_id` na chave. Mudar a identidade para `FULL` também resolveria,
+  mas dobra o tamanho de cada UPDATE no tempo real (a névoa do mapa chega a 256 KB).
+- **O teste antigo da troca de mapa passava com o bug:** o dublê do `listMaps` dava ao jogador a
+  biblioteca inteira, e o RLS de verdade dá só o mapa ativo. Teste do que o jogador lê precisa
+  imitar o RLS. Com o `board-store` antigo, os testes novos falham (conferido).
+- **O `electron-updater` emite `error` e também rejeita o `checkForUpdates` com o mesmo objeto**:
+  o controlador conta uma vez só. Achado rodando o app empacotado com `RPGMESA_PROFILE=updtest`
+  (perfil à parte, sem disputar a instância única com o app instalado).
+- **Não criar script do npm chamado `release`:** o electron-builder publica sozinho quando roda
+  dentro dele (`npm_lifecycle_event`). Fora do CI e sem `--publish`, o `build:win` não publica.
+- **No runner Windows, `run` de várias linhas (PowerShell) não para no primeiro erro**: compilar e
+  publicar são passos separados, senão um build quebrado seria empacotado e publicado.
+- **Snapshot de arquivo com nome antigo trava o CI:** o teste do Geralt recriava
+  `ficha-padrao-da-mesa.json`, que o Thalysson renomeou. Localmente o Vitest grava o arquivo que
+  falta; com `CI=true`, falha. Renomeou arquivo de `toMatchFileSnapshot`? Renomeie no teste.
+- `vi.clearAllMocks` não descarta respostas `mockResolvedValueOnce` não usadas: no
+  `board-store.test` o `beforeEach` usa `mockReset`, senão um teste que falha derruba os vizinhos.
+- O `dist/Cantinho-Nerd-0.1.0-setup.exe` gerado nesta tarefa foi só para conferir o empacotamento
+  (já com atualizador). Não é para distribuir: a versão de verdade sai do GitHub Actions.
+
+Pendências, de propósito:
+
+- "Versão mínima obrigatória" (bloquear app velho que não abre um modelo novo) não foi feita; o
+  Thalysson não respondeu e com a atualização automática ela fica rara.
+- A atualização de ponta a ponta só dá para ver depois da segunda release (0.3.0 → 0.3.1): a
+  primeira é instalada à mão.

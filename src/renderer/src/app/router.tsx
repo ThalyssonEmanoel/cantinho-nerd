@@ -16,6 +16,7 @@ import { SettingsPage } from '@/features/settings/settings-page'
 import { SheetBuilderPage } from '@/features/sheet-builder/sheet-builder-page'
 import { SheetsPage } from '@/features/sheets/sheets-page'
 import { SheetTemplatesPage } from '@/features/sheet-templates/sheet-templates-page'
+import { UpdateNotifier } from '@/features/updates/update-notifier'
 import { AppLayout } from './app-layout'
 import { DeepLinkBridge } from './deep-link-bridge'
 import { NotFoundPage } from './not-found-page'
@@ -30,6 +31,8 @@ export function AppRouter(): React.JSX.Element {
     <HashRouter>
       <AuthBootstrap />
       <DeepLinkBridge />
+      {/* "Nova versão pronta" em qualquer tela, inclusive na de entrada (decisão 80). */}
+      <UpdateNotifier />
       <Routes>
         <Route path="/" element={<Navigate to="/login" replace />} />
         <Route path="/login" element={<LoginPage />} />

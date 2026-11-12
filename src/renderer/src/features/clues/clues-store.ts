@@ -161,7 +161,8 @@ export const useCluesStore = create<CluesStoreState>()((set, get) => {
     },
 
     removeClue: (clueId) => {
-      if (clueId === '') return
+      // O DELETE chega de qualquer mesa (assinatura sem filtro): id desconhecido não faz nada.
+      if (clueId === '' || !get().clues.some((clue) => clue.id === clueId)) return
       set({
         clues: get().clues.filter((clue) => clue.id !== clueId),
         unseen: get().unseen.filter((id) => id !== clueId)

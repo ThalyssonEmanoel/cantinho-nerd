@@ -1360,8 +1360,11 @@ describe('o modelo da mesa, em branco', () => {
 
 describe('arquivos', () => {
   it('os arquivos para importar estão em dia com o gerador', async () => {
+    // O modelo em branco foi renomeado para o nome do sistema (Runa Arcana). Com o nome
+    // antigo aqui, cada rodada recriava o arquivo velho — e no CI, onde snapshot ausente é
+    // falha, travava a publicação de versão.
     await expect(`${JSON.stringify(createBlankTemplateFile(), null, 2)}\n`).toMatchFileSnapshot(
-      '../../../../../docs/fichas/ficha-padrao-da-mesa.json'
+      '../../../../../docs/fichas/ficha-padrao-runaarcana.json'
     )
     await expect(`${JSON.stringify(createGeraltTemplateFile(), null, 2)}\n`).toMatchFileSnapshot(
       '../../../../../docs/fichas/ficha-do-geralt.json'

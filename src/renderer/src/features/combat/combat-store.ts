@@ -94,8 +94,9 @@ export const useCombatStore = create<CombatStoreState>()((set, get) => {
 
     applyEntryChange: (change) => {
       if (change.event === 'DELETE') {
-        // O DELETE chega só com o id (10.3).
+        // O DELETE chega só com o id (10.3), e de qualquer mesa: id desconhecido não faz nada.
         const id = String(change.old.id ?? '')
+        if (!get().entries.some((entry) => entry.id === id)) return
         set({ entries: get().entries.filter((entry) => entry.id !== id) })
         return
       }

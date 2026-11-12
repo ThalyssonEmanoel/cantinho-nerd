@@ -7,6 +7,7 @@ import {
   type SaveTextFileRequest,
   type TextFileResult
 } from '../shared/ipc'
+import type { UpdateStatus } from '../shared/update'
 
 /**
  * Ponte mínima entre o renderer e o processo principal (seção 10.4): só o que o app
@@ -57,6 +58,24 @@ const api = {
     ipcRenderer.on(IpcChannel.deepLink, listener)
     return () => {
       ipcRenderer.removeListener(IpcChannel.deepLink, listener)
+    }
+  },
+
+  /** Atualização automática (decisão 78): o estado de agora. */
+  getUpdateStatus: (): Promise<UpdateStatus> => ipcRenderer.invoke(IpcChannel.updateStatus),
+
+  /** Procura versão nova agora (botão das Configurações). */
+  checkForUpdate: (): Promise<UpdateStatus> => ipcRenderer.invoke(IpcChannel.updateCheck),
+
+  /** Reinicia instalando a versão já baixada. Sem versão baixada, não faz nada. */
+  installUpdate: (): Promise<boolean> => ipcRenderer.invoke(IpcChannel.updateInstall),
+
+  /** O estado da atualização mudou. Devolve a função para remover o listener. */
+  onUpdateStatus: (callback: (status: UpdateStatus) => void): (() => void) => {
+    const listener = (_event: IpcRendererEvent, status: UpdateStatus): void => callback(status)
+    ipcRenderer.on(IpcChannel.updateChanged, listener)
+    return () => {
+      ipcRenderer.removeListener(IpcChannel.updateChanged, listener)
     }
   }
 }
