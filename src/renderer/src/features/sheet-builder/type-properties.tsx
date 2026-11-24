@@ -7,6 +7,7 @@ import { Textarea } from '@/components/ui/textarea'
 import { newId, safeNumber, type NumberFormat, type SheetComponent } from '@/lib/sheet'
 import { FigureProperties } from './figure-properties'
 import { PropertyField, PropertyGroup } from './property-field'
+import { RollCostInputs } from './roll-cost-inputs'
 import { TableProperties } from './table-properties'
 
 interface TypePropertiesProps {
@@ -507,6 +508,17 @@ export function TypeProperties({
               />
               Marcar falha crítica
             </label>
+          </PropertyField>
+
+          <PropertyField
+            label="Desconta ao rolar"
+            hint="Chave de uma barra ou de um número e quanto sai dela (ex.: pocoes_cura e 1). Vazio: só rola."
+          >
+            <RollCostInputs
+              cost={component.cost}
+              amountPlaceholder="1"
+              onChange={(cost) => onChange({ cost })}
+            />
           </PropertyField>
         </PropertyGroup>
       )

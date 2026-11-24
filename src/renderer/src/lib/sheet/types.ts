@@ -174,12 +174,24 @@ export interface ComputedComponent extends ComponentBase {
   format: NumberFormat
 }
 
+/**
+ * O que um botão de rolagem desconta da ficha ao ser usado (a energia de uma habilidade, uma
+ * poção da mochila). Opcional: sem ele, rolar não mexe em nada, como sempre foi.
+ */
+export interface RollCost {
+  /** Chave de uma barra de recurso ou de um campo de número. */
+  target: string
+  /** Quanto desconta. Fórmula; na tabela, enxerga as colunas da própria linha (`=pe`). */
+  amount: string
+}
+
 export interface RollButtonComponent extends ComponentBase {
   type: 'rollButton'
   /** Notação com `{…}`, ex.: `1d20 + {forca.mod}`. */
   formula: string
   critical: CriticalRule
   criticalFailureOnOne: boolean
+  cost?: RollCost
 }
 
 export type TableColumnKind = 'text' | 'number' | 'checkbox' | 'select' | 'computed' | 'rollButton'
@@ -200,11 +212,19 @@ export interface TableColumn {
   format?: NumberFormat
   critical?: CriticalRule
   criticalFailureOnOne?: boolean
+  /** Para `rollButton`: o que a rolagem desconta da ficha (ver `RollCost`). */
+  cost?: RollCost
   /**
    * Não aparece na tabela, mas as fórmulas da linha enxergam. É como uma coluna calculada
    * descobre em que linha está: `atrib = "FOR"` na linha Força das salvaguardas.
    */
   hidden?: boolean
+  /**
+   * `gm` trava a coluna para o jogador mesmo numa tabela que ele edita: ele marca a caixa
+   * "escolhida" da habilidade, mas não muda o custo dela. Sem isto, vale a permissão da
+   * tabela. Só faz diferença nas colunas que guardam valor (texto, número, caixa, lista).
+   */
+  editableBy?: EditPermission
 }
 
 export interface TableRowTemplate {
@@ -231,6 +251,12 @@ export interface TableComponent extends ComponentBase {
   playerCanAddRows: boolean
   /** Mostra a coluna de rótulo das linhas fixas. */
   showRowLabels: boolean
+  /**
+   * Fórmula por linha, que enxerga as colunas da própria linha (`nv <= nivel`). Falsa, a
+   * linha some para o jogador e aparece apagada para o mestre. A linha continua na ficha:
+   * `soma` e `contar` a enxergam do mesmo jeito.
+   */
+  rowVisibleWhen?: string
 }
 
 export type SheetComponent =

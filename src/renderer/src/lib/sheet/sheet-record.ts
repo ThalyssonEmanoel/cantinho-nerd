@@ -6,7 +6,13 @@ import {
   type SheetSummary
 } from './context'
 import { newId } from './factory'
-import { canPatchField, holdsValue, isGmOnly, type SheetAudience } from './permissions'
+import {
+  canPatchField,
+  changedLockedColumns,
+  holdsValue,
+  isGmOnly,
+  type SheetAudience
+} from './permissions'
 import {
   findComponentById,
   findComponentByKey,
@@ -143,13 +149,27 @@ export function buildPatch(schema: SheetSchema, changes: SheetValues): SheetPatc
   return patch
 }
 
-/** Campos do patch que quem está pedindo não tem direito de gravar. */
+/**
+ * Campos do patch que quem está pedindo não tem direito de gravar.
+ *
+ * Com `previous` (os valores gravados agora), uma tabela que o jogador edita também é recusada
+ * quando ele mexeu numa coluna travada para o mestre (`editableBy: 'gm'` na coluna).
+ */
 export function rejectedPatchFields(
   schema: SheetSchema,
   patch: SheetPatch,
-  audience: SheetAudience
+  audience: SheetAudience,
+  previous?: SheetValues
 ): string[] {
-  return patchedIds(patch).filter((id) => !canPatchField(schema, id, audience))
+  return patchedIds(patch).filter((id) => {
+    if (!canPatchField(schema, id, audience)) return true
+    if (audience === 'gm' || previous === undefined) return false
+
+    const component = findComponentById(schema, id)
+    if (component?.type !== 'table') return false
+    const next = patch.values?.[id] ?? patch.gmValues?.[id]
+    return changedLockedColumns(component, previous[id], next).length > 0
+  })
 }
 
 export function patchedIds(patch: SheetPatch): string[] {

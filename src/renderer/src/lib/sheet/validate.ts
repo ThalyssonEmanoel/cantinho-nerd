@@ -13,6 +13,7 @@ import {
   ROLE_ALLOWED_TYPES,
   ROLE_LABELS,
   type ComponentRole,
+  type RollCost,
   type SheetComponent,
   type SheetSchema
 } from './types'
@@ -44,10 +45,15 @@ export interface ValidationReport {
   ok: boolean
 }
 
-/** Campos cuja fórmula produz valor — são esses que podem formar dependência circular. */
+/**
+ * Campos cuja fórmula produz valor — são esses que podem formar dependência circular. Mostrar
+ * ou esconder, a margem de crítico e o custo de uma rolagem só são lidos na hora de usar.
+ */
 function producesValue(slot: FormulaSlot): boolean {
   if (slot.kind === 'roll') return false
   if (slot.field === 'visibleWhen' || slot.field === 'critical.threshold') return false
+  if (slot.field === 'rowVisibleWhen') return false
+  if (slot.field.endsWith('cost.target') || slot.field.endsWith('cost.amount')) return false
   return true
 }
 
@@ -60,6 +66,7 @@ export function validateSchema(schema: SheetSchema): ValidationReport {
   checkComponentShape(schema, components, issues)
   checkRoles(components, issues)
   checkFormulas(schema, issues)
+  checkRollCosts(schema, issues)
   checkCycles(schema, issues)
   checkVisibilityLeaks(schema, issues)
 
@@ -429,6 +436,64 @@ function describeTableReferenceProblem(
   }
 
   return `"${head}.${rest.join('.')}" não é um caminho de tabela válido.`
+}
+
+/**
+ * O que uma rolagem desconta tem de ser uma barra ou um número da ficha, e a quantidade não
+ * pode faltar. A chave que não existe já sai em `checkFormulas`; aqui fica o tipo errado.
+ */
+function checkRollCosts(schema: SheetSchema, issues: ValidationIssue[]): void {
+  const components = allComponents(schema)
+
+  for (const tab of schema.tabs) {
+    for (const component of tab.components) {
+      const costs: { cost: RollCost; where: string }[] = []
+      const name = component.label.trim() === '' ? component.key : component.label
+      if (component.type === 'rollButton' && component.cost !== undefined) {
+        costs.push({ cost: component.cost, where: name })
+      }
+      if (component.type === 'table') {
+        for (const column of component.columns) {
+          if (column.kind === 'rollButton' && column.cost !== undefined) {
+            costs.push({ cost: column.cost, where: `${name} → coluna ${column.label}` })
+          }
+        }
+      }
+
+      for (const { cost, where } of costs) {
+        const targetKey = cost.target.trim().replace(/^=/, '').trim()
+        if (targetKey === '') {
+          issues.push({
+            severity: 'error',
+            code: 'cost-no-target',
+            message: `${where}: escolha a barra ou o número que a rolagem desconta.`,
+            componentId: component.id,
+            tabId: tab.id
+          })
+          continue
+        }
+        const target = components.find((item) => item.key === targetKey)
+        if (target !== undefined && target.type !== 'resource' && target.type !== 'number') {
+          issues.push({
+            severity: 'error',
+            code: 'cost-target-type',
+            message: `${where}: a rolagem só desconta de uma barra ou de um campo de número, e "${targetKey}" não é nenhum dos dois.`,
+            componentId: component.id,
+            tabId: tab.id
+          })
+        }
+        if (cost.amount.trim() === '') {
+          issues.push({
+            severity: 'error',
+            code: 'cost-no-amount',
+            message: `${where}: diga quanto a rolagem desconta (um número ou uma fórmula).`,
+            componentId: component.id,
+            tabId: tab.id
+          })
+        }
+      }
+    }
+  }
 }
 
 function checkCycles(schema: SheetSchema, issues: ValidationIssue[]): void {

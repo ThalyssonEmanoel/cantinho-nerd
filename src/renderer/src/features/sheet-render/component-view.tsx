@@ -345,7 +345,8 @@ export function ComponentView({
                 formula: component.formula,
                 critical: component.critical,
                 criticalFailureOnOne: component.criticalFailureOnOne,
-                context
+                context,
+                ...(component.cost === undefined ? {} : { cost: component.cost })
               })
             }
           >

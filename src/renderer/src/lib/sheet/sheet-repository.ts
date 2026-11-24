@@ -242,7 +242,7 @@ export function createLocalSheetRepository(
       const schema = await schemaFor(sheet, { fresh: false })
       if (schema === null) throw new Error('O modelo desta ficha não está mais disponível.')
 
-      const rejected = rejectedPatchFields(schema, patch, audience)
+      const rejected = rejectedPatchFields(schema, patch, audience, sheet.values)
       if (rejected.length > 0) throw new SheetPermissionError(rejected)
 
       // Relê de dentro para fora: o patch entra na ficha que está gravada agora, não na

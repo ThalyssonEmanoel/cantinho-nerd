@@ -1,6 +1,12 @@
 import type { CriticalRule } from '@/lib/dice'
 import type { FormulaContext } from '@/lib/formula'
-import { canEditComponent, canSeeComponent, type SheetComponent, type SheetValue } from '@/lib/sheet'
+import {
+  canEditComponent,
+  canSeeComponent,
+  type RollCost,
+  type SheetComponent,
+  type SheetValue
+} from '@/lib/sheet'
 
 /** Quem está olhando a ficha. A regra em si vive em `lib/sheet/permissions`. */
 export type { SheetAudience } from '@/lib/sheet'
@@ -13,6 +19,8 @@ export interface RollRequest {
   criticalFailureOnOne: boolean
   /** Contexto da própria linha quando o botão está numa tabela. */
   context: FormulaContext
+  /** O que a rolagem desconta da ficha. Quem desconta é a `SheetView`, antes de rolar. */
+  cost?: RollCost
 }
 
 export interface SheetRenderCallbacks {

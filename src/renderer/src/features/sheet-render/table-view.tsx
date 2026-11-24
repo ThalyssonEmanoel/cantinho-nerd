@@ -18,8 +18,10 @@ import {
 import { Dices, GripVertical, Plus, Trash2 } from 'lucide-react'
 import type { FormulaContext } from '@/lib/formula'
 import {
+  canEditColumn,
   createRowFormulaContext,
   formatCellValue,
+  isTableRowVisible,
   isTableValue,
   newId,
   readFormulaValue,
@@ -107,7 +109,18 @@ export function TableView({
 
   const gridTemplate = buildGridTemplate(component, reorderable)
 
-  const body = rows.map((row, index) => {
+  // `rowVisibleWhen`: a linha some para o jogador e fica apagada para o mestre, que precisa
+  // ver a ficha inteira para conferir. Os índices continuam os de `rows`: esconder não muda
+  // nada no que é gravado.
+  const shown = rows.flatMap((row, index) => {
+    const visible =
+      options.applyConditionalVisibility !== true ||
+      isTableRowVisible(context, component, row.key ?? row.id)
+    if (!visible && options.audience !== 'gm') return []
+    return [{ row, index, dimmed: !visible }]
+  })
+
+  const body = shown.map(({ row, index, dimmed }) => {
     const props: RowProps = {
       row,
       index,
@@ -116,6 +129,7 @@ export function TableView({
       options,
       editable,
       gridTemplate,
+      dimmed,
       onChangeCells: (cells) => updateRow(index, cells),
       onRemove: () => removeRow(index)
     }
@@ -145,7 +159,7 @@ export function TableView({
       </div>
 
       <div className="min-h-0 flex-1 overflow-auto">
-        {rows.length === 0 && (
+        {shown.length === 0 && (
           <p className="text-muted-foreground px-2 py-3 text-xs">Nenhuma linha.</p>
         )}
 
@@ -157,7 +171,7 @@ export function TableView({
             onDragEnd={handleDragEnd}
           >
             <SortableContext
-              items={rows.map((row) => row.id)}
+              items={shown.map(({ row }) => row.id)}
               strategy={verticalListSortingStrategy}
             >
               {body}
@@ -203,13 +217,21 @@ interface RowProps {
   options: SheetRenderOptions
   editable: boolean
   gridTemplate: string
+  /** Linha que a condição esconde do jogador: o mestre a vê apagada. */
+  dimmed: boolean
   onChangeCells: (cells: Record<string, CellValue>) => void
   onRemove: () => void
 }
 
+const DIMMED_TITLE = 'Escondida para o jogador (mostrar a linha quando)'
+
 function TableRow(props: RowProps): React.JSX.Element {
   return (
-    <div className={ROW_CLASS} style={{ gridTemplateColumns: props.gridTemplate }}>
+    <div
+      className={cn(ROW_CLASS, props.dimmed && 'opacity-50')}
+      style={{ gridTemplateColumns: props.gridTemplate }}
+      title={props.dimmed ? DIMMED_TITLE : undefined}
+    >
       <RowCells {...props} />
     </div>
   )
@@ -224,7 +246,8 @@ function SortableTableRow(props: RowProps): React.JSX.Element {
   return (
     <div
       ref={setNodeRef}
-      className={cn(ROW_CLASS, isDragging && 'bg-accent/40 relative z-10')}
+      className={cn(ROW_CLASS, props.dimmed && 'opacity-50', isDragging && 'bg-accent/40 relative z-10')}
+      title={props.dimmed ? DIMMED_TITLE : undefined}
       style={{
         gridTemplateColumns: props.gridTemplate,
         // Só o eixo vertical se move, então não vale carregar o utilitário de matriz.
@@ -276,7 +299,9 @@ function RowCells({
           context={context}
           row={row}
           rowName={rowName}
-          editable={editable}
+          // Coluna travada para o mestre (`editableBy: 'gm'`) vira texto para o jogador, mesmo
+          // com a tabela editável: ele marca "escolhida", mas não muda o custo.
+          editable={editable && canEditColumn(column, options.audience)}
           options={options}
           onChange={(value) => onChangeCells({ [column.key]: value })}
         />
@@ -402,12 +427,15 @@ function CellView({
 
     case 'computed': {
       const { value, error } = readFormulaValue(context, [component.key, rowName, column.key])
+      const text = error === undefined ? formatCellValue(value, column.format) : '#ERRO'
       return (
         <span
           className={cn('truncate text-sm', error !== undefined && 'text-destructive')}
-          title={error?.message}
+          // A célula é de uma linha só: passar o mouse mostra o texto que não coube, como já
+          // acontecia nas células de texto.
+          title={error?.message ?? (text === '' ? undefined : text)}
         >
-          {error === undefined ? formatCellValue(value, column.format) : '#ERRO'}
+          {text}
         </span>
       )
     }
@@ -427,7 +455,8 @@ function CellView({
               formula: column.formula ?? '1d20',
               critical: column.critical ?? { kind: 'none' },
               criticalFailureOnOne: column.criticalFailureOnOne ?? false,
-              context: createRowFormulaContext(context, component, rowName)
+              context: createRowFormulaContext(context, component, rowName),
+              ...(column.cost === undefined ? {} : { cost: column.cost })
             })
           }
         >

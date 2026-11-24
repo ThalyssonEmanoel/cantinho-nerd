@@ -975,3 +975,46 @@ Decisões e armadilhas registradas:
 - **Coluna grande sem mudança não vem no evento do Postgres** (TOAST): sem a `fog` no evento,
   o `mapFromRow` dava névoa desligada. Vale para qualquer tabela com jsonb grande.
 - Dois testes do canvas contavam com os 9 m de visão; agora passam a visão explícita.
+
+**Opções de tabela e botão + Ficha dos guri (pedido de 24/11/2026) — feito, aguardando teste.**
+1365 testes. Decisões 89 a 93. Falta aplicar a migração `20261124120000_table_column_permissions.sql`
+(`npx supabase db push --password <senha>`); não muda tabela nem coluna, então não precisa de
+`db:types`.
+
+- `docs/fichas/Ficha dos guri.json`: o sistema do Thalysson revisado e rebalanceado (raças com 6
+  habilidades, Guerreiro com 6 de energia-base, Mago soma INT × 2 na energia, armas por categoria,
+  armaduras, condições, incapacitação e morte, texto completo das habilidades). Já usa as três
+  opções novas.
+- `lib/sheet/types.ts` + `schema.ts`: `TableColumn.editableBy`, `TableColumn.cost`,
+  `TableComponent.rowVisibleWhen` e `RollButtonComponent.cost` (`RollCost`: alvo + quantidade).
+- `lib/sheet/permissions.ts`: `isLockedColumn`, `canEditColumn` e `changedLockedColumns` (a regra
+  que o `patch_sheet` repete). `rejectedPatchFields` ganhou o 4º parâmetro (valores gravados).
+- `lib/sheet/roll-cost.ts`: `planRollCost` e `labelWithMissing`. `lib/sheet/context.ts`:
+  `isTableRowVisible`.
+- `features/sheet-render/sheet-view.tsx` desconta o custo antes de rolar; `table-view.tsx` trava
+  a célula, esconde/apaga a linha e põe o texto inteiro no `title` da célula calculada.
+- Construtor: "Só o mestre edita" por coluna, "Mostrar a linha quando" e "Desconta ao rolar"
+  (`features/sheet-builder/roll-cost-inputs.tsx`, usado pela coluna e pelo botão).
+
+Decisões e armadilhas registradas:
+
+- **O desconto mora na `SheetView`, num lugar só**: ficha, mesa, construtor e bestiário passam
+  por ela. O botão só leva o `cost` no `RollRequest`.
+- **O alvo do custo é um slot de expressão** (`cost.target` em `formula-refs`): assim a validação
+  acusa chave que não existe, o aviso de exclusão o acha e renomear a barra o acompanha.
+- **Linha que o jogador adiciona nasce com `''` nas listas** (o botão "Adicionar"), não com a
+  primeira opção: a regra da coluna travada aceita os dois como "vazio", no app e no banco.
+- **App desatualizado ignora as opções novas** (o zod descarta chave que não conhece): abre a ficha,
+  mas mostra as linhas escondidas, não desconta e deixa tentar editar a coluna travada (o banco
+  recusa e a tela desfaz). Atualizar o app antes de usar. Cuidado: mestre que **salvar** o
+  modelo num app velho perde as opções.
+- O `create_character_sheet` não confere colunas travadas (nem os campos só do mestre): quem cria
+  a ficha grava os valores que o app manda. Já era assim antes; entre amigos, basta.
+- Linhas fixas são copiadas quando a ficha nasce: fichas da Ficha dos guri criadas antes desta
+  versão ficam com as habilidades antigas. Criar de novo.
+
+Pendências, de propósito:
+
+- A Visão noturna não mexe na visão do token (decisão 93).
+- O PV que algumas habilidades custam (Descendente de Satã, Feiticeiro) continua sendo descontado
+  à mão: um botão só desconta de um alvo.

@@ -77,10 +77,15 @@ function componentSlots(tab: SheetTab, component: SheetComponent): FormulaSlot[]
       ) {
         push('critical.threshold', component.critical.threshold, 'expression', 'margem de crítico')
       }
+      // O alvo do custo é só uma chave, mas entra como expressão: assim a validação acusa
+      // chave que não existe, o aviso de exclusão o encontra e renomear a barra o acompanha.
+      push('cost.target', component.cost?.target, 'expression', 'o que a rolagem desconta')
+      push('cost.amount', component.cost?.amount, 'expression', 'quanto a rolagem desconta')
       break
     case 'table': {
       // Numa coluna calculada, as outras colunas da mesma linha valem como chave.
       const columnKeys = component.columns.map((column) => column.key)
+      push('rowVisibleWhen', component.rowVisibleWhen, 'expression', 'mostrar a linha quando', columnKeys)
       component.columns.forEach((column, index) => {
         if (column.kind === 'computed') {
           push(
@@ -97,6 +102,21 @@ function componentSlots(tab: SheetTab, component: SheetComponent): FormulaSlot[]
             column.formula,
             'roll',
             `coluna ${column.label}`,
+            columnKeys
+          )
+          // O alvo é da ficha, não da linha: sem `columnKeys`, uma coluna com o mesmo nome
+          // não passa por barra.
+          push(
+            `columns[${index}].cost.target`,
+            column.cost?.target,
+            'expression',
+            `coluna ${column.label} (o que desconta)`
+          )
+          push(
+            `columns[${index}].cost.amount`,
+            column.cost?.amount,
+            'expression',
+            `coluna ${column.label} (quanto desconta)`,
             columnKeys
           )
         }
@@ -250,12 +270,33 @@ export function mapComponentFormulas(
           threshold: transform(next.critical.threshold, 'expression')
         }
       }
+      if (next.cost !== undefined) {
+        next.cost = {
+          target: transform(next.cost.target, 'expression'),
+          amount: transform(next.cost.amount, 'expression')
+        }
+      }
       break
     case 'table':
+      if (next.rowVisibleWhen !== undefined) {
+        next.rowVisibleWhen = transform(next.rowVisibleWhen, 'expression')
+      }
       next.columns = next.columns.map((column) => {
-        if (column.formula === undefined) return column
-        const kind = column.kind === 'rollButton' ? 'roll' : 'expression'
-        return { ...column, formula: transform(column.formula, kind) }
+        let mapped = column
+        if (column.formula !== undefined) {
+          const kind = column.kind === 'rollButton' ? 'roll' : 'expression'
+          mapped = { ...mapped, formula: transform(column.formula, kind) }
+        }
+        if (column.cost !== undefined) {
+          mapped = {
+            ...mapped,
+            cost: {
+              target: transform(column.cost.target, 'expression'),
+              amount: transform(column.cost.amount, 'expression')
+            }
+          }
+        }
+        return mapped
       })
       break
     default:

@@ -1,4 +1,13 @@
-import { findComponentById, isDecorative, type SheetComponent, type SheetSchema } from './types'
+import {
+  findComponentById,
+  isDecorative,
+  type SheetComponent,
+  type SheetSchema,
+  type TableColumn
+} from './types'
+import type { CellValue, SheetValue } from './values'
+
+type TableComponent = Extract<SheetComponent, { type: 'table' }>
 
 /**
  * Quem vê e quem edita cada campo da ficha (seções 5.3 e 5.7).
@@ -46,4 +55,82 @@ export function canPatchField(
   if (component === undefined) return false
   if (!holdsValue(component)) return false
   return canEditComponent(component, audience)
+}
+
+// ---------------------------------------------------------------------------
+// Coluna de tabela travada para o jogador (`editableBy: 'gm'` na coluna)
+// ---------------------------------------------------------------------------
+
+const VALUE_COLUMN_KINDS: readonly TableColumn['kind'][] = ['text', 'number', 'checkbox', 'select']
+
+/** Coluna que só o mestre muda, mesmo numa tabela que o jogador edita. */
+export function isLockedColumn(column: TableColumn): boolean {
+  return column.editableBy === 'gm' && VALUE_COLUMN_KINDS.includes(column.kind)
+}
+
+/** A célula desta coluna pode ser editada por quem está olhando? (a tabela já é editável) */
+export function canEditColumn(column: TableColumn, audience: SheetAudience): boolean {
+  return audience === 'gm' || !isLockedColumn(column)
+}
+
+function defaultCell(column: TableColumn): CellValue {
+  switch (column.kind) {
+    case 'number':
+      return 0
+    case 'checkbox':
+      return false
+    case 'select':
+      return column.options?.[0]?.id ?? ''
+    default:
+      return ''
+  }
+}
+
+/**
+ * Valores que uma célula travada pode ter numa linha que o jogador acabou de adicionar: ele
+ * cria a linha, mas quem preenche a coluna do mestre é o mestre. Aceita os dois jeitos de
+ * nascer vazia (o padrão do modelo e o `''` que o botão "Adicionar" põe na lista).
+ */
+function isBlankCell(column: TableColumn, value: CellValue | undefined): boolean {
+  return value === undefined || value === '' || value === 0 || value === false || value === defaultCell(column)
+}
+
+function rowsOf(value: SheetValue | undefined): { id: string; cells: Record<string, CellValue> }[] {
+  return Array.isArray(value) ? value : []
+}
+
+/**
+ * Colunas travadas que o patch mudou. É a mesma conta que o `patch_sheet` faz no banco
+ * (migração 20261124120000): a tela já impede a edição, isto é a garantia.
+ *
+ * - linha que já existia: a célula travada tem de ficar igual (célula que falta vale o padrão,
+ *   para uma coluna nova no modelo não parecer mudança);
+ * - linha nova: a célula travada só pode nascer vazia;
+ * - linha removida: não conta (remover linha é da tabela, não da coluna).
+ */
+export function changedLockedColumns(
+  table: TableComponent,
+  previous: SheetValue | undefined,
+  next: SheetValue | undefined
+): string[] {
+  const locked = table.columns.filter(isLockedColumn)
+  if (locked.length === 0) return []
+
+  const before = new Map(rowsOf(previous).map((row) => [row.id, row]))
+  const changed = new Set<string>()
+
+  for (const row of rowsOf(next)) {
+    const old = before.get(row.id)
+    for (const column of locked) {
+      const value = row.cells[column.key]
+      if (old === undefined) {
+        if (!isBlankCell(column, value)) changed.add(column.key)
+        continue
+      }
+      const fallback = defaultCell(column)
+      if ((value ?? fallback) !== (old.cells[column.key] ?? fallback)) changed.add(column.key)
+    }
+  }
+
+  return [...changed]
 }

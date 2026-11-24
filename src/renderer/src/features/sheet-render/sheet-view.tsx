@@ -4,13 +4,15 @@ import {
   GRID_COLUMNS,
   GRID_ROW_HEIGHT,
   followingBarChanges,
+  labelWithMissing,
+  planRollCost,
   type SheetComponent,
   type SheetSchema,
   type SheetValue,
   type SheetValues
 } from '@/lib/sheet'
 import { ComponentView } from './component-view'
-import { canSee, type SheetRenderOptions } from './types'
+import { canSee, type RollRequest, type SheetRenderOptions } from './types'
 
 interface SheetViewProps {
   schema: SheetSchema
@@ -43,18 +45,37 @@ export function SheetView({
 
   // A barra que acompanha o máximo (`followsMax`) muda junto com o campo editado: quem escuta
   // `onChange` recebe os dois, cada um no seu patch de sempre, sem precisar saber dessa regra.
-  const { onChange } = options
-  const fieldOptions: SheetRenderOptions =
+  const { onChange, onRoll } = options
+  const change =
     onChange === undefined
-      ? options
-      : {
-          ...options,
-          onChange: (componentId: string, value: SheetValue) => {
-            const bars = followingBarChanges(schema, values, componentId, value, options.audience)
-            onChange(componentId, value)
-            for (const bar of bars) onChange(bar.id, bar.value)
-          }
+      ? undefined
+      : (componentId: string, value: SheetValue) => {
+          const bars = followingBarChanges(schema, values, componentId, value, options.audience)
+          onChange(componentId, value)
+          for (const bar of bars) onChange(bar.id, bar.value)
         }
+
+  // Botão com custo (`cost`): desconta da ficha e rola. Faltou recurso, rola do mesmo jeito com
+  // o alvo em 0 e o rótulo conta quanto faltou — o mestre decide no chat. Quem não edita a ficha
+  // (só lendo, ou sem permissão no alvo) rola sem descontar.
+  const roll =
+    onRoll === undefined
+      ? undefined
+      : (request: RollRequest) => {
+          if (request.cost === undefined || change === undefined || options.readOnly === true) {
+            onRoll(request)
+            return
+          }
+          const charge = planRollCost(schema, values, request.cost, request.context, options.audience)
+          if (charge === null) {
+            onRoll(request)
+            return
+          }
+          change(charge.componentId, charge.value)
+          onRoll({ ...request, label: labelWithMissing(request.label, charge) })
+        }
+
+  const fieldOptions: SheetRenderOptions = { ...options, onChange: change, onRoll: roll }
 
   return (
     <div

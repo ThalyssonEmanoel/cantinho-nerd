@@ -682,3 +682,23 @@ Decidido em 12/11/2026 (névoa), a pedido do Thalysson, para confirmar no teste:
 88. **Evento do banco sem a névoa não apaga a névoa:** o Postgres não manda no evento uma
     coluna grande que não mudou, então renomear ou reordenar mapas, ou mexer só na grade, fazia
     a névoa "sumir" na tela do jogador. Agora o que não veio no evento fica como estava.
+
+Decidido em 24/11/2026 (opções de tabela e botão de rolagem), a pedido do Thalysson. Todas
+opcionais: modelo que não as usa continua igual.
+
+89. **Coluna "Só o mestre edita"** (`editableBy: 'gm'` na coluna de texto, número, caixa ou
+    lista): numa tabela que o jogador edita, ele vê a coluna mas não a muda. O banco garante
+    (`patch_sheet`, migração `20261124120000`): linha que já existia não pode mudar a célula
+    travada, e linha que o jogador adiciona só nasce com ela vazia.
+90. **"Mostrar a linha quando"** (`rowVisibleWhen` na tabela): fórmula por linha, com as colunas
+    da linha. Falsa, a linha some para o jogador e aparece **apagada para o mestre**, que precisa
+    conferir a ficha inteira. A linha continua nas somas e contagens.
+91. **"Desconta ao rolar"** (`cost` no botão de rolagem e na coluna de rolagem): uma barra ou um
+    número da ficha e quanto sai dele (fórmula; na tabela, com as colunas da linha). **Faltou,
+    rola do mesmo jeito**, o campo vai a 0 e o rótulo da rolagem diz quanto faltou: o mestre vê
+    no chat e decide. Quantidade 0 não mexe em nada; quem não pode editar o alvo rola sem
+    descontar.
+92. **Célula calculada cortada mostra o texto inteiro ao passar o mouse**, como as de texto já
+    mostravam. Vale para todas as tabelas.
+93. **A Visão noturna (mutação da Ficha dos guri) não liga ao papel Visão do token**: fica no
+    texto da ficha e o mestre ajusta a visão do token quando precisar.

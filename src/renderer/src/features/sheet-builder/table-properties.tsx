@@ -11,8 +11,12 @@ import {
   type TableRowTemplate
 } from '@/lib/sheet'
 import { PropertyField, PropertyGroup } from './property-field'
+import { RollCostInputs } from './roll-cost-inputs'
 
 type TableComponent = Extract<SheetComponent, { type: 'table' }>
+
+/** Colunas que guardam valor: só nelas faz sentido travar para o jogador. */
+const VALUE_KINDS: readonly TableColumnKind[] = ['text', 'number', 'checkbox', 'select']
 
 const COLUMN_KINDS: { value: TableColumnKind; label: string }[] = [
   { value: 'text', label: 'Texto' },
@@ -180,6 +184,14 @@ export function TableProperties({ component, onChange }: TablePropertiesProps): 
                 />
               )}
 
+              {column.kind === 'rollButton' && (
+                <RollCostInputs
+                  cost={column.cost}
+                  amountPlaceholder="=pe"
+                  onChange={(cost) => updateColumn(index, { cost })}
+                />
+              )}
+
               {column.kind === 'select' && (
                 <Input
                   className="h-7 text-xs"
@@ -222,6 +234,23 @@ export function TableProperties({ component, onChange }: TablePropertiesProps): 
                 />
                 Oculta
               </label>
+
+              {VALUE_KINDS.includes(column.kind) && (
+                <label
+                  className="flex items-center gap-2 text-xs"
+                  title="O jogador vê, mas não muda esta coluna, mesmo que a tabela seja dele (ex.: o custo de uma habilidade que ele marca como escolhida)."
+                >
+                  <input
+                    type="checkbox"
+                    className="accent-primary size-3.5"
+                    checked={column.editableBy === 'gm'}
+                    onChange={(event) =>
+                      updateColumn(index, { editableBy: event.target.checked ? 'gm' : undefined })
+                    }
+                  />
+                  Só o mestre edita
+                </label>
+              )}
             </div>
           ))}
         </div>
@@ -329,6 +358,22 @@ export function TableProperties({ component, onChange }: TablePropertiesProps): 
             />
             Primeira coluna com o rótulo
           </label>
+        </PropertyField>
+
+        <PropertyField
+          label="Mostrar a linha quando"
+          hint="Fórmula por linha, com as colunas da linha (ex.: nv <= nivel). Falsa, some para o jogador e fica apagada para você. Vazio: todas aparecem."
+        >
+          <Input
+            className="font-mono text-xs"
+            value={component.rowVisibleWhen ?? ''}
+            placeholder="nv <= nivel"
+            onChange={(event) =>
+              onChange({
+                rowVisibleWhen: event.target.value.trim() === '' ? undefined : event.target.value
+              })
+            }
+          />
         </PropertyField>
       </PropertyGroup>
     </>

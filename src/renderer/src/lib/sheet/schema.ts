@@ -49,6 +49,11 @@ const criticalRule = z.union([
   z.object({ kind: z.literal('margin'), threshold: z.union([z.number(), z.string().max(200)]) })
 ])
 
+const rollCost = z.object({
+  target: z.string().max(64),
+  amount: formula
+})
+
 const componentBase = {
   id: identifier,
   key: z.string().max(64),
@@ -76,7 +81,9 @@ const tableColumn = z.object({
   format: numberFormat.optional(),
   critical: criticalRule.optional(),
   criticalFailureOnOne: z.boolean().optional(),
-  hidden: z.boolean().optional()
+  cost: rollCost.optional(),
+  hidden: z.boolean().optional(),
+  editableBy: z.enum(['player', 'gm']).optional()
 })
 
 const tableRow = z.object({
@@ -166,7 +173,8 @@ const sheetComponent = z.discriminatedUnion('type', [
     type: z.literal('rollButton'),
     formula,
     critical: criticalRule,
-    criticalFailureOnOne: z.boolean()
+    criticalFailureOnOne: z.boolean(),
+    cost: rollCost.optional()
   }),
   z.object({
     ...componentBase,
@@ -174,7 +182,8 @@ const sheetComponent = z.discriminatedUnion('type', [
     columns: z.array(tableColumn).max(40),
     rows: z.array(tableRow).max(400),
     playerCanAddRows: z.boolean(),
-    showRowLabels: z.boolean()
+    showRowLabels: z.boolean(),
+    rowVisibleWhen: formula.optional()
   })
 ])
 

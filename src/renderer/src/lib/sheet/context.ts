@@ -1,6 +1,7 @@
 import {
   evaluateFormula,
   FormulaException,
+  toBoolean,
   toNumber,
   withValues,
   type FormulaContext,
@@ -523,6 +524,23 @@ export function readFormulaValue(
     if (error instanceof FormulaException) return { error: error.error }
     throw error
   }
+}
+
+/**
+ * A linha da tabela aparece? (`rowVisibleWhen`, com as colunas da própria linha à mão.)
+ *
+ * Condição quebrada mostra a linha, como no "mostrar quando" dos campos: melhor aparecer do
+ * que o jogador perder uma linha da ficha por um erro de digitação do mestre.
+ */
+export function isTableRowVisible(
+  context: FormulaContext,
+  table: Extract<SheetComponent, { type: 'table' }>,
+  rowName: string
+): boolean {
+  const condition = table.rowVisibleWhen
+  if (condition === undefined || condition.trim() === '') return true
+  const result = evaluateFormula(condition, createRowFormulaContext(context, table, rowName))
+  return result.ok ? toBoolean(result.value) : true
 }
 
 /**

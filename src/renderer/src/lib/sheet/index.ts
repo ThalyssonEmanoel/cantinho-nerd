@@ -55,9 +55,13 @@ export {
   createSheetContext,
   createRowFormulaContext,
   fillResourceCurrents,
+  isTableRowVisible,
   readFormulaValue,
   resolveMarkersCount
 } from './context'
+
+export type { RollCharge } from './roll-cost'
+export { labelWithMissing, planRollCost, rollCostTargetKey } from './roll-cost'
 
 export type { ImportResult, TemplateFile } from './schema'
 export {
@@ -79,11 +83,14 @@ export { followingBarChanges } from './following-bars'
 
 export type { SheetAudience } from './permissions'
 export {
+  canEditColumn,
   canEditComponent,
   canPatchField,
   canSeeComponent,
+  changedLockedColumns,
   holdsValue,
-  isGmOnly
+  isGmOnly,
+  isLockedColumn
 } from './permissions'
 
 export type {
