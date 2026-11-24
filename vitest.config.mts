@@ -9,6 +9,10 @@ export default defineConfig({
     }
   },
   test: {
+    // Os testes nunca falam com o Supabase de verdade (o Vite carregaria o `.env` real, e no
+    // CI o `.env` vem dos segredos). Sem URL nem chave, um `lib/db/*` sem dublê falha na hora
+    // em vez de ir à rede — a ida ao servidor já estourou o tempo de um teste no CI.
+    env: { VITE_SUPABASE_URL: '', VITE_SUPABASE_ANON_KEY: '' },
     projects: [
       {
         // Lógica pura (fórmulas, dados, modelos, permissões): não precisa de DOM.

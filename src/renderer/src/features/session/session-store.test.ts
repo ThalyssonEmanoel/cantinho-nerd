@@ -48,6 +48,10 @@ vi.mock('@/lib/db/chat', () => ({
   fetchFeed: vi.fn(async () => []),
   listMacros: vi.fn(async () => [])
 }))
+// As pistas e as notas também (Fase 13). Sem o dublê, cada `open` ia ao servidor de verdade,
+// e com relógio falso a ida demorava até estourar os 5 s do teste no CI.
+vi.mock('@/lib/db/clues', () => ({ listClues: vi.fn(async () => []) }))
+vi.mock('@/lib/db/notes', () => ({ fetchNotes: vi.fn(async () => ''), saveNotes: vi.fn() }))
 vi.mock('@/features/sheets/repository', () => ({ sheetRepository: { list: mocks.list } }))
 vi.mock('@/features/sheets/sheet-store', () => ({
   useSheetStore: { getState: () => ({ applyRemote: mocks.applyRemote }) }

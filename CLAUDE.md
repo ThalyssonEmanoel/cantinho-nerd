@@ -109,8 +109,11 @@ Decisões que não são óbvias:
   depois que existirem contas. O perfil nasce por gatilho no banco, e o nome de usuário sai
   do e-mail — não dos metadados —, então perfil e login nunca divergem.
 - **O cliente do Supabase é criado na primeira chamada**, não ao importar: telas e testes
-  que não falam com o banco sobem sem `.env`. Os testes nunca devem chegar ao cliente de
-  verdade (o Vitest carrega o `.env` real); dublê `lib/db/*` com `vi.mock`.
+  que não falam com o banco sobem sem `.env`. Os testes nunca chegam ao cliente de verdade:
+  o `vitest.config.mts` esvazia a URL e a chave, e um `lib/db/*` sem dublê falha na hora, sem
+  ir à rede. Mesmo assim, dublê `lib/db/*` com `vi.mock` — esse erro costuma morrer num
+  `catch` de store, e o teste passa sem conferir nada. (Já estourou o tempo no CI duas vezes:
+  o chat na Fase 7 e as pistas na Fase 13.)
 - **Tipos do banco** em `lib/db/database.types.ts`: gerados com `npm run db:types`. Na Fase 4
   foram escritos à mão no mesmo formato (a CLI ainda não estava ligada ao projeto).
 
